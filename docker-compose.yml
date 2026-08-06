@@ -148,6 +148,41 @@ services:
       influxdb:
         condition: service_healthy
 
+  core-api:
+    build:
+      context: ./core-api
+      dockerfile: Dockerfile
+    container_name: core-api
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - ./certs/ca/root_ca.crt:/certs/ca/root_ca.crt:ro
+      - step_ca_data:/home/step:ro
+    environment:
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      INFLUXDB_URL: "http://influxdb:8086"
+      INFLUXDB_ADMIN_TOKEN: "${INFLUXDB_ADMIN_TOKEN}"
+      INFLUXDB_ORG: "${INFLUXDB_ORG}"
+      STEP_CA_URL: "https://step-ca:9000"
+      STEP_CA_ROOT: "/certs/ca/root_ca.crt"
+      STEP_CA_PROVISIONER: "iot-platform"
+      STEP_CA_PASSWORD_FILE: "/home/step/secrets/password"
+      JWT_SECRET: "${JWT_SECRET}"
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+      step-ca:
+        condition: service_healthy
+
   nginx:
     image: nginx:1.25-alpine
     container_name: nginx
