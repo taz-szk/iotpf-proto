@@ -45,15 +45,16 @@ def _count_influxdb_points(influxdb_org_id: str) -> int:
         '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
         '  |> group()\n'
         '  |> count()\n'
+        '  |> sum()\n'
     )
     try:
         resp = httpx.post(
-            f"{settings.influxdb_url}/api/v2/query",
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
             headers={
                 "Authorization": f"Token {settings.influxdb_admin_token}",
                 "Content-Type": "application/json",
             },
-            json={"query": query, "type": "flux", "orgID": influxdb_org_id},
+            json={"query": query, "type": "flux"},
             timeout=15.0,
         )
         if resp.status_code != 200:
