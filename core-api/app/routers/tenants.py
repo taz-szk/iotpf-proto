@@ -12,7 +12,7 @@ _bearer = HTTPBearer()
 
 def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
     payload = verify_token(creds.credentials)
-    if not payload or payload.get("type") != "platform":
+    if not payload or payload.get("type") != "platform" or payload.get("token_type") == "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     return payload
 

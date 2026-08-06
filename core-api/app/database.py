@@ -16,6 +16,9 @@ def get_db():
         db.close()
 
 def create_tenant_schema(tenant_id: str) -> None:
+    import re
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', tenant_id.lower()):
+        raise ValueError(f"Invalid tenant_id format: {tenant_id}")
     schema = f"tenant_{tenant_id.replace('-', '_')}"
     with engine.connect() as conn:
         conn.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))

@@ -21,7 +21,8 @@ def provision(req: ProvisionRequest):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
         now = datetime.now(timezone.utc)
-        if token.expires_at.replace(tzinfo=timezone.utc) < now:
+        expires_at = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < now:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
 
         if token.registered_count >= token.max_devices:
@@ -37,7 +38,10 @@ def provision(req: ProvisionRequest):
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Device already registered")
 
-        cert_pem, key_pem = issue_device_cert_for_tenant(tenant_id, req.device_id)
+        try:
+            cert_pem, key_pem = issue_device_cert_for_tenant(tenant_id, req.device_id)
+        except RuntimeError:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Certificate issuance failed")
 
         db.execute(
             text(f'''INSERT INTO "{schema}".devices (id, device_id, connection_status)
