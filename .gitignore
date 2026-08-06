@@ -1,0 +1,12 @@
+.env
+certs/
+step-ca/data/
+postgres/data/
+influxdb/data/
+emqx/data/
+minio/data/
+grafana/data/
+*.key
+*.pem
+*.crt
+*.p12
