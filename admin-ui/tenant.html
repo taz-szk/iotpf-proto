@@ -270,7 +270,7 @@
             </div>
           </div>
           <div class="flex justify-end gap-2 mt-3">
-            <button @click="uploadFile = null; fwVersion = ''"
+            <button @click="uploadFile = null; fwVersion = ''; fwTargetModel = ''; fwDescription = ''"
                     class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
             <button @click="submitUpload()" :disabled="!fwVersion || uploading"
                     class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
@@ -466,6 +466,7 @@
 
         uploadFirmware(event) {
           this.uploadFile = event.target.files[0] || null;
+          event.target.value = '';  // 同じファイルの再選択を可能にする
         },
 
         async submitUpload() {
