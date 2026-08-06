@@ -17,18 +17,22 @@ def send_alert_email(
     if not to_emails:
         return
 
+    # Sanitize values that go into email headers
+    sensor_key = str(sensor_key).replace("\r", "").replace("\n", "")
+    device_id_clean = str(device_id).replace("\r", "").replace("\n", "") if device_id else None
+
     subject_prefix = "[RESOLVED]" if resolved else f"[{severity.upper()}]"
     subject = f"{subject_prefix} IoT Alert: {sensor_key}"
-    if device_id:
-        subject += f" / {device_id}"
+    if device_id_clean:
+        subject += f" / {device_id_clean}"
 
     if resolved:
-        body = f"Alert resolved.\nSensor: {sensor_key}\nDevice: {device_id or 'all'}\nTenant: {tenant_id}"
+        body = f"Alert resolved.\nSensor: {sensor_key}\nDevice: {device_id_clean or 'all'}\nTenant: {tenant_id}"
     else:
         body = (
             f"Alert triggered.\n"
             f"Sensor: {sensor_key}\n"
-            f"Device: {device_id or 'all'}\n"
+            f"Device: {device_id_clean or 'all'}\n"
             f"Condition: {condition} {threshold}\n"
             f"Current value: {current_value}\n"
             f"Tenant: {tenant_id}"

@@ -4,12 +4,19 @@ from app.config import settings
 BUCKET_NAME = "telemetry"
 
 def _flux_recent_values(org_id: str, device_id: str, sensor_key: str, window_sec: int) -> list[float]:
+    import re
+    # Sanitize: only allow alphanumeric, dash, underscore, dot for field names
+    if not re.fullmatch(r'[\w\-\.]+', device_id or ""):
+        return []
+    if not re.fullmatch(r'[\w\-\.]+', sensor_key or ""):
+        return []
+
     client = InfluxDBClient(url=settings.influxdb_url, token=settings.influxdb_admin_token, org=org_id)
     try:
         query_api = client.query_api()
         flux = f'''
 from(bucket: "{BUCKET_NAME}")
-  |> range(start: -{window_sec}s)
+  |> range(start: -{int(window_sec)}s)
   |> filter(fn: (r) => r._measurement == "telemetry")
   |> filter(fn: (r) => r.device_id == "{device_id}")
   |> filter(fn: (r) => r._field == "{sensor_key}")

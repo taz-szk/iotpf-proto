@@ -61,10 +61,12 @@ def _evaluate_tenant(tenant_id: str, org_id: str) -> None:
 
 def _check_dead_devices(tenant_id: str) -> None:
     offline_devices = get_offline_devices(tenant_id, settings.device_offline_threshold_sec)
+    if not offline_devices:
+        return
+    rules = get_active_alert_rules(tenant_id)
     for row in offline_devices:
         device_id = row["device_id"]
         mark_device_offline(tenant_id, device_id)
-        rules = get_active_alert_rules(tenant_id)
         for rule in rules:
             if rule["condition"] != "device_offline":
                 continue

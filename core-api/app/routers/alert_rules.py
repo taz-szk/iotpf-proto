@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Literal
 from app.services.auth import verify_token
 from app.database import SessionLocal
 from sqlalchemy import text
@@ -24,12 +24,12 @@ def _schema(tenant_id: str) -> str:
 class AlertRuleCreate(BaseModel):
     device_id: Optional[str] = None
     sensor_key: str
-    condition: str
+    condition: Literal["above", "below", "equal", "device_offline"]
     threshold: Optional[float] = None
-    trigger_mode: str = "consecutive"
+    trigger_mode: Literal["consecutive", "duration", "consecutive_and_duration"] = "consecutive"
     consecutive_count: int = 3
     duration_sec: int = 60
-    severity: str = "warning"
+    severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
 
 class AlertRuleOut(BaseModel):

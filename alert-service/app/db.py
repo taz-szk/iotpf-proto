@@ -99,8 +99,8 @@ def get_offline_devices(tenant_id: str, threshold_sec: int) -> list[dict]:
                 FROM "{schema}".devices
                 WHERE connection_status != 'offline'
                   AND last_seen_at IS NOT NULL
-                  AND last_seen_at < NOW() - INTERVAL '{threshold_sec} seconds'
-            ''')
+                  AND last_seen_at < NOW() - make_interval(secs => %s)
+            ''', (threshold_sec,))
             return cur.fetchall()
     finally:
         conn.close()
