@@ -10,6 +10,7 @@ class Tenant(Base):
     slug = Column(String(100), nullable=False, unique=True)
     influxdb_org_id = Column(String(255))
     influxdb_token = Column(String)
+    grafana_org_id = Column(String(255))
     status = Column(String(20), nullable=False, default="active")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

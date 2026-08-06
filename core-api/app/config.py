@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 15
     refresh_token_expire_days: int = 30
+    grafana_url: str = "http://grafana:3000"
+    grafana_admin_user: str = "admin"
+    grafana_admin_password: str = "changeme"
 
     class Config:
         env_file = ".env"

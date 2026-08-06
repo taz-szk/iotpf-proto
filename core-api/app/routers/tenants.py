@@ -26,9 +26,10 @@ def create_tenant(body: TenantCreate, _: dict = Depends(_require_platform)):
         db.add(tenant)
         db.flush()
         tenant_id = str(tenant.id)
-        org_id, token = setup_tenant(tenant_id, body.name)
+        org_id, token, grafana_org_id = setup_tenant(tenant_id, body.name)
         tenant.influxdb_org_id = org_id
         tenant.influxdb_token = token
+        tenant.grafana_org_id = str(grafana_org_id)
         db.commit()
         db.refresh(tenant)
         return tenant

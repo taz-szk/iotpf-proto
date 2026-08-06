@@ -85,3 +85,11 @@ def create_tenant_schema(tenant_id: str) -> None:
             ON "{schema}".alert_events(rule_id, triggered_at DESC)
         '''))
         conn.commit()
+
+def migrate_add_grafana_org_id() -> None:
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS grafana_org_id VARCHAR(255)
+        """))
+        conn.commit()

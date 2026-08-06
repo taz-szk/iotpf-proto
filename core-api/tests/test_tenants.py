@@ -11,11 +11,12 @@ def test_create_tenant_success(client):
     mock_tenant.name = "Test Tenant"
     mock_tenant.slug = "test-tenant"
     mock_tenant.status = "active"
+    mock_tenant.grafana_org_id = "42"
     from datetime import datetime, timezone
     mock_tenant.created_at = datetime.now(timezone.utc)
 
     with patch("app.routers.tenants.SessionLocal") as mock_session, \
-         patch("app.routers.tenants.setup_tenant", return_value=("influx-org-id-001", "influx-token-001")), \
+         patch("app.routers.tenants.setup_tenant", return_value=("influx-org-id-001", "influx-token-001", 42)), \
          patch("app.routers.tenants.verify_token", return_value={"sub": str(uuid.uuid4()), "type": "platform"}):
 
         mock_db = MagicMock()
