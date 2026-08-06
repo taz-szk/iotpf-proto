@@ -10,3 +10,13 @@ grafana/data/
 *.pem
 *.crt
 *.p12
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
