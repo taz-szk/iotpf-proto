@@ -90,15 +90,12 @@ def list_firmware(tenant_id: str, _: dict = Depends(_require_platform)):
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     schema = f"tenant_{schema_suffix}"
     with SessionLocal() as db:
-        try:
-            add_firmware_tables_to_tenant_schema(tenant_id)
-            rows = db.execute(text(f'''
-                SELECT id, version, target_model, file_size, checksum, description, is_active, uploaded_at
-                FROM "{schema}".firmware_releases
-                ORDER BY uploaded_at DESC
-            ''')).fetchall()
-        except Exception:
-            return []
+        add_firmware_tables_to_tenant_schema(tenant_id)
+        rows = db.execute(text(f'''
+            SELECT id, version, target_model, file_size, checksum, description, is_active, uploaded_at
+            FROM "{schema}".firmware_releases
+            ORDER BY uploaded_at DESC
+        ''')).fetchall()
         return [
             {
                 "id": str(r.id),
@@ -154,19 +151,19 @@ def dispatch_ota_command(
         token = create_firmware_download_token(firmware_id, tenant_id, row.minio_key)
         download_url = f"https://{settings.platform_domain}/api/firmware-download?token={token}"
 
+        publish_ota_command(tenant_id, device_id, {
+            "firmware_id": firmware_id,
+            "version": row.version,
+            "download_url": download_url,
+            "checksum": row.checksum,
+            "file_size": row.file_size,
+        })
+
         db.execute(text(f'''
             INSERT INTO "{schema}".ota_events (firmware_id, device_id)
             VALUES (:firmware_id, :device_id)
         '''), {"firmware_id": firmware_id, "device_id": device_id})
         db.commit()
-
-    publish_ota_command(tenant_id, device_id, {
-        "firmware_id": firmware_id,
-        "version": row.version,
-        "download_url": download_url,
-        "checksum": row.checksum,
-        "file_size": row.file_size,
-    })
 
     return {"status": "dispatched", "device_id": device_id, "firmware_id": firmware_id}
 
