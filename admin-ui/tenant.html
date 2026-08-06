@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テナント詳細 - IoT Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="/admin/js/api.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/admin/tenants.html" class="text-gray-400 hover:text-gray-600 text-sm">← テナント一覧</a>
+      <span class="text-gray-300">|</span>
+      <h1 class="text-lg font-bold text-gray-800" x-data="{}" x-text="document.title"></h1>
+    </div>
+    <button @click="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+  </nav>
+
+  <div x-data="tenantDetailApp()" class="max-w-5xl mx-auto px-6 py-8">
+
+    <div x-show="loading" class="text-center py-12 text-gray-400">読み込み中...</div>
+    <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 rounded px-4 py-3 mb-4" x-text="error"></div>
+
+    <div x-show="!loading && tenant">
+
+      <!-- テナント情報 -->
+      <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <h2 class="text-xl font-bold text-gray-800" x-text="tenant?.name"></h2>
+          <span class="text-sm text-gray-400" x-text="'ID: ' + tenant?.id"></span>
+        </div>
+        <div class="flex items-center gap-4 text-sm text-gray-500">
+          <span x-text="'スラッグ: ' + tenant?.slug"></span>
+          <span x-show="tenant?.grafana_org_id">
+            <a :href="grafanaUrl()" target="_blank"
+               class="text-blue-600 hover:underline">Grafanaダッシュボードを開く →</a>
+          </span>
+        </div>
+      </div>
+
+      <!-- タブ -->
+      <div class="flex border-b border-gray-200 mb-6">
+        <button @click="activeTab = 'tokens'"
+                :class="activeTab === 'tokens' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">プロビジョニングトークン</button>
+        <button @click="activeTab = 'alerts'"
+                :class="activeTab === 'alerts' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">アラートルール</button>
+      </div>
+
+      <!-- プロビジョニングトークンタブ -->
+      <div x-show="activeTab === 'tokens'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-medium text-gray-700">ブートストラップトークン</h3>
+          <button @click="createToken()" :disabled="creatingToken"
+                  class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-3 py-1.5 rounded text-sm">
+            + トークン発行
+          </button>
+        </div>
+        <div x-show="newTokenValue" class="bg-green-50 border border-green-200 rounded p-4 mb-4">
+          <p class="text-sm font-medium text-green-800 mb-1">新しいトークンが発行されました（この画面のみ表示）</p>
+          <code class="text-xs bg-white border border-green-200 rounded px-2 py-1 break-all" x-text="newTokenValue"></code>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div x-show="tokens.length === 0" class="py-8 text-center text-gray-400 text-sm">トークンがありません</div>
+          <table x-show="tokens.length > 0" class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス上限</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録済</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">有効期限</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="t in tokens" :key="t.id">
+                <tr>
+                  <td class="px-4 py-3 text-sm" x-text="t.max_devices + ' 台'"></td>
+                  <td class="px-4 py-3 text-sm" x-text="t.registered_count + ' 台'"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500"
+                      x-text="new Date(t.expires_at).toLocaleDateString('ja-JP')"></td>
+                  <td class="px-4 py-3 text-right">
+                    <button @click="revokeToken(t.id)"
+                            class="text-red-500 hover:text-red-700 text-xs">失効</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- アラートルールタブ -->
+      <div x-show="activeTab === 'alerts'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-medium text-gray-700">アラートルール</h3>
+          <button @click="showAlertForm = !showAlertForm"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+            + ルール追加
+          </button>
+        </div>
+
+        <!-- アラートルール作成フォーム -->
+        <div x-show="showAlertForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+          <form @submit.prevent="createAlertRule" class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">センサーキー</label>
+              <input type="text" x-model="newRule.sensor_key" required placeholder="temperature"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">デバイスID（空=全デバイス）</label>
+              <input type="text" x-model="newRule.device_id" placeholder="device-001"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">条件</label>
+              <select x-model="newRule.condition"
+                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="above">以上（above）</option>
+                <option value="below">以下（below）</option>
+                <option value="equal">等しい（equal）</option>
+                <option value="device_offline">デバイス offline</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">閾値</label>
+              <input type="number" x-model="newRule.threshold" step="any"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">トリガーモード</label>
+              <select x-model="newRule.trigger_mode"
+                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="consecutive">連続N回</option>
+                <option value="duration">N秒継続</option>
+                <option value="consecutive_and_duration">連続N回 かつ N秒継続</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">連続回数</label>
+              <input type="number" x-model.number="newRule.consecutive_count" min="1" max="100"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">重大度</label>
+              <select x-model="newRule.severity"
+                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="info">情報</option>
+                <option value="warning">警告</option>
+                <option value="critical">重大</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">通知先メール（カンマ区切り）</label>
+              <input type="text" x-model="emailsInput" placeholder="ops@example.com,admin@example.com"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div class="col-span-2 flex justify-end gap-2">
+              <button type="button" @click="showAlertForm = false"
+                      class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+              <button type="submit"
+                      class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded">作成</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div x-show="alertRules.length === 0" class="py-8 text-center text-gray-400 text-sm">アラートルールがありません</div>
+          <table x-show="alertRules.length > 0" class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">センサー</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">条件</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">重大度</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">通知先</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="r in alertRules" :key="r.id">
+                <tr>
+                  <td class="px-4 py-3 text-sm font-medium" x-text="r.sensor_key + (r.device_id ? ' / ' + r.device_id : '')"></td>
+                  <td class="px-4 py-3 text-sm" x-text="r.condition + (r.threshold != null ? ' ' + r.threshold : '')"></td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium"
+                          :class="{
+                            'bg-red-100 text-red-700': r.severity === 'critical',
+                            'bg-yellow-100 text-yellow-700': r.severity === 'warning',
+                            'bg-blue-100 text-blue-700': r.severity === 'info',
+                          }"
+                          x-text="r.severity"></span>
+                  </td>
+                  <td class="px-4 py-3 text-sm text-gray-500" x-text="(r.notify_emails || []).join(', ') || '-'"></td>
+                  <td class="px-4 py-3 text-right">
+                    <button @click="deleteAlertRule(r.id)"
+                            class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function tenantDetailApp() {
+      const params = new URLSearchParams(window.location.search);
+      const tenantId = params.get('id');
+
+      return {
+        tenant: null,
+        loading: true,
+        error: '',
+        activeTab: 'tokens',
+        tokens: [],
+        newTokenValue: '',
+        creatingToken: false,
+        alertRules: [],
+        showAlertForm: false,
+        emailsInput: '',
+        newRule: {
+          sensor_key: '', device_id: '', condition: 'above', threshold: null,
+          trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
+          severity: 'warning', notify_emails: [],
+        },
+
+        grafanaUrl() {
+          return `/grafana/?orgId=${this.tenant?.grafana_org_id}`;
+        },
+
+        async init() {
+          if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+          if (!tenantId) { this.error = 'テナントIDが指定されていません'; this.loading = false; return; }
+          try {
+            const [tenant, tokens, rules] = await Promise.all([
+              api.tenants.get(tenantId),
+              api.provisioningTokens.list(tenantId),
+              api.alertRules.list(tenantId),
+            ]);
+            this.tenant = tenant;
+            this.tokens = tokens;
+            this.alertRules = rules;
+            document.title = `${tenant.name} - IoT Platform`;
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        async createToken() {
+          this.creatingToken = true;
+          this.newTokenValue = '';
+          try {
+            const t = await api.provisioningTokens.create(tenantId, 100, 365);
+            this.newTokenValue = t.token;
+            this.tokens = await api.provisioningTokens.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.creatingToken = false;
+          }
+        },
+
+        async revokeToken(tokenId) {
+          if (!confirm('このトークンを失効させますか？')) return;
+          try {
+            await api.provisioningTokens.revoke(tenantId, tokenId);
+            this.tokens = await api.provisioningTokens.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async createAlertRule() {
+          const rule = { ...this.newRule };
+          rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
+          if (rule.condition === 'device_offline') rule.threshold = null;
+          try {
+            await api.alertRules.create(tenantId, rule);
+            this.alertRules = await api.alertRules.list(tenantId);
+            this.showAlertForm = false;
+            this.emailsInput = '';
+            this.newRule = {
+              sensor_key: '', device_id: '', condition: 'above', threshold: null,
+              trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
+              severity: 'warning', notify_emails: [],
+            };
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async deleteAlertRule(ruleId) {
+          if (!confirm('このアラートルールを削除しますか？')) return;
+          try {
+            await api.alertRules.delete(tenantId, ruleId);
+            this.alertRules = await api.alertRules.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>
