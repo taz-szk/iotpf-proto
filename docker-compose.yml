@@ -168,6 +168,9 @@ services:
       STEP_CA_PROVISIONER: "iot-platform"
       STEP_CA_PASSWORD_FILE: "/home/step/secrets/password"
       JWT_SECRET: "${JWT_SECRET}"
+      GRAFANA_URL: "http://grafana:3000"
+      GRAFANA_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
+      GRAFANA_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-changeme}"
     expose:
       - "8000"
     healthcheck:
@@ -243,6 +246,7 @@ services:
       - ./certs/server/server.crt:/etc/nginx/certs/server.crt:ro
       - ./certs/server/server.key:/etc/nginx/certs/server.key:ro
       - ./certs/ca/root_ca.crt:/etc/nginx/certs/root_ca.crt:ro
+      - ./admin-ui:/usr/share/nginx/admin-ui:ro
     ports:
       - "80:80"
       - "443:443"
