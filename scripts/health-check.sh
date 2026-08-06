@@ -30,31 +30,33 @@ check "テナントテーブル存在確認" \
 echo ""
 echo "[InfluxDB]"
 check "ping確認" \
-    "curl -sf http://localhost:8086/ping"
+    "docker exec influxdb influx ping"
 check "認証確認" \
-    "curl -sf -H 'Authorization: Token ${INFLUXDB_ADMIN_TOKEN}' http://localhost:8086/api/v2/orgs"
+    "docker exec influxdb influx org list --token ${INFLUXDB_ADMIN_TOKEN}"
 
 echo ""
 echo "[EMQX]"
 check "ノード状態確認" \
     "docker exec emqx emqx ping"
 check "管理API確認" \
-    "curl -sf -u admin:${EMQX_DASHBOARD_PASSWORD} http://localhost:18083/api/v5/status"
+    "docker exec emqx curl -sf -u admin:${EMQX_DASHBOARD_PASSWORD} http://localhost:18083/api/v5/status"
 
 echo ""
 echo "[MinIO]"
 check "ヘルスチェック" \
-    "curl -sf http://localhost:9000/minio/health/live"
+    "docker exec minio curl -sf http://localhost:9000/minio/health/live"
 
 echo ""
 echo "[Grafana]"
 check "ヘルスチェック" \
-    "curl -sf http://localhost:3000/api/health"
+    "docker exec grafana curl -sf http://localhost:3000/api/health"
 
 echo ""
 echo "[Nginx/HTTPS]"
-check "HTTPSアクセス確認" \
-    "curl -sf -k https://localhost/api/health"
+check "HTTPリダイレクト確認" \
+    "curl -sf -o /dev/null -w '%{http_code}' http://localhost | grep -q 301"
+check "HTTPS Grafana確認" \
+    "curl -sf -k https://localhost/grafana/api/health"
 
 echo ""
 echo "=== 結果: ${PASS}件成功 / ${FAIL}件失敗 ==="
