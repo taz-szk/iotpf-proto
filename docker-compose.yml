@@ -183,6 +183,54 @@ services:
       step-ca:
         condition: service_healthy
 
+  ingestion-service:
+    build:
+      context: ./ingestion-service
+      dockerfile: Dockerfile
+    container_name: ingestion-service
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      INFLUXDB_URL: "http://influxdb:8086"
+      INFLUXDB_ADMIN_TOKEN: "${INFLUXDB_ADMIN_TOKEN}"
+    expose:
+      - "8001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
+  alert-service:
+    build:
+      context: ./alert-service
+      dockerfile: Dockerfile
+    container_name: alert-service
+    restart: unless-stopped
+    networks: [internal]
+    environment:
+      POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
+      INFLUXDB_URL: "http://influxdb:8086"
+      INFLUXDB_ADMIN_TOKEN: "${INFLUXDB_ADMIN_TOKEN}"
+      SMTP_HOST: "${SMTP_HOST:-localhost}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
+      SMTP_FROM: "${SMTP_FROM:-alerts@iot-platform.local}"
+      EVAL_INTERVAL_SEC: "${EVAL_INTERVAL_SEC:-60}"
+      DEVICE_OFFLINE_THRESHOLD_SEC: "${DEVICE_OFFLINE_THRESHOLD_SEC:-180}"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+
   nginx:
     image: nginx:1.25-alpine
     container_name: nginx
