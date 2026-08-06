@@ -86,6 +86,37 @@ def create_tenant_schema(tenant_id: str) -> None:
         '''))
         conn.commit()
 
+def add_firmware_tables_to_tenant_schema(tenant_id: str) -> None:
+    import re
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', tenant_id.lower()):
+        raise ValueError(f"Invalid tenant_id: {tenant_id}")
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    with engine.connect() as conn:
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".firmware_releases (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                version VARCHAR(100) NOT NULL,
+                target_model VARCHAR(100),
+                minio_key TEXT NOT NULL,
+                file_size BIGINT NOT NULL,
+                checksum VARCHAR(128) NOT NULL,
+                description TEXT,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                uploaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        '''))
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".ota_events (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                firmware_id UUID NOT NULL
+                    REFERENCES "{schema}".firmware_releases(id) ON DELETE CASCADE,
+                device_id VARCHAR(255) NOT NULL,
+                commanded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        '''))
+        conn.commit()
+
+
 def migrate_add_grafana_org_id() -> None:
     with engine.connect() as conn:
         conn.execute(text("""
