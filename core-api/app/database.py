@@ -68,12 +68,20 @@ def create_tenant_schema(tenant_id: str) -> None:
         conn.execute(text(f'''
             CREATE TABLE IF NOT EXISTS "{schema}".alert_events (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-                rule_id UUID NOT NULL,
+                rule_id UUID NOT NULL REFERENCES "{schema}".alert_rules(id) ON DELETE CASCADE,
                 device_id VARCHAR(255),
                 triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 resolved_at TIMESTAMPTZ,
                 trigger_value NUMERIC,
                 notified_at TIMESTAMPTZ
             )
+        '''))
+        conn.execute(text(f'''
+            CREATE INDEX IF NOT EXISTS idx_alert_rules_device
+            ON "{schema}".alert_rules(device_id) WHERE device_id IS NOT NULL
+        '''))
+        conn.execute(text(f'''
+            CREATE INDEX IF NOT EXISTS idx_alert_events_rule
+            ON "{schema}".alert_events(rule_id, triggered_at DESC)
         '''))
         conn.commit()
