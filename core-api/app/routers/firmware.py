@@ -38,6 +38,15 @@ def _validate_uuid(value: str, field: str = "id") -> str:
     return value.lower()
 
 
+def _validate_device_id(device_id: str) -> str:
+    if not re.fullmatch(r'[A-Za-z0-9_\-\.]{1,128}', device_id):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Invalid device_id: must be 1-128 chars of [A-Za-z0-9_\\-\\.]"
+        )
+    return device_id
+
+
 def _validate_tenant(tenant_id: str) -> tuple[str, str]:
     """Returns (tenant_name, schema_suffix). Raises 404 if not found."""
     _validate_uuid(tenant_id, "tenant_id")
@@ -59,6 +68,12 @@ async def upload_firmware_release(
 ):
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     content = await file.read()
+    MAX_FIRMWARE_BYTES = 100 * 1024 * 1024  # 100 MB
+    if len(content) > MAX_FIRMWARE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Firmware file too large (max 100 MB)"
+        )
     checksum = "sha256:" + hashlib.sha256(content).hexdigest()
     firmware_id = str(uuid_lib.uuid4())
 
@@ -94,6 +109,7 @@ def list_firmware(tenant_id: str, _: dict = Depends(_require_platform)):
         rows = db.execute(text(f'''
             SELECT id, version, target_model, file_size, checksum, description, is_active, uploaded_at
             FROM "{schema}".firmware_releases
+            WHERE is_active = TRUE
             ORDER BY uploaded_at DESC
         ''')).fetchall()
         return [
@@ -135,6 +151,7 @@ def dispatch_ota_command(
     _: dict = Depends(_require_platform),
 ):
     _validate_uuid(tenant_id, "tenant_id")
+    device_id = _validate_device_id(device_id)
     firmware_id = _validate_uuid(body.get("firmware_id", ""), "firmware_id")
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     schema = f"tenant_{schema_suffix}"
