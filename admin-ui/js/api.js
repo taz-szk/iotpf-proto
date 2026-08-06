@@ -61,6 +61,7 @@ const api = {
     isLoggedIn: () => !!getToken(),
     logout: () => { clearTokens(); window.location.href = '/admin/'; },
     setTokens,
+    request: (method, path, body = null) => request(method, path, body),
 };
 
 window.api = api;

@@ -49,6 +49,12 @@
         <button @click="activeTab = 'alerts'"
                 :class="activeTab === 'alerts' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">アラートルール</button>
+        <button @click="activeTab = 'stats'; loadStats()"
+                :class="activeTab === 'stats' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">統計</button>
+        <button @click="activeTab = 'firmware'; loadFirmware()"
+                :class="activeTab === 'firmware' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">ファームウェア</button>
       </div>
 
       <!-- プロビジョニングトークンタブ -->
@@ -205,6 +211,125 @@
           </table>
         </div>
       </div>
+
+      <!-- 統計タブ -->
+      <div x-show="activeTab === 'stats'">
+        <div x-show="statsLoading" class="py-8 text-center text-gray-400">統計を取得中...</div>
+        <div x-show="!statsLoading && stats" class="grid grid-cols-2 gap-4 md:grid-cols-3">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">総デバイス数</p>
+            <p class="text-3xl font-bold text-gray-800" x-text="stats?.total_devices ?? '-'"></p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">オンライン</p>
+            <p class="text-3xl font-bold text-green-600" x-text="stats?.online_devices ?? '-'"></p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">データポイント（30日）</p>
+            <p class="text-3xl font-bold text-blue-600" x-text="(stats?.data_points_30d ?? 0).toLocaleString()"></p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">アラートイベント（30日）</p>
+            <p class="text-3xl font-bold text-yellow-600" x-text="stats?.alert_events_30d ?? '-'"></p>
+          </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
+            <p class="text-3xl font-bold text-gray-700" x-text="stats?.firmware_releases ?? '-'"></p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ファームウェアタブ -->
+      <div x-show="activeTab === 'firmware'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-medium text-gray-700">ファームウェア一覧</h3>
+          <label class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm cursor-pointer">
+            + アップロード
+            <input type="file" class="hidden" @change="uploadFirmware($event)">
+          </label>
+        </div>
+
+        <!-- アップロードフォーム（ファイル選択後に表示） -->
+        <div x-show="uploadFile" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+          <p class="text-sm font-medium text-gray-700 mb-3" x-text="'ファイル: ' + uploadFile?.name"></p>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">バージョン</label>
+              <input type="text" x-model="fwVersion" placeholder="1.0.0"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">対象モデル（任意）</label>
+              <input type="text" x-model="fwTargetModel" placeholder="SensorNode-v2"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1">説明（任意）</label>
+              <input type="text" x-model="fwDescription"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+          </div>
+          <div class="flex justify-end gap-2 mt-3">
+            <button @click="uploadFile = null; fwVersion = ''"
+                    class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+            <button @click="submitUpload()" :disabled="!fwVersion || uploading"
+                    class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+              <span x-show="!uploading">アップロード</span>
+              <span x-show="uploading">アップロード中...</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div x-show="firmwareList.length === 0" class="py-8 text-center text-gray-400 text-sm">ファームウェアがありません</div>
+          <table x-show="firmwareList.length > 0" class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">バージョン</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">モデル</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">サイズ</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">アップロード日</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="fw in firmwareList" :key="fw.id">
+                <tr>
+                  <td class="px-4 py-3 text-sm font-medium" x-text="fw.version"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500" x-text="fw.target_model || '全デバイス'"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500" x-text="(fw.file_size / 1024).toFixed(1) + ' KB'"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500"
+                      x-text="new Date(fw.uploaded_at).toLocaleDateString('ja-JP')"></td>
+                  <td class="px-4 py-3 text-right flex gap-2 justify-end">
+                    <button @click="sendOta(fw.id, fw.version)"
+                            class="text-blue-500 hover:text-blue-700 text-xs">OTA送信</button>
+                    <button @click="deactivateFirmware(fw.id)"
+                            class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- OTA送信ダイアログ -->
+        <div x-show="otaTargetFirmware" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+          <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
+            <h3 class="font-medium text-gray-800 mb-4" x-text="'OTA送信: v' + otaTargetFirmware?.version"></h3>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-600 mb-1">デバイスID</label>
+              <input type="text" x-model="otaDeviceId" placeholder="device-001"
+                     class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+            </div>
+            <div class="flex justify-end gap-2">
+              <button @click="otaTargetFirmware = null; otaDeviceId = ''"
+                      class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+              <button @click="submitOta()" :disabled="!otaDeviceId"
+                      class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">送信</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -302,6 +427,101 @@
           try {
             await api.alertRules.delete(tenantId, ruleId);
             this.alertRules = await api.alertRules.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        // Stats
+        stats: null,
+        statsLoading: false,
+        async loadStats() {
+          this.statsLoading = true;
+          try {
+            this.stats = await api.request('GET', `/tenants/${tenantId}/stats`);
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.statsLoading = false;
+          }
+        },
+
+        // Firmware
+        firmwareList: [],
+        uploadFile: null,
+        fwVersion: '',
+        fwTargetModel: '',
+        fwDescription: '',
+        uploading: false,
+        otaTargetFirmware: null,
+        otaDeviceId: '',
+
+        async loadFirmware() {
+          try {
+            this.firmwareList = await api.request('GET', `/tenants/${tenantId}/firmware`);
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        uploadFirmware(event) {
+          this.uploadFile = event.target.files[0] || null;
+        },
+
+        async submitUpload() {
+          if (!this.uploadFile || !this.fwVersion) return;
+          this.uploading = true;
+          try {
+            const formData = new FormData();
+            formData.append('file', this.uploadFile);
+            formData.append('version', this.fwVersion);
+            if (this.fwTargetModel) formData.append('target_model', this.fwTargetModel);
+            if (this.fwDescription) formData.append('description', this.fwDescription);
+
+            const token = localStorage.getItem('iot_access_token');
+            const resp = await fetch(`/api/tenants/${tenantId}/firmware`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: formData,
+            });
+            if (!resp.ok) {
+              const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+              throw new Error(err.detail || 'Upload failed');
+            }
+            this.uploadFile = null;
+            this.fwVersion = '';
+            this.fwTargetModel = '';
+            this.fwDescription = '';
+            await this.loadFirmware();
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.uploading = false;
+          }
+        },
+
+        sendOta(firmwareId, version) {
+          this.otaTargetFirmware = { id: firmwareId, version };
+          this.otaDeviceId = '';
+        },
+
+        async submitOta() {
+          if (!this.otaDeviceId || !this.otaTargetFirmware) return;
+          try {
+            await api.request('POST', `/tenants/${tenantId}/devices/${this.otaDeviceId}/ota`,
+              { firmware_id: this.otaTargetFirmware.id });
+            this.otaTargetFirmware = null;
+            this.otaDeviceId = '';
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async deactivateFirmware(firmwareId) {
+          if (!confirm('このファームウェアを無効化しますか？')) return;
+          try {
+            await api.request('DELETE', `/tenants/${tenantId}/firmware/${firmwareId}`);
+            await this.loadFirmware();
           } catch(e) {
             this.error = e.message;
           }
