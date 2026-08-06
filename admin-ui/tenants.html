@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テナント管理 - IoT Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="/admin/js/api.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ナビゲーション -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <h1 class="text-lg font-bold text-gray-800">IoT Platform 管理</h1>
+    <button @click="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+  </nav>
+
+  <div x-data="tenantsApp()" class="max-w-4xl mx-auto px-6 py-8">
+    <div class="flex items-center justify-between mb-6">
+      <h2 class="text-xl font-semibold text-gray-800">テナント一覧</h2>
+      <button @click="showForm = !showForm"
+              class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+        + テナント追加
+      </button>
+    </div>
+
+    <!-- 作成フォーム -->
+    <div x-show="showForm" x-transition class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+      <h3 class="font-medium text-gray-700 mb-4">新しいテナントを作成</h3>
+      <div x-show="formError" class="bg-red-50 border border-red-200 text-red-600 text-sm rounded px-3 py-2 mb-4" x-text="formError"></div>
+      <form @submit.prevent="createTenant" class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">テナント名</label>
+          <input type="text" x-model="newName" required placeholder="株式会社サンプル"
+                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1">スラッグ（英小文字・ハイフン）</label>
+          <input type="text" x-model="newSlug" required placeholder="sample-corp"
+                 pattern="[a-z0-9\-]+" title="英小文字・数字・ハイフンのみ"
+                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div class="col-span-2 flex gap-2 justify-end">
+          <button type="button" @click="showForm = false"
+                  class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">キャンセル</button>
+          <button type="submit" :disabled="creating"
+                  class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm font-medium">
+            <span x-show="!creating">作成</span>
+            <span x-show="creating">作成中（Grafana設定中）...</span>
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- エラー表示 -->
+    <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 text-sm rounded px-4 py-3 mb-4" x-text="error"></div>
+
+    <!-- テナント一覧テーブル -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div x-show="loading" class="py-12 text-center text-gray-400">読み込み中...</div>
+      <div x-show="!loading && tenants.length === 0" class="py-12 text-center text-gray-400">
+        テナントがありません
+      </div>
+      <table x-show="!loading && tenants.length > 0" class="w-full">
+        <thead class="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">テナント名</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">スラッグ</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">ステータス</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">作成日</th>
+            <th class="px-6 py-3"></th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          <template x-for="tenant in tenants" :key="tenant.id">
+            <tr class="hover:bg-gray-50">
+              <td class="px-6 py-4 font-medium text-gray-800" x-text="tenant.name"></td>
+              <td class="px-6 py-4 text-sm text-gray-500" x-text="tenant.slug"></td>
+              <td class="px-6 py-4">
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                      :class="tenant.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
+                      x-text="tenant.status"></span>
+              </td>
+              <td class="px-6 py-4 text-sm text-gray-500"
+                  x-text="new Date(tenant.created_at).toLocaleDateString('ja-JP')"></td>
+              <td class="px-6 py-4 text-right">
+                <a :href="'/admin/tenant.html?id=' + tenant.id"
+                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">詳細 →</a>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    function tenantsApp() {
+      return {
+        tenants: [],
+        loading: true,
+        error: '',
+        showForm: false,
+        newName: '',
+        newSlug: '',
+        creating: false,
+        formError: '',
+        async init() {
+          if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+          await this.loadTenants();
+        },
+        async loadTenants() {
+          this.loading = true;
+          try {
+            this.tenants = await api.tenants.list();
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+        async createTenant() {
+          this.creating = true;
+          this.formError = '';
+          try {
+            await api.tenants.create(this.newName, this.newSlug);
+            this.showForm = false;
+            this.newName = '';
+            this.newSlug = '';
+            await this.loadTenants();
+          } catch(e) {
+            this.formError = e.message;
+          } finally {
+            this.creating = false;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>
