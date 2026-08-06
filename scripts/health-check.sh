@@ -11,10 +11,10 @@ check() {
     local cmd="$2"
     if eval "$cmd" > /dev/null 2>&1; then
         echo "  [OK] $name"
-        ((PASS++))
+        ((PASS++)) || true
     else
         echo "  [NG] $name"
-        ((FAIL++))
+        ((FAIL++)) || true
     fi
 }
 
