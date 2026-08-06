@@ -93,6 +93,7 @@ services:
       - ./certs/server/server.key:/opt/emqx/etc/certs/server.key:ro
     environment:
       EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+      EMQX_NODE__COOKIE: ${EMQX_NODE_COOKIE}
     ports:
       - "8883:8883"
     expose:
