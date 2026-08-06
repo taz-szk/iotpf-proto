@@ -1,0 +1,170 @@
+name: iot-platform
+
+networks:
+  internal:
+    driver: bridge
+  external:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  emqx_data:
+  minio_data:
+  grafana_data:
+  step_ca_data:
+
+services:
+
+  step-ca:
+    image: smallstep/step-ca:latest
+    container_name: step-ca
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - step_ca_data:/home/step
+    environment:
+      DOCKER_STEPCA_INIT_NAME: "IoT Platform CA"
+      DOCKER_STEPCA_INIT_DNS_NAMES: "step-ca,localhost,${PLATFORM_DOMAIN}"
+      DOCKER_STEPCA_INIT_PROVISIONER_NAME: "iot-platform"
+      DOCKER_STEPCA_INIT_PASSWORD: "${STEP_CA_PASSWORD}"
+      DOCKER_STEPCA_INIT_ADDRESS: ":9000"
+    expose:
+      - "9000"
+    healthcheck:
+      test: ["CMD", "step", "ca", "health", "--ca-url=https://localhost:9000", "--root=/home/step/certs/root_ca.crt"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  influxdb:
+    image: influxdb:2-alpine
+    container_name: influxdb
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_ADMIN_USER}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_ADMIN_PASSWORD}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_ADMIN_TOKEN}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
+    expose:
+      - "8086"
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  emqx:
+    image: emqx:5
+    container_name: emqx
+    restart: unless-stopped
+    networks: [internal, external]
+    volumes:
+      - emqx_data:/opt/emqx/data
+      - ./emqx/emqx.conf:/opt/emqx/etc/emqx.conf:ro
+      - ./emqx/acl.conf:/opt/emqx/etc/acl.conf:ro
+      - ./certs/ca/root_ca.crt:/opt/emqx/etc/certs/root_ca.crt:ro
+      - ./certs/server/server.crt:/opt/emqx/etc/certs/server.crt:ro
+      - ./certs/server/server.key:/opt/emqx/etc/certs/server.key:ro
+    environment:
+      EMQX_DASHBOARD__DEFAULT_PASSWORD: ${EMQX_DASHBOARD_PASSWORD}
+    ports:
+      - "8883:8883"
+    expose:
+      - "18083"
+    healthcheck:
+      test: ["CMD", "emqx", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - minio_data:/data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command: server /data --console-address ":9001"
+    expose:
+      - "9000"
+      - "9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    container_name: grafana
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: https://${PLATFORM_DOMAIN}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      influxdb:
+        condition: service_healthy
+
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: nginx
+    restart: unless-stopped
+    networks: [internal, external]
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certs/server/server.crt:/etc/nginx/certs/server.crt:ro
+      - ./certs/server/server.key:/etc/nginx/certs/server.key:ro
+      - ./certs/ca/root_ca.crt:/etc/nginx/certs/root_ca.crt:ro
+    ports:
+      - "80:80"
+      - "443:443"
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      - grafana
