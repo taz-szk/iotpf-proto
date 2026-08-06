@@ -16,6 +16,14 @@ class Settings(BaseSettings):
     grafana_url: str = "http://grafana:3000"
     grafana_admin_user: str = "admin"
     grafana_admin_password: str = "changeme"
+    minio_endpoint: str = "http://minio:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "changeme"
+    minio_firmware_bucket: str = "firmware"
+    emqx_api_url: str = "http://emqx:18083"
+    emqx_api_user: str = "admin"
+    emqx_api_password: str = "public"
+    platform_domain: str = "localhost"
 
     class Config:
         env_file = ".env"
