@@ -6,6 +6,8 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 source "${PROJECT_DIR}/.env"
 
+docker info > /dev/null 2>&1 || { echo "Docker デーモンが起動していません"; exit 1; }
+
 echo "=== IoTプラットフォーム 初回セットアップ ==="
 
 mkdir -p "${PROJECT_DIR}/certs/ca"
@@ -17,9 +19,16 @@ echo "[1/4] Step-CA起動・初期化..."
 docker compose up -d step-ca
 
 echo "Step-CA起動待機中..."
+MAX_RETRIES=20
+RETRIES=0
 until docker compose exec -T step-ca \
   step ca health --ca-url=https://localhost:9000 \
   --root=/home/step/certs/root_ca.crt 2>/dev/null; do
+  RETRIES=$((RETRIES + 1))
+  if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+    echo "Step-CA起動タイムアウト（${MAX_RETRIES}回リトライ後）"
+    exit 1
+  fi
   sleep 3
 done
 
