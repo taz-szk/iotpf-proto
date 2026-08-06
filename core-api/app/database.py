@@ -46,4 +46,34 @@ def create_tenant_schema(tenant_id: str) -> None:
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         '''))
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".alert_rules (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                device_id VARCHAR(255),
+                sensor_key VARCHAR(255) NOT NULL,
+                condition VARCHAR(20) NOT NULL
+                    CHECK (condition IN (\'above\', \'below\', \'equal\', \'device_offline\')),
+                threshold NUMERIC,
+                trigger_mode VARCHAR(30) NOT NULL DEFAULT \'consecutive\'
+                    CHECK (trigger_mode IN (\'consecutive\', \'duration\', \'consecutive_and_duration\')),
+                consecutive_count INT NOT NULL DEFAULT 3,
+                duration_sec INT NOT NULL DEFAULT 60,
+                severity VARCHAR(20) NOT NULL DEFAULT \'warning\'
+                    CHECK (severity IN (\'info\', \'warning\', \'critical\')),
+                notify_emails TEXT[] NOT NULL DEFAULT \'{{}}\'::TEXT[],
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        '''))
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".alert_events (
+                id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                rule_id UUID NOT NULL,
+                device_id VARCHAR(255),
+                triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                resolved_at TIMESTAMPTZ,
+                trigger_value NUMERIC,
+                notified_at TIMESTAMPTZ
+            )
+        '''))
         conn.commit()
