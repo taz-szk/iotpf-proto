@@ -123,6 +123,39 @@ def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str, tenan
     if add.status_code not in (200, 409):
         add.raise_for_status()
 
+def ensure_platform_admin_in_grafana(email: str) -> None:
+    """プラットフォーム管理者を Grafana に server admin として登録する。
+    Auth Proxy は login = email で検索するため、同名ユーザーを先に作成して権限を付与する。
+    ユーザーが既に server admin であれば何もしない。"""
+    lookup = httpx.get(
+        f"{settings.grafana_url}/api/users/lookup",
+        params={"loginOrEmail": email},
+        auth=_admin_auth(), timeout=10.0,
+    )
+    if lookup.status_code == 404:
+        create = httpx.post(
+            f"{settings.grafana_url}/api/admin/users",
+            auth=_admin_auth(),
+            json={"name": email, "email": email, "login": email,
+                  "password": secrets.token_hex(16)},
+            timeout=10.0,
+        )
+        create.raise_for_status()
+        user_id = create.json()["id"]
+        is_admin = False
+    else:
+        lookup.raise_for_status()
+        user_id = lookup.json()["id"]
+        is_admin = lookup.json().get("isGrafanaAdmin", False)
+    if not is_admin:
+        httpx.put(
+            f"{settings.grafana_url}/api/admin/users/{user_id}/permissions",
+            auth=_admin_auth(),
+            json={"isGrafanaAdmin": True},
+            timeout=10.0,
+        ).raise_for_status()
+
+
 def provision_tenant_grafana(tenant_name: str, influxdb_org_id: str, influxdb_token: str) -> int:
     """テナント用Grafana Orgを作成しDataSource・ダッシュボードを設定する。Org IDを返す。"""
     org_id = create_grafana_org(tenant_name)

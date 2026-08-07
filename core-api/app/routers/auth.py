@@ -5,6 +5,7 @@ from app.services.auth import verify_password, create_access_token, create_refre
 from app.models.public import PlatformUser
 from app.database import SessionLocal
 from app.config import settings
+from app.services.grafana import ensure_platform_admin_in_grafana
 
 router = APIRouter(prefix="/auth")
 
@@ -15,6 +16,10 @@ def login(req: LoginRequest, response: Response):
     if not user or not user.is_active or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     payload = {"sub": str(user.id), "email": user.email, "type": "platform"}
+    try:
+        ensure_platform_admin_in_grafana(user.email)
+    except Exception:
+        pass  # Grafana 未起動でもログインはブロックしない
     access = create_access_token(payload)
     refresh = create_refresh_token(payload)
     # Grafana SSO Cookie (24h)
