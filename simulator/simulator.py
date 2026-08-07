@@ -1,4 +1,6 @@
 # simulator/simulator.py
+from __future__ import annotations
+
 import json
 import os
 import queue
@@ -210,6 +212,9 @@ class SimulatorApp(tk.Tk):
                     self._update_state(device_id, data["state"])
                 elif event_type == "log":
                     self._append_log(data["message"], level=data.get("level", "info"))
+                elif event_type == "telemetry":
+                    payload_str = json.dumps(data.get("payload", {}), ensure_ascii=False)
+                    self._append_log(f"{device_id}: telemetry {payload_str}", level="info")
         except queue.Empty:
             pass
         self.after(100, self._process_queue)
