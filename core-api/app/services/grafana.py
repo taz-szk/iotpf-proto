@@ -1,4 +1,5 @@
 import httpx
+import secrets
 from app.config import settings
 
 _DEFAULT_DASHBOARD = {
@@ -78,6 +79,36 @@ def create_default_dashboard(org_id: int, tenant_name: str) -> None:
         timeout=10.0,
     )
     resp.raise_for_status()
+
+def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str) -> None:
+    """Grafana org_id にユーザーを追加する。存在しなければ作成する。"""
+    # 1. ユーザー存在確認
+    lookup = httpx.get(
+        f"{settings.grafana_url}/api/users/lookup?loginOrEmail={email}",
+        auth=_admin_auth(), timeout=10.0,
+    )
+    if lookup.status_code == 404:
+        # 2. ユーザー作成（パスワードは使わない — Auth Proxy が認証するため）
+        create = httpx.post(
+            f"{settings.grafana_url}/api/admin/users",
+            auth=_admin_auth(),
+            json={"name": email, "email": email, "login": email,
+                  "password": secrets.token_hex(16)},
+            timeout=10.0,
+        )
+        create.raise_for_status()
+    else:
+        lookup.raise_for_status()
+
+    # 3. org に追加（409 = すでにメンバー → 無視）
+    add = httpx.post(
+        f"{settings.grafana_url}/api/orgs/{org_id}/users",
+        auth=_admin_auth(),
+        json={"loginOrEmail": email, "role": grafana_role},
+        timeout=10.0,
+    )
+    if add.status_code not in (200, 409):
+        add.raise_for_status()
 
 def provision_tenant_grafana(tenant_name: str, influxdb_org_id: str, influxdb_token: str) -> int:
     """テナント用Grafana Orgを作成しDataSource・ダッシュボードを設定する。Org IDを返す。"""
