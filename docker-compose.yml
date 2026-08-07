@@ -135,7 +135,10 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
-    networks: [internal, grafana-net]
+    networks:
+      internal: {}
+      grafana-net:
+        ipv4_address: 172.30.0.10
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
