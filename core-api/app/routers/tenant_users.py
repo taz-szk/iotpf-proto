@@ -3,6 +3,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from app.schemas.tenant_users import TenantUserCreate, TenantUserOut
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
@@ -16,7 +17,7 @@ _ROLE_GRAFANA = {"admin": "Admin", "operator": "Editor", "viewer": "Viewer"}
 
 def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
     payload = verify_token(creds.credentials)
-    if not payload or payload.get("type") != "platform" or payload.get("token_type") == "refresh":
+    if not payload or payload.get("type") != "platform" or payload.get("token_type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     return payload
 
@@ -38,17 +39,23 @@ def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depend
     password_hash = hash_password(body.password)
 
     with engine.connect() as conn:
-        conn.execute(
-            text(f'''
-                INSERT INTO "{schema}".users (id, email, password_hash, role)
-                VALUES (:id, :email, :hash, :role)
-            '''),
-            {"id": user_id, "email": body.email, "hash": password_hash, "role": body.role}
-        )
-        conn.commit()
-
-    if tenant.grafana_org_id:
-        ensure_grafana_user_in_org(int(tenant.grafana_org_id), body.email, _ROLE_GRAFANA[body.role])
+        try:
+            conn.execute(
+                text(f'''
+                    INSERT INTO "{schema}".users (id, email, password_hash, role)
+                    VALUES (:id, :email, :hash, :role)
+                '''),
+                {"id": user_id, "email": body.email, "hash": password_hash, "role": body.role}
+            )
+            if tenant.grafana_org_id:
+                ensure_grafana_user_in_org(int(tenant.grafana_org_id), body.email, _ROLE_GRAFANA[body.role], str(tenant_id))
+            conn.commit()
+        except IntegrityError:
+            raise HTTPException(status_code=409, detail="Email already exists")
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(status_code=502, detail="Grafana sync failed; user not created")
 
     return TenantUserOut(
         id=user_id, email=body.email, role=body.role,

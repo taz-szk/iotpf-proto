@@ -5,6 +5,13 @@ networks:
     driver: bridge
   external:
     driver: bridge
+  # Grafana Auth Proxy 専用ネットワーク。nginx / core-api のみ参加し、
+  # GF_AUTH_PROXY_WHITELIST をこのサブネットに限定する。
+  grafana-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
 
 volumes:
   postgres_data:
@@ -128,7 +135,7 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
-    networks: [internal]
+    networks: [grafana-net]
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
@@ -136,13 +143,15 @@ services:
       GF_SERVER_ROOT_URL: https://${PLATFORM_DOMAIN}/grafana/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_USERS_AUTO_ASSIGN_ORG: "false"
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_AUTH_PROXY_ENABLED: "true"
       GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
-      GF_AUTH_PROXY_HEADER_PROPERTY: email
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_HEADERS: "Email:X-WEBAUTH-EMAIL"
       GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
       GF_AUTH_PROXY_SYNC_TTL: "60"
-      GF_AUTH_PROXY_WHITELIST: ""
+      GF_AUTH_PROXY_WHITELIST: "172.30.0.0/24"
     expose:
       - "3000"
     healthcheck:
@@ -160,7 +169,7 @@ services:
       dockerfile: Dockerfile
     container_name: core-api
     restart: unless-stopped
-    networks: [internal]
+    networks: [internal, grafana-net]
     volumes:
       - ./certs/ca/root_ca.crt:/certs/ca/root_ca.crt:ro
       - step_ca_data:/home/step:ro
@@ -252,7 +261,7 @@ services:
     image: nginx:1.25-alpine
     container_name: nginx
     restart: unless-stopped
-    networks: [internal, external]
+    networks: [internal, external, grafana-net]
     volumes:
       # Note: core-api service (P2) must be added to this compose file or an overlay
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro

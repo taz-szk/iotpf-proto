@@ -40,10 +40,21 @@ def test_tenant_login_success():
 
 
 def test_tenant_login_invalid_credentials():
-    with patch("app.routers.tenant_auth.SessionLocal") as mock_sl:
+    with patch("app.routers.tenant_auth.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_auth.verify_password", return_value=False):
         mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = None
         resp = client.post("/tenant-auth/login", json={"tenant_slug": "x", "email": "x@x.com", "password": "x"})
     assert resp.status_code == 401
+
+
+def test_tenant_login_no_grafana_org():
+    tenant = _make_tenant(grafana_org_id=None)  # no Grafana provisioning
+
+    with patch("app.routers.tenant_auth.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_auth.verify_password", return_value=True):
+        mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
+        resp = client.post("/tenant-auth/login", json={"tenant_slug": "acme", "email": "user@acme.com", "password": "pass"})
+    assert resp.status_code == 503
 
 
 def test_verify_jwt_no_cookie():
@@ -56,7 +67,8 @@ def test_verify_jwt_valid_tenant_cookie():
     token = create_access_token({"sub": "u1", "email": "user@acme.com", "type": "tenant", "tenant_id": "t1"})
     resp = client.get("/auth/verify-jwt", cookies={"iot_token": token})
     assert resp.status_code == 200
-    assert resp.headers.get("x-auth-user") == "user@acme.com"
+    assert resp.headers.get("x-auth-user") == "t1:user@acme.com"
+    assert resp.headers.get("x-auth-email") == "user@acme.com"
 
 
 def test_verify_jwt_valid_platform_cookie():
@@ -65,6 +77,14 @@ def test_verify_jwt_valid_platform_cookie():
     resp = client.get("/auth/verify-jwt", cookies={"iot_token": token})
     assert resp.status_code == 200
     assert resp.headers.get("x-auth-user") == "admin@iot.local"
+    assert resp.headers.get("x-auth-email") == "admin@iot.local"
+
+
+def test_verify_jwt_reserved_email_rejected():
+    from app.services.auth import create_access_token
+    token = create_access_token({"sub": "u1", "email": "admin@localhost", "type": "platform"})
+    resp = client.get("/auth/verify-jwt", cookies={"iot_token": token})
+    assert resp.status_code == 401
 
 
 def test_verify_jwt_refresh_token_rejected():

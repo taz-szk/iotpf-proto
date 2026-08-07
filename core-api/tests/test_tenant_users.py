@@ -1,5 +1,6 @@
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
+from sqlalchemy.exc import IntegrityError
 from app.main import app
 from app.services.auth import create_access_token
 
@@ -20,7 +21,8 @@ def test_create_tenant_user_success():
     tenant = _make_tenant()
     with patch("app.routers.tenant_users.SessionLocal") as mock_sl, \
          patch("app.routers.tenant_users.engine") as mock_engine, \
-         patch("app.routers.tenant_users.ensure_grafana_user_in_org") as mock_grafana:
+         patch("app.routers.tenant_users.ensure_grafana_user_in_org") as mock_grafana, \
+         patch("app.routers.tenant_users.hash_password", return_value="hashed"):
         mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
         mock_conn = MagicMock()
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
@@ -35,7 +37,31 @@ def test_create_tenant_user_success():
     data = resp.json()
     assert data["email"] == "user@acme.com"
     assert data["role"] == "viewer"
-    mock_grafana.assert_called_once_with(3, "user@acme.com", "Viewer")
+    # Verify schema name transformation
+    sql_text = str(mock_conn.execute.call_args[0][0])
+    assert '"tenant_22222222_2222_2222_2222_222222222222".users' in sql_text
+    # Verify email is passed as bind parameter (not interpolated)
+    params = mock_conn.execute.call_args[0][1]
+    assert params["email"] == "user@acme.com"
+    # Verify Grafana sync called with namespaced tenant_id
+    mock_grafana.assert_called_once_with(3, "user@acme.com", "Viewer", "22222222-2222-2222-2222-222222222222")
+
+def test_create_tenant_user_duplicate_email():
+    tenant = _make_tenant()
+    with patch("app.routers.tenant_users.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_users.engine") as mock_engine, \
+         patch("app.routers.tenant_users.hash_password", return_value="hashed"):
+        mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
+        mock_conn = MagicMock()
+        mock_conn.execute.side_effect = IntegrityError("", {}, None)
+        mock_engine.connect.return_value.__enter__.return_value = mock_conn
+
+        resp = client.post(
+            "/tenants/22222222-2222-2222-2222-222222222222/users",
+            json={"email": "user@acme.com", "password": "secure1234", "role": "viewer"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 409
 
 def test_create_tenant_user_unauthorized():
     resp = client.post(

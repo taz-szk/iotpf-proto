@@ -1,9 +1,9 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 
 class TenantLoginRequest(BaseModel):
     tenant_slug: str
-    email: str
+    email: EmailStr
     password: str
 
 

@@ -80,12 +80,13 @@ def create_default_dashboard(org_id: int, tenant_name: str) -> None:
     )
     resp.raise_for_status()
 
-def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str) -> None:
-    """Grafana org_id にユーザーを追加する。存在しなければ作成する。"""
-    # 1. ユーザー存在確認
+def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str, tenant_id_str: str) -> None:
+    """Grafana org にユーザーを追加する。存在しなければ作成する。"""
+    login = f"{tenant_id_str}:{email}"
+    # 1. ユーザー存在確認（テナント名前空間付きloginで検索）
     lookup = httpx.get(
         f"{settings.grafana_url}/api/users/lookup",
-        params={"loginOrEmail": email},
+        params={"loginOrEmail": login},
         auth=_admin_auth(), timeout=10.0,
     )
     if lookup.status_code == 404:
@@ -93,7 +94,7 @@ def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str) -> No
         create = httpx.post(
             f"{settings.grafana_url}/api/admin/users",
             auth=_admin_auth(),
-            json={"name": email, "email": email, "login": email,
+            json={"name": email, "email": email, "login": login,
                   "password": secrets.token_hex(16)},
             timeout=10.0,
         )
@@ -101,11 +102,12 @@ def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str) -> No
     else:
         lookup.raise_for_status()
 
-    # 3. org に追加（409 = すでにメンバー → 無視）
+    # 3. org に追加（409 = すでにメンバー → 無視。ロールの更新は別途 PATCH が必要だが
+    #    現時点でロール変更エンドポイントがないため未実装）
     add = httpx.post(
         f"{settings.grafana_url}/api/orgs/{org_id}/users",
         auth=_admin_auth(),
-        json={"loginOrEmail": email, "role": grafana_role},
+        json={"loginOrEmail": login, "role": grafana_role},
         timeout=10.0,
     )
     if add.status_code not in (200, 409):

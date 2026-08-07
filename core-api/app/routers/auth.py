@@ -49,5 +49,16 @@ def verify_jwt(request: Request, response: Response):
     payload = verify_token(token)
     if not payload or payload.get("type") not in ("tenant", "platform") or payload.get("token_type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    response.headers["X-Auth-User"] = payload["email"]
-    return {"email": payload["email"], "type": payload["type"]}
+    email = payload["email"]
+    # Defense-in-depth: reject reserved Grafana usernames that would grant server-admin
+    _RESERVED = {"admin@localhost", "admin@grafana", "grafana@grafana"}
+    if not email.isascii() or email.lower() in _RESERVED:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if payload.get("type") == "tenant":
+        tenant_id = payload.get("tenant_id", "")
+        x_auth_user = f"{tenant_id}:{email}"
+    else:
+        x_auth_user = email
+    response.headers["X-Auth-User"] = x_auth_user
+    response.headers["X-Auth-Email"] = email
+    return {"email": email, "type": payload["type"]}

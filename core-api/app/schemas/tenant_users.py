@@ -1,7 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class TenantUserCreate(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     role: str = "viewer"  # "admin" | "operator" | "viewer"
 
