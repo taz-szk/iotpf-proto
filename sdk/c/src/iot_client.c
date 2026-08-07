@@ -163,6 +163,7 @@ int iot_connect(iot_client_t *client) {
     if (MQTTClient_subscribe(client->mqtt, topic, 1) != MQTTCLIENT_SUCCESS) {
         MQTTClient_disconnect(client->mqtt, 1000);
         MQTTClient_destroy(&client->mqtt);
+        client->mqtt = NULL; /* prevent double-free in iot_client_destroy */
         return IOT_ERR_CONNECT;
     }
 
