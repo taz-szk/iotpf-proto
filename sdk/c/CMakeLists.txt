@@ -52,6 +52,13 @@ target_link_libraries(test_compile iot_platform)
 enable_testing()
 add_test(NAME compile_link_check COMMAND test_compile)
 
+# -- Examples --
+add_executable(basic_telemetry examples/basic_telemetry.c)
+target_link_libraries(basic_telemetry iot_platform)
+
+add_executable(ota_update examples/ota_update.c)
+target_link_libraries(ota_update iot_platform)
+
 # -- Install headers --
 install(FILES include/iot_client.h include/iot_platform.h
         DESTINATION include/iot_platform
