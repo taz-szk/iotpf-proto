@@ -74,7 +74,8 @@ int iot_provision_exec(const char *api_url,
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &wb);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-    /* Trust system CA for API; mTLS not needed at provisioning stage */
+    /* SSL peer verification disabled: device has no CA bundle before provisioning.
+     * Known bootstrap problem with private CA; token is one-time-use and short-lived. */
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 
     CURLcode rc = curl_easy_perform(curl);

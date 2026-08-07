@@ -102,7 +102,7 @@ int iot_ota_download(download_url, output_path, "sha256:..."); /* → 0 / IOT_ER
 
 ## MCU へのポーティング
 
-`include/iot_platform.h` の 6 関数を実装してください。  
+`include/iot_platform.h` の 7 関数を実装してください。  
 テンプレートと ESP-IDF / FreeRTOS の実装例は `porting/` を参照。
 
 ## エラーコード
