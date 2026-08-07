@@ -47,7 +47,7 @@ def verify_jwt(request: Request, response: Response):
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No token")
     payload = verify_token(token)
-    if not payload or payload.get("type") not in ("tenant", "platform") or payload.get("token_type") == "refresh":
+    if not payload or payload.get("type") not in ("tenant", "platform") or payload.get("token_type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     response.headers["X-Auth-User"] = payload["email"]
     return {"email": payload["email"], "type": payload["type"]}
