@@ -65,6 +65,7 @@ class DeviceWorker(threading.Thread):
         self._put_event("status", {"state": "disconnected"})
 
     def start_sending(self, interval: float, payload_fn: Callable[[], dict]) -> None:
+        self.stop_sending()
         self._stop_send.clear()
         self._send_thread = threading.Thread(
             target=self._send_loop,
