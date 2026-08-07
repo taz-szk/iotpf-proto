@@ -53,7 +53,7 @@ enable_testing()
 add_test(NAME compile_link_check COMMAND test_compile)
 
 # -- Install headers --
-install(FILES include/iot_client.h
+install(FILES include/iot_client.h include/iot_platform.h
         DESTINATION include/iot_platform
         OPTIONAL)
 install(TARGETS iot_platform DESTINATION lib)
