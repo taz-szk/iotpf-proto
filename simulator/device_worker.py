@@ -1,4 +1,6 @@
 # simulator/device_worker.py
+from __future__ import annotations
+
 import json
 import os
 import queue
@@ -96,13 +98,6 @@ class DeviceWorker(threading.Thread):
                     payload = payload_fn()
                     self._client.publish_telemetry(payload)
                     self._put_event("telemetry", {"payload": payload})
-                    self._put_event(
-                        "log",
-                        {
-                            "message": f"{self.device_id}: telemetry {json.dumps(payload, ensure_ascii=False)}",
-                            "level": "info",
-                        },
-                    )
                 except Exception as exc:
                     self._put_event(
                         "log", {"message": f"{self.device_id}: 送信エラー — {exc}", "level": "error"}
