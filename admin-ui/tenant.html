@@ -58,6 +58,9 @@
         <button @click="activeTab = 'users'; loadUsers()"
                 :class="activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">ユーザー管理</button>
+        <button @click="activeTab = 'devices'; startDevicesRefresh()"
+                :class="activeTab === 'devices' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">デバイス</button>
       </div>
 
       <!-- プロビジョニングトークンタブ -->
@@ -316,6 +319,60 @@
         </div>
       </div>
 
+      <!-- デバイスタブ -->
+      <div x-show="activeTab === 'devices'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-medium text-gray-700">登録デバイス</h3>
+          <button @click="loadDevices()" :disabled="devicesLoading"
+                  class="text-sm text-blue-600 hover:text-blue-800 disabled:text-blue-300">
+            <span x-show="!devicesLoading">↻ 更新</span>
+            <span x-show="devicesLoading">更新中...</span>
+          </button>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div x-show="!devicesLoading && devices.length === 0"
+               class="py-8 text-center text-gray-400 text-sm">デバイスが登録されていません</div>
+          <table x-show="devices.length > 0" class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイスID</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終通信</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">FWバージョン</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="d in devices" :key="d.id">
+                <tr>
+                  <td class="px-4 py-3 font-mono text-xs" x-text="d.device_id"></td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium"
+                          :class="{
+                            'bg-green-100 text-green-700': d.connection_status === 'online',
+                            'bg-red-100 text-red-700':   d.connection_status === 'offline',
+                            'bg-gray-100 text-gray-500': d.connection_status === 'unknown',
+                          }"
+                          x-text="d.connection_status"></span>
+                  </td>
+                  <td class="px-4 py-3 text-gray-500"
+                      :title="d.last_seen_at ?? ''"
+                      x-text="timeAgo(d.last_seen_at)"></td>
+                  <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
+                  <td class="px-4 py-3"
+                      :class="certClass(d.cert_not_after)"
+                      x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
+                  <td class="px-4 py-3 text-gray-400"
+                      x-text="new Date(d.created_at).toLocaleDateString('ja-JP')"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-gray-400 mt-2 text-right">30秒ごとに自動更新</p>
+      </div>
+
       <!-- ファームウェアタブ -->
       <div x-show="activeTab === 'firmware'">
         <div class="flex items-center justify-between mb-4">
@@ -538,6 +595,11 @@
         showUserForm: false,
         newUser: { email: '', password: '', role: 'viewer' },
 
+        // デバイス
+        devices: [],
+        devicesLoading: false,
+        _devicesTimer: null,
+
         async loadUsers() {
           try {
             this.users = await api.tenantUsers.list(tenantId);
@@ -555,6 +617,44 @@
           } catch(e) {
             this.error = e.message;
           }
+        },
+
+        timeAgo(isoStr) {
+          if (!isoStr) return '-';
+          const diff = Date.now() - new Date(isoStr).getTime();
+          const mins = Math.floor(diff / 60000);
+          if (mins < 1) return '今';
+          if (mins < 60) return `${mins}分前`;
+          const hrs = Math.floor(mins / 60);
+          if (hrs < 24) return `${hrs}時間前`;
+          return `${Math.floor(hrs / 24)}日前`;
+        },
+
+        certClass(certNotAfter) {
+          if (!certNotAfter) return 'text-gray-400';
+          const days = (new Date(certNotAfter) - Date.now()) / 86400000;
+          if (days < 0)  return 'text-red-600 font-medium';
+          if (days < 7)  return 'text-yellow-600 font-medium';
+          return 'text-gray-500';
+        },
+
+        async loadDevices() {
+          this.devicesLoading = true;
+          try {
+            this.devices = await api.tenantDevices.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.devicesLoading = false;
+          }
+        },
+
+        startDevicesRefresh() {
+          if (this._devicesTimer) clearInterval(this._devicesTimer);
+          this.loadDevices();
+          this._devicesTimer = setInterval(() => {
+            if (this.activeTab === 'devices') this.loadDevices();
+          }, 30000);
         },
 
         async loadFirmware() {

@@ -43,8 +43,8 @@ const api = {
         create: (name, slug) => request('POST', '/tenants', { name, slug }),
         get: (id) => request('GET', `/tenants/${id}`),
     },
-    devices: {
-        // accessed via raw SQL from tenant schema — future endpoint
+    tenantDevices: {
+        list: (tenantId) => request('GET', `/tenants/${tenantId}/devices`),
     },
     provisioningTokens: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/provisioning-tokens`),
