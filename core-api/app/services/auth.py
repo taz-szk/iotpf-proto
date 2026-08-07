@@ -11,8 +11,8 @@ def hash_password(password: str) -> str:
 def verify_password(plain: str, hashed: str) -> bool:
     return _pwd_ctx.verify(plain, hashed)
 
-def create_access_token(data: dict) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    expire = datetime.now(timezone.utc) + (expires_delta or timedelta(minutes=settings.access_token_expire_minutes))
     return jwt.encode({**data, "exp": expire, "token_type": "access"}, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 def create_refresh_token(data: dict) -> str:

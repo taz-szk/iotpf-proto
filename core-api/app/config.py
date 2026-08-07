@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     emqx_api_user: str = "admin"
     emqx_api_password: str = "public"
     platform_domain: str = "localhost"
+    grafana_session_expire_hours: int = 24
 
     class Config:
         env_file = ".env"
