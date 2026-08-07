@@ -51,6 +51,7 @@ def list_tenant_devices(tenant_id: UUID, _: dict = Depends(_require_platform)):
                        fw_version, cert_not_after, created_at
                 FROM "{schema}".devices
                 ORDER BY created_at DESC
+                LIMIT 1000
             ''')
         ).fetchall()
     return [

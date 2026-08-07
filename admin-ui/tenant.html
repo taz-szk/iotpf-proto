@@ -639,6 +639,7 @@
         },
 
         async loadDevices() {
+          this.error = '';
           this.devicesLoading = true;
           try {
             this.devices = await api.tenantDevices.list(tenantId);
