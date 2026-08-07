@@ -135,7 +135,7 @@ services:
     image: grafana/grafana-oss:latest
     container_name: grafana
     restart: unless-stopped
-    networks: [grafana-net]
+    networks: [internal, grafana-net]
     volumes:
       - grafana_data:/var/lib/grafana
     environment:
