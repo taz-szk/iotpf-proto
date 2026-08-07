@@ -1,12 +1,11 @@
+FROM smallstep/step-cli:latest AS step-cli
+
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y curl wget && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # step CLI インストール（Step-CA証明書発行に使用）
-RUN wget -q https://dl.smallstep.com/gh-release/cli/gh-release-header/v0.27.0/step_linux_0.27.0_amd64.tar.gz \
-    && tar xzf step_linux_0.27.0_amd64.tar.gz \
-    && mv step_0.27.0/bin/step /usr/local/bin/ \
-    && rm -rf step_linux_0.27.0_amd64.tar.gz step_0.27.0
+COPY --from=step-cli /usr/local/bin/step /usr/local/bin/step
 
 WORKDIR /app
 COPY requirements.txt .
