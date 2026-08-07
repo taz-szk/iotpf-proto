@@ -49,6 +49,7 @@ class SimulatorApp(tk.Tk):
         self._bootstrap_token = tk.StringVar(value="")
         self._interval = tk.DoubleVar(value=5.0)
         self._use_random = tk.BooleanVar(value=True)
+        self._ssl_verify = tk.BooleanVar(value=True)
         self._custom_json_text: Optional[scrolledtext.ScrolledText] = None
         self._log_text: Optional[scrolledtext.ScrolledText] = None
         self._device_list_frame: Optional[tk.Frame] = None
@@ -74,6 +75,8 @@ class SimulatorApp(tk.Tk):
         ttk.Entry(conn_frame, textvariable=self._bootstrap_token, width=52, show="*").grid(
             row=1, column=1, columnspan=5, sticky=tk.W, padx=4
         )
+        ttk.Checkbutton(conn_frame, text="SSL証明書を検証する（オフ=自己署名証明書を許可）",
+                        variable=self._ssl_verify).grid(row=2, column=0, columnspan=6, sticky=tk.W, pady=(2, 0))
 
         pane = tk.PanedWindow(self, orient=tk.HORIZONTAL, sashrelief=tk.RAISED)
         pane.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
@@ -152,6 +155,7 @@ class SimulatorApp(tk.Tk):
             bootstrap_token=self._bootstrap_token.get(),
             cert_dir=cert_dir,
             event_queue=self._event_queue,
+            ssl_verify=self._ssl_verify.get(),
         )
         self._workers[device_id] = worker
 

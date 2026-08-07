@@ -21,6 +21,7 @@ class DeviceWorker(threading.Thread):
         bootstrap_token: str,
         cert_dir: str,
         event_queue: queue.Queue,
+        ssl_verify: bool = True,
     ):
         super().__init__(daemon=True, name=f"worker-{device_id}")
         self.device_id = device_id
@@ -30,6 +31,7 @@ class DeviceWorker(threading.Thread):
         self._bootstrap_token = bootstrap_token
         self._cert_dir = cert_dir
         self._queue = event_queue
+        self._ssl_verify = ssl_verify
         self._client: Optional[IotClient] = None
         self._running = True
         self._stop_send = threading.Event()
@@ -49,7 +51,7 @@ class DeviceWorker(threading.Thread):
                 self._client.load_credentials(self._cert_dir)
             else:
                 self._put_event("log", {"message": f"{self.device_id}: プロビジョニング中...", "level": "info"})
-                self._client.provision(self._bootstrap_token, self.device_id, self._cert_dir)
+                self._client.provision(self._bootstrap_token, self.device_id, self._cert_dir, verify=self._ssl_verify)
                 self._put_event("log", {"message": f"{self.device_id}: プロビジョニング完了", "level": "info"})
 
             self._put_event("status", {"state": "connecting"})

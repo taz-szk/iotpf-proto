@@ -2,12 +2,16 @@ import os
 import requests
 
 
-def provision(api_url: str, bootstrap_token: str, device_id: str, cert_dir: str) -> tuple:
+def provision(api_url: str, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True) -> tuple:
     os.makedirs(cert_dir, exist_ok=True)
+    if not verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     resp = requests.post(
         f"{api_url}/provision",
         json={"bootstrap_token": bootstrap_token, "device_id": device_id},
         timeout=30,
+        verify=verify,
     )
     resp.raise_for_status()
     data = resp.json()

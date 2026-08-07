@@ -20,8 +20,8 @@ class IotClient:
         self._mqtt: Optional[mqtt.Client] = None
         self._connected = threading.Event()
 
-    def provision(self, bootstrap_token: str, device_id: str, cert_dir: str) -> None:
-        tenant_id, dev_id = _do_provision(self._api_url, bootstrap_token, device_id, cert_dir)
+    def provision(self, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True) -> None:
+        tenant_id, dev_id = _do_provision(self._api_url, bootstrap_token, device_id, cert_dir, verify=verify)
         self._tenant_id = tenant_id
         self._device_id = dev_id
         self._cert_dir = cert_dir
