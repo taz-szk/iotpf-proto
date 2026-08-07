@@ -35,7 +35,7 @@
         <div class="flex items-center gap-4 text-sm text-gray-500">
           <span x-text="'スラッグ: ' + tenant?.slug"></span>
           <span x-show="tenant?.grafana_org_id">
-            <a :href="grafanaUrl()" target="_blank"
+            <a :href="`/api/tenants/${tenantId}/grafana`" target="_blank"
                class="text-blue-600 hover:underline">Grafanaダッシュボードを開く →</a>
           </span>
         </div>

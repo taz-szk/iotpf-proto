@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.routers import health, auth, tenants, provisioning, emqx, provisioning_tokens, alert_rules, emqx_events, firmware, stats, tenant_auth, tenant_users, tenant_devices
+from app.routers import health, auth, tenants, provisioning, emqx, provisioning_tokens, alert_rules, emqx_events, firmware, stats, tenant_auth, tenant_users, tenant_devices, tenant_grafana
 from app.database import migrate_add_grafana_org_id
 
 app = FastAPI(title="IoT Platform Core API", version="0.1.0")
@@ -24,3 +24,4 @@ app.include_router(stats.router)
 app.include_router(tenant_auth.router)
 app.include_router(tenant_users.router)
 app.include_router(tenant_devices.router)
+app.include_router(tenant_grafana.router)

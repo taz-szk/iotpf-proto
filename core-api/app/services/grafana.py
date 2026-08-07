@@ -123,6 +123,42 @@ def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str, tenan
     if add.status_code not in (200, 409):
         add.raise_for_status()
 
+def add_user_to_grafana_org(org_id: int, login_or_email: str, role: str = "Admin") -> None:
+    """ユーザーを Grafana org に追加する（409 = 既存メンバー → 無視）"""
+    resp = httpx.post(
+        f"{settings.grafana_url}/api/orgs/{org_id}/users",
+        auth=_admin_auth(),
+        json={"loginOrEmail": login_or_email, "role": role},
+        timeout=10.0,
+    )
+    if resp.status_code not in (200, 409):
+        resp.raise_for_status()
+
+
+def get_org_home_dashboard_url(org_id: int) -> str | None:
+    """org のホームダッシュボード URL を返す。未設定なら None。"""
+    prefs = httpx.get(
+        f"{settings.grafana_url}/api/org/preferences",
+        auth=_admin_auth(),
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    prefs.raise_for_status()
+    uid = prefs.json().get("homeDashboardUID")
+    if not uid:
+        return None
+    dash = httpx.get(
+        f"{settings.grafana_url}/api/dashboards/uid/{uid}",
+        auth=_admin_auth(),
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    if dash.status_code != 200:
+        return None
+    url = dash.json().get("meta", {}).get("url", "")
+    return url if url else None
+
+
 def ensure_platform_admin_in_grafana(email: str) -> None:
     """プラットフォーム管理者を Grafana に server admin として登録する。
     Auth Proxy は login = email で検索するため、同名ユーザーを先に作成して権限を付与する。
