@@ -58,6 +58,11 @@ const api = {
         create: (tenantId, rule) => request('POST', `/tenants/${tenantId}/alert-rules`, rule),
         delete: (tenantId, ruleId) => request('DELETE', `/tenants/${tenantId}/alert-rules/${ruleId}`),
     },
+    tenantUsers: {
+        list: (tenantId) => request('GET', `/tenants/${tenantId}/users`),
+        create: (tenantId, email, password, role) =>
+            request('POST', `/tenants/${tenantId}/users`, { email, password, role }),
+    },
     isLoggedIn: () => !!getToken(),
     logout: () => { clearTokens(); window.location.href = '/admin/'; },
     setTokens,

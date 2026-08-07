@@ -55,6 +55,9 @@
         <button @click="activeTab = 'firmware'; loadFirmware()"
                 :class="activeTab === 'firmware' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">ファームウェア</button>
+        <button @click="activeTab = 'users'; loadUsers()"
+                :class="activeTab === 'users' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">ユーザー管理</button>
       </div>
 
       <!-- プロビジョニングトークンタブ -->
@@ -236,6 +239,80 @@
             <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
             <p class="text-3xl font-bold text-gray-700" x-text="stats?.firmware_releases ?? '-'"></p>
           </div>
+        </div>
+      </div>
+
+      <!-- ユーザー管理タブ -->
+      <div x-show="activeTab === 'users'">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="font-medium text-gray-700">テナントユーザー</h3>
+          <button @click="showUserForm = !showUserForm"
+                  class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+            + ユーザー追加
+          </button>
+        </div>
+
+        <div x-show="showUserForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+          <form @submit.prevent="createUser" class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">メールアドレス</label>
+              <input type="email" x-model="newUser.email" required
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
+              <input type="password" x-model="newUser.password" required minlength="8"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">ロール</label>
+              <select x-model="newUser.role"
+                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option value="viewer">Viewer（閲覧のみ）</option>
+                <option value="operator">Operator（編集可）</option>
+                <option value="admin">Admin（管理者）</option>
+              </select>
+            </div>
+            <div class="col-span-2 flex justify-end gap-2">
+              <button type="button" @click="showUserForm = false"
+                      class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+              <button type="submit"
+                      class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded">作成</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <div x-show="users.length === 0" class="py-8 text-center text-gray-400 text-sm">ユーザーがいません</div>
+          <table x-show="users.length > 0" class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">メール</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">ロール</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">作成日</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="u in users" :key="u.id">
+                <tr>
+                  <td class="px-4 py-3 text-sm font-medium" x-text="u.email"></td>
+                  <td class="px-4 py-3">
+                    <span class="text-xs px-2 py-0.5 rounded font-medium"
+                          :class="{
+                            'bg-purple-100 text-purple-700': u.role === 'admin',
+                            'bg-blue-100 text-blue-700': u.role === 'operator',
+                            'bg-gray-100 text-gray-600': u.role === 'viewer',
+                          }"
+                          x-text="u.role"></span>
+                  </td>
+                  <td class="px-4 py-3 text-sm" x-text="u.is_active ? '有効' : '無効'"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500"
+                      x-text="u.created_at ? new Date(u.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -455,6 +532,30 @@
         uploading: false,
         otaTargetFirmware: null,
         otaDeviceId: '',
+
+        // ユーザー管理
+        users: [],
+        showUserForm: false,
+        newUser: { email: '', password: '', role: 'viewer' },
+
+        async loadUsers() {
+          try {
+            this.users = await api.tenantUsers.list(tenantId);
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async createUser() {
+          try {
+            await api.tenantUsers.create(tenantId, this.newUser.email, this.newUser.password, this.newUser.role);
+            this.users = await api.tenantUsers.list(tenantId);
+            this.showUserForm = false;
+            this.newUser = { email: '', password: '', role: 'viewer' };
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
 
         async loadFirmware() {
           try {

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ダッシュボードログイン - IoT Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div x-data="tenantLoginApp()" class="w-full max-w-sm">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+      <h1 class="text-xl font-bold text-gray-800 mb-1">ダッシュボードにアクセス</h1>
+      <p class="text-sm text-gray-500 mb-6">テナントのメールとパスワードを入力してください</p>
+
+      <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 rounded px-4 py-2 mb-4 text-sm" x-text="error"></div>
+
+      <form @submit.prevent="login" class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">テナントスラッグ</label>
+          <input type="text" x-model="form.tenant_slug" required placeholder="your-company"
+                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">メールアドレス</label>
+          <input type="email" x-model="form.email" required
+                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
+          <input type="password" x-model="form.password" required
+                 class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <button type="submit" :disabled="loading"
+                class="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-2 rounded text-sm">
+          <span x-show="!loading">ダッシュボードを開く</span>
+          <span x-show="loading">ログイン中...</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    function tenantLoginApp() {
+      return {
+        form: { tenant_slug: '', email: '', password: '' },
+        loading: false,
+        error: '',
+
+        async login() {
+          this.loading = true;
+          this.error = '';
+          try {
+            const resp = await fetch('/api/tenant-auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.form),
+              credentials: 'include',
+            });
+            if (!resp.ok) {
+              const err = await resp.json().catch(() => ({ detail: 'ログインに失敗しました' }));
+              throw new Error(err.detail || 'ログインに失敗しました');
+            }
+            const data = await resp.json();
+            window.location.href = data.redirect_url;
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+  </script>
+</body>
+</html>
