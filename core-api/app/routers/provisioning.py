@@ -1,13 +1,17 @@
-from fastapi import APIRouter, HTTPException, status
-from datetime import datetime, timezone
-from app.schemas.device import ProvisionRequest, ProvisionOut
-from app.models.public import ProvisioningToken
-from app.database import SessionLocal
-from app.services.provisioning import issue_device_cert_for_tenant
-from app.config import settings
-from sqlalchemy import text
+import logging
 import uuid
+from datetime import datetime, timezone
 
+from fastapi import APIRouter, HTTPException, status
+from sqlalchemy import text
+
+from app.config import settings
+from app.database import SessionLocal
+from app.models.public import ProvisioningToken
+from app.schemas.device import ProvisionRequest, ProvisionOut
+from app.services.provisioning import issue_device_cert_for_tenant
+
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 @router.post("/provision", response_model=ProvisionOut)
@@ -41,7 +45,8 @@ def provision(req: ProvisionRequest):
 
         try:
             cert_pem, key_pem = issue_device_cert_for_tenant(tenant_id, req.device_id)
-        except RuntimeError:
+        except RuntimeError as exc:
+            logger.error("Certificate issuance failed for %s:%s — %s", tenant_id, req.device_id, exc)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Certificate issuance failed")
 
         db.execute(
