@@ -34,6 +34,7 @@ class DeviceWorker(threading.Thread):
         self._ssl_verify = ssl_verify
         self._client: Optional[IotClient] = None
         self._running = True
+        self._connected_flag = threading.Event()
         self._stop_send = threading.Event()
         self._send_thread: Optional[threading.Thread] = None
 
@@ -56,6 +57,7 @@ class DeviceWorker(threading.Thread):
 
             self._put_event("status", {"state": "connecting"})
             self._client.connect()
+            self._connected_flag.set()
             self._put_event("status", {"state": "connected"})
             self._put_event("log", {"message": f"{self.device_id}: 接続完了", "level": "info"})
         except Exception as exc:
@@ -95,7 +97,7 @@ class DeviceWorker(threading.Thread):
 
     def _send_loop(self, interval: float, payload_fn: Callable[[], dict]) -> None:
         while not self._stop_send.is_set():
-            if self._client:
+            if self._client and self._connected_flag.is_set():
                 try:
                     payload = payload_fn()
                     self._client.publish_telemetry(payload)
