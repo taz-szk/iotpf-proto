@@ -1,4 +1,5 @@
 import json
+import os
 import ssl
 import threading
 from typing import Callable, Optional
@@ -26,7 +27,6 @@ class IotClient:
         self._cert_dir = cert_dir
 
     def load_credentials(self, cert_dir: str) -> None:
-        import os
         tenant_id, _, _, _ = load_credentials(cert_dir)
         self._tenant_id = tenant_id
         self._cert_dir = cert_dir

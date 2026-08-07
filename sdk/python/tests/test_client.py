@@ -1,11 +1,12 @@
 import json
 import os
 import tempfile
+import threading
 from unittest.mock import patch, MagicMock, call
 from iot_platform.client import IotClient
 
 
-def _setup_creds(tmpdir: str) -> IotClient:
+def _write_creds(tmpdir: str) -> None:
     for name, content in [
         ("tenant_id", "t-abc"),
         ("device_id", "dev-001"),
@@ -14,6 +15,10 @@ def _setup_creds(tmpdir: str) -> IotClient:
         ("ca.pem", "CA"),
     ]:
         open(os.path.join(tmpdir, name), "w").write(content)
+
+
+def _setup_creds(tmpdir: str) -> IotClient:
+    _write_creds(tmpdir)
     c = IotClient("http://api", "broker.local")
     c.load_credentials(tmpdir)
     return c
@@ -100,3 +105,23 @@ def test_disconnect_publishes_offline():
         )
         mock_mqtt.loop_stop.assert_called_once()
         mock_mqtt.disconnect.assert_called_once()
+
+
+def test_connect_publishes_online_status():
+    with tempfile.TemporaryDirectory() as d:
+        _write_creds(d)
+        c = IotClient("http://api", broker_host="broker.local")
+        c.load_credentials(d)
+
+        mock_mqtt_instance = MagicMock()
+
+        # Use a MagicMock so clear() is a no-op and wait() returns True immediately
+        mock_connected = MagicMock()
+        mock_connected.wait.return_value = True
+
+        with patch("paho.mqtt.client.Client", return_value=mock_mqtt_instance), \
+             patch.object(c, "_connected", mock_connected), \
+             patch.object(c, "publish_status") as mock_publish_status:
+            c.connect()
+
+        mock_publish_status.assert_called_once_with("online")
