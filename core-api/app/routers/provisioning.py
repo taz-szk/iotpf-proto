@@ -4,6 +4,7 @@ from app.schemas.device import ProvisionRequest, ProvisionOut
 from app.models.public import ProvisioningToken
 from app.database import SessionLocal
 from app.services.provisioning import issue_device_cert_for_tenant
+from app.config import settings
 from sqlalchemy import text
 import uuid
 
@@ -51,9 +52,16 @@ def provision(req: ProvisionRequest):
         token.registered_count += 1
         db.commit()
 
+    try:
+        with open(settings.step_ca_root) as f:
+            ca_cert = f.read()
+    except OSError:
+        ca_cert = ""
+
     return ProvisionOut(
         tenant_id=tenant_id,
         device_id=req.device_id,
         certificate=cert_pem,
         private_key=key_pem,
+        ca_certificate=ca_cert,
     )

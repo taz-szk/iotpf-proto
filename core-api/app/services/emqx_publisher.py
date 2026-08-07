@@ -8,7 +8,7 @@ def publish_ota_command(tenant_id: str, device_id: str, payload: dict) -> None:
         f"{settings.emqx_api_url}/api/v5/publish",
         auth=(settings.emqx_api_user, settings.emqx_api_password),
         json={
-            "topic": f"{tenant_id}/{device_id}/ota/command",
+            "topic": f"/{tenant_id}/devices/{device_id}/commands",
             "qos": 1,
             "payload": json.dumps(payload),
             "retain": False,
