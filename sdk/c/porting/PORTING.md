@@ -4,7 +4,7 @@
 
 `iot_client.h` は Linux 向けフル実装（paho-mqtt / libcurl / OpenSSL）です。
 MCU でこのプラットフォームへ接続する場合は、`iot_platform.h` に定義された
-6 つの関数を実装してください。Linux 側のコードは一切不要です。
+7 つの関数を実装してください。Linux 側のコードは一切不要です。
 
 ## 実装する関数
 
