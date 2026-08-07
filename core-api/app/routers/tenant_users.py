@@ -1,4 +1,5 @@
 import uuid
+from uuid import UUID
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
@@ -27,11 +28,12 @@ def _get_active_tenant(tenant_id: str):
     return tenant
 
 @router.post("", response_model=TenantUserOut, status_code=status.HTTP_201_CREATED)
-def create_tenant_user(tenant_id: str, body: TenantUserCreate, _: dict = Depends(_require_platform)):
+def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depends(_require_platform)):
     if body.role not in _ROLE_GRAFANA:
         raise HTTPException(status_code=400, detail=f"role must be one of {list(_ROLE_GRAFANA)}")
-    tenant = _get_active_tenant(tenant_id)
-    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    tenant_id_str = str(tenant_id)
+    tenant = _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
     user_id = str(uuid.uuid4())
     password_hash = hash_password(body.password)
 
@@ -54,9 +56,10 @@ def create_tenant_user(tenant_id: str, body: TenantUserCreate, _: dict = Depends
     )
 
 @router.get("", response_model=list[TenantUserOut])
-def list_tenant_users(tenant_id: str, _: dict = Depends(_require_platform)):
-    tenant = _get_active_tenant(tenant_id)
-    schema = f"tenant_{tenant_id.replace('-', '_')}"
+def list_tenant_users(tenant_id: UUID, _: dict = Depends(_require_platform)):
+    tenant_id_str = str(tenant_id)
+    tenant = _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
     with engine.connect() as conn:
         rows = conn.execute(
             text(f'SELECT id, email, role, is_active, created_at FROM "{schema}".users ORDER BY created_at DESC')

@@ -84,7 +84,8 @@ def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str) -> No
     """Grafana org_id にユーザーを追加する。存在しなければ作成する。"""
     # 1. ユーザー存在確認
     lookup = httpx.get(
-        f"{settings.grafana_url}/api/users/lookup?loginOrEmail={email}",
+        f"{settings.grafana_url}/api/users/lookup",
+        params={"loginOrEmail": email},
         auth=_admin_auth(), timeout=10.0,
     )
     if lookup.status_code == 404:
