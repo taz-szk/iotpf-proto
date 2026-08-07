@@ -34,8 +34,15 @@ static int _msg_arrived(void *ctx, char *topic, int topic_len, MQTTClient_messag
         return 1;
     }
 
-    char *json = (char *)msg->payload;
-    size_t json_len = (size_t)msg->payloadlen;
+    /* C-1: payload is not null-terminated — copy to heap and terminate */
+    char *json = (char *)malloc((size_t)msg->payloadlen + 1);
+    if (!json) {
+        MQTTClient_freeMessage(&msg);
+        MQTTClient_free(topic);
+        return 1;
+    }
+    memcpy(json, msg->payload, (size_t)msg->payloadlen);
+    json[msg->payloadlen] = '\0';
 
     /* extract "type" field with simple scan */
     char type[64] = "";
@@ -55,7 +62,8 @@ static int _msg_arrived(void *ctx, char *topic, int topic_len, MQTTClient_messag
         }
     }
 
-    c->callback(type, json, json_len, c->user_data);
+    c->callback(type, json, (size_t)msg->payloadlen, c->user_data);
+    free(json);
     MQTTClient_freeMessage(&msg);
     MQTTClient_free(topic);
     return 1;
@@ -121,7 +129,7 @@ int iot_connect(iot_client_t *client) {
                           MQTTCLIENT_PERSISTENCE_NONE, NULL) != MQTTCLIENT_SUCCESS)
         return IOT_ERR_CONNECT;
 
-    MQTTClient_setCallbacks(client->mqtt, client, NULL, _msg_arrived, NULL);
+    /* I-1: messageArrived not registered — iot_loop() uses MQTTClient_receive() exclusively */
 
     char cert_path[640], key_path[640], ca_path[640];
     snprintf(cert_path, sizeof(cert_path), "%s/cert.pem", client->cert_dir);
@@ -151,7 +159,12 @@ int iot_connect(iot_client_t *client) {
     char topic[320];
     snprintf(topic, sizeof(topic), "/%s/devices/%s/commands",
              client->tenant_id, client->device_id);
-    MQTTClient_subscribe(client->mqtt, topic, 1);
+    /* I-3: check subscribe return value */
+    if (MQTTClient_subscribe(client->mqtt, topic, 1) != MQTTCLIENT_SUCCESS) {
+        MQTTClient_disconnect(client->mqtt, 1000);
+        MQTTClient_destroy(&client->mqtt);
+        return IOT_ERR_CONNECT;
+    }
 
     /* Publish online status */
     iot_publish_status(client, "online");
@@ -162,6 +175,8 @@ void iot_disconnect(iot_client_t *client) {
     if (!client || !client->mqtt) return;
     iot_publish_status(client, "offline");
     MQTTClient_disconnect(client->mqtt, 1000);
+    MQTTClient_destroy(&client->mqtt); /* I-4: release handle */
+    client->mqtt = NULL;               /* I-4: prevent dangling pointer */
 }
 
 int iot_publish_telemetry(iot_client_t *client, const char *json_payload) {
