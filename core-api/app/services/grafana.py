@@ -67,7 +67,8 @@ def setup_grafana_datasource(org_id: int, tenant_name: str, influxdb_org_id: str
     )
     resp.raise_for_status()
 
-def create_default_dashboard(org_id: int, tenant_name: str) -> None:
+def create_default_dashboard(org_id: int, tenant_name: str) -> str:
+    """ダッシュボードを作成し、org のホームに設定する。ダッシュボード UID を返す。"""
     dashboard = dict(_DEFAULT_DASHBOARD)
     dashboard["dashboard"] = dict(dashboard["dashboard"])
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
@@ -79,6 +80,15 @@ def create_default_dashboard(org_id: int, tenant_name: str) -> None:
         timeout=10.0,
     )
     resp.raise_for_status()
+    uid = resp.json()["uid"]
+    # org のホームダッシュボードに設定 — ログイン後 /grafana/?orgId=N で直接着地
+    httpx.patch(
+        f"{settings.grafana_url}/api/orgs/{org_id}/preferences",
+        auth=_admin_auth(),
+        json={"homeDashboardUID": uid},
+        timeout=10.0,
+    ).raise_for_status()
+    return uid
 
 def ensure_grafana_user_in_org(org_id: int, email: str, grafana_role: str, tenant_id_str: str) -> None:
     """Grafana org にユーザーを追加する。存在しなければ作成する。"""
