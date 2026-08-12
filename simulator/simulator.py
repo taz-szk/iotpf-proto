@@ -327,6 +327,8 @@ class SimulatorApp(tk.Tk):
         self._device_list_frame: Optional[tk.Frame] = None
         self._tenant_listbox:    Optional[tk.Listbox] = None
         self._random_fields_inner: Optional[tk.Frame] = None
+        self._ota_dialogs: dict[int, OtaProgressDialog] = {}
+        self._fw_version_labels: dict[int, tk.Label] = {}
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -596,10 +598,13 @@ class SimulatorApp(tk.Tk):
         state_lbl.pack(side=tk.LEFT, padx=2)
         tk.Label(row, text=device_id, font=("Consolas", 9)).pack(side=tk.LEFT)
         tk.Label(row, text=f" [{tenant['name']}]", fg="gray", font=("", 8)).pack(side=tk.LEFT)
+        fw_lbl = tk.Label(row, text="fw: 1.0.0", fg="gray", font=("Consolas", 8))
+        fw_lbl.pack(side=tk.LEFT, padx=(6, 0))
         tk.Button(row, text="✕", font=("", 8), fg="gray", relief=tk.FLAT, bd=0,
                   cursor="hand2", command=lambda w=wid: self._remove_device(w)
                   ).pack(side=tk.RIGHT, padx=2)
         self._state_labels[wid] = state_lbl
+        self._fw_version_labels[wid] = fw_lbl
         self._device_rows[wid] = row
 
         worker.start()
@@ -670,10 +675,19 @@ class SimulatorApp(tk.Tk):
         if os.path.isdir(cert_dir):
             shutil.rmtree(cert_dir, ignore_errors=True)
 
+        # OTA ダイアログが開いていれば閉じる
+        dlg = self._ota_dialogs.pop(wid, None)
+        if dlg:
+            try:
+                dlg.destroy()
+            except tk.TclError:
+                pass
+
         # ワーカー停止・UI 除去
         worker.stop()
         self._workers.pop(wid, None)
         self._state_labels.pop(wid, None)
+        self._fw_version_labels.pop(wid, None)
         self._device_tenants.pop(wid, None)
         row = self._device_rows.pop(wid, None)
         if row:
@@ -756,9 +770,64 @@ class SimulatorApp(tk.Tk):
                     label = w.device_id if w else str(wid)
                     s = json.dumps(data.get("payload", {}), ensure_ascii=False)
                     self._append_log(f"{label}: telemetry {s}", level="info")
+
+                elif event_type == "ota_start":
+                    if wid in self._ota_dialogs:
+                        self._append_log(
+                            f"{data['device_id']}: OTA既に進行中 — スキップ", level="warn")
+                    else:
+                        worker = self._workers.get(wid)
+                        old_ver = worker.fw_version if worker else "unknown"
+                        new_ver = data["payload"].get("version", "unknown")
+                        tenant_name = self._device_tenants.get(wid, "unknown")
+                        out_path = os.path.join(
+                            CERT_BASE, tenant_name, data["device_id"], "ota_firmware.bin")
+                        dlg = OtaProgressDialog(
+                            parent=self,
+                            wid=wid,
+                            device_id=data["device_id"],
+                            old_version=old_ver,
+                            new_version=new_ver,
+                            payload=data["payload"],
+                            ssl_verify=data["ssl_verify"],
+                            event_queue=self._event_queue,
+                            out_path=out_path,
+                        )
+                        self._ota_dialogs[wid] = dlg
+                        dlg.protocol("WM_DELETE_WINDOW",
+                                     lambda w=wid, d=dlg: self._on_ota_close(w, d))
+                        dlg.start_ota()
+                        self._append_log(
+                            f"{data['device_id']}: OTA開始 v{old_ver} → v{new_ver}", level="info")
+
+                elif event_type == "ota_done":
+                    new_ver = data["version"]
+                    worker = self._workers.get(wid)
+                    if worker:
+                        worker.fw_version = new_ver
+                    lbl = self._fw_version_labels.get(wid)
+                    if lbl:
+                        lbl.config(text=f"fw: {new_ver}", fg="blue")
+                    self._ota_dialogs.pop(wid, None)
+                    dev_id = worker.device_id if worker else str(wid)
+                    self._append_log(f"{dev_id}: OTA完了 → v{new_ver}", level="info")
+
+                elif event_type == "ota_failed":
+                    self._ota_dialogs.pop(wid, None)
+                    worker = self._workers.get(wid)
+                    dev_id = worker.device_id if worker else str(wid)
+                    self._append_log(
+                        f"{dev_id}: OTA失敗 — {data.get('error', '不明')}", level="error")
         except queue.Empty:
             pass
         self.after(100, self._process_queue)
+
+    def _on_ota_close(self, wid: int, dlg: "OtaProgressDialog") -> None:
+        self._ota_dialogs.pop(wid, None)
+        try:
+            dlg.destroy()
+        except tk.TclError:
+            pass
 
     def _update_state(self, wid: int, state: str) -> None:
         lbl = self._state_labels.get(wid)
