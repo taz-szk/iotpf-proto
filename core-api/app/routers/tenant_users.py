@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from pydantic import BaseModel
 from app.schemas.tenant_users import TenantUserCreate, TenantUserOut
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
@@ -13,7 +14,7 @@ from app.services.grafana import ensure_grafana_user_in_org
 router = APIRouter(prefix="/tenants/{tenant_id}/users", tags=["tenant-users"])
 _bearer = HTTPBearer()
 
-_ROLE_GRAFANA = {"admin": "Admin", "operator": "Editor", "viewer": "Viewer"}
+_ROLE_GRAFANA = {"admin": "Viewer", "operator": "Viewer", "viewer": "Viewer"}
 
 def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
     payload = verify_token(creds.credentials)
@@ -54,13 +55,34 @@ def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depend
             raise HTTPException(status_code=409, detail="Email already exists")
         except HTTPException:
             raise
-        except Exception:
+        except Exception as e:
+            print(f"[create_tenant_user] unexpected error: {e}")
             raise HTTPException(status_code=502, detail="Grafana sync failed; user not created")
 
     return TenantUserOut(
         id=user_id, email=body.email, role=body.role,
         is_active=True, created_at="",
     )
+
+class PasswordResetBody(BaseModel):
+    password: str
+
+@router.patch("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_tenant_user_password(tenant_id: UUID, user_id: str, body: PasswordResetBody, _: dict = Depends(_require_platform)):
+    if len(body.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    tenant_id_str = str(tenant_id)
+    _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'UPDATE "{schema}".users SET password_hash = :hash WHERE id = :uid'),
+            {"hash": hash_password(body.password), "uid": user_id},
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        conn.commit()
+
 
 @router.get("", response_model=list[TenantUserOut])
 def list_tenant_users(tenant_id: UUID, _: dict = Depends(_require_platform)):

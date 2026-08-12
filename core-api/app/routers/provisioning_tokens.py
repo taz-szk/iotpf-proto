@@ -2,8 +2,9 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
+from sqlalchemy import text
 from app.models.public import ProvisioningToken, Tenant
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.services.auth import verify_token
 import uuid, secrets
 
@@ -32,6 +33,8 @@ class TokenOut(BaseModel):
     tenant_id: str
     max_devices: int
     registered_count: int
+    active_count: int = 0
+    deleted_count: int = 0
     expires_at: datetime
     is_active: bool
 
@@ -65,16 +68,50 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
 @router.get("/{tenant_id}/provisioning-tokens", response_model=list[TokenOut])
 def list_provisioning_tokens(tenant_id: str, _: dict = Depends(_require_platform)):
     tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
+    schema = f"tenant_{str(tenant_uuid).replace('-', '_')}"
     with SessionLocal() as db:
         tokens = db.query(ProvisioningToken).filter(
             ProvisioningToken.tenant_id == tenant_uuid,
             ProvisioningToken.is_active == True,
         ).all()
-        return [TokenOut(
-            id=str(t.id), token=t.token, tenant_id=str(t.tenant_id),
-            max_devices=t.max_devices, registered_count=t.registered_count,
-            expires_at=t.expires_at, is_active=t.is_active,
-        ) for t in tokens]
+        result = []
+        for t in tokens:
+            try:
+                active_count = db.execute(text(f'''
+                    SELECT COUNT(*) FROM "{schema}".devices
+                    WHERE provisioning_token_id = :tid
+                '''), {"tid": str(t.id)}).scalar() or 0
+            except Exception:
+                active_count = 0
+            result.append(TokenOut(
+                id=str(t.id), token=t.token, tenant_id=str(t.tenant_id),
+                max_devices=t.max_devices, registered_count=t.registered_count,
+                active_count=int(active_count),
+                deleted_count=max(0, t.registered_count - int(active_count)),
+                expires_at=t.expires_at, is_active=t.is_active,
+            ))
+        return result
+
+@router.get("/{tenant_id}/provisioning-tokens/{token_id}/devices")
+def list_token_devices(tenant_id: str, token_id: str, _: dict = Depends(_require_platform)):
+    tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
+    schema = f"tenant_{str(tenant_uuid).replace('-', '_')}"
+    with engine.connect() as conn:
+        rows = conn.execute(text(f'''
+            SELECT device_id, device_name, connection_status, created_at
+            FROM "{schema}".devices
+            WHERE provisioning_token_id = :tid
+            ORDER BY created_at DESC
+        '''), {"tid": token_id}).fetchall()
+    return [
+        {
+            "device_id": r.device_id,
+            "device_name": r.device_name or r.device_id,
+            "connection_status": r.connection_status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
 
 @router.delete("/{tenant_id}/provisioning-tokens/{token_id}", status_code=204)
 def revoke_provisioning_token(tenant_id: str, token_id: str, _: dict = Depends(_require_platform)):

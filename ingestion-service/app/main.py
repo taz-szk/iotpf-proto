@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Any, Optional
 from datetime import datetime
-from app.tenant_cache import get_tenant_influx_config
+from app.tenant_cache import get_tenant_influx_config, get_device_name
 from app.influx_writer import write_telemetry
 from app.device_updater import update_last_seen
 
@@ -35,10 +35,12 @@ def ingest(req: IngestRequest):
     if not measurements:
         return {"result": "no_numeric_fields"}
 
+    device_name = get_device_name(req.tenant_id, req.device_id)
     write_telemetry(
         org_id=config["org_id"],
         tenant_id=req.tenant_id,
         device_id=req.device_id,
+        device_name=device_name,
         measurements=measurements,
         timestamp=req.timestamp,
     )

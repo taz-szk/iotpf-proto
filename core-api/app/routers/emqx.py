@@ -1,6 +1,8 @@
 import re
 from fastapi import APIRouter
 from pydantic import BaseModel
+from app.database import SessionLocal
+from app.models.public import Tenant
 
 router = APIRouter(prefix="/emqx")
 
@@ -25,10 +27,22 @@ def _parse_cn(cn: str) -> tuple[str, str] | None:
         return None
     return m.group(1), m.group(2)
 
+def _tenant_is_active(tenant_id: str) -> bool:
+    try:
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            return tenant is not None and tenant.status == "active"
+    except Exception:
+        return False
+
 @router.post("/auth")
 def emqx_auth(req: AuthRequest):
     cn = req.cert_common_name or req.username
-    if not _parse_cn(cn):
+    parsed = _parse_cn(cn)
+    if not parsed:
+        return {"result": "deny"}
+    tenant_id, _ = parsed
+    if not _tenant_is_active(tenant_id):
         return {"result": "deny"}
     return {"result": "allow"}
 

@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token
+from app.services.grafana import retire_device_in_influxdb
 
 router = APIRouter(prefix="/tenants/{tenant_id}/devices", tags=["tenant-devices"])
 _bearer = HTTPBearer()
@@ -15,6 +16,7 @@ _bearer = HTTPBearer()
 class DeviceOut(BaseModel):
     id: str
     device_id: str
+    device_name: Optional[str] = None
     connection_status: str
     last_seen_at: Optional[str] = None
     fw_version: Optional[str] = None
@@ -39,6 +41,25 @@ def _get_active_tenant(tenant_id_str: str):
     return tenant
 
 
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tenant_device(tenant_id: UUID, device_id: str, _: dict = Depends(_require_platform)):
+    tenant_id_str = str(tenant_id)
+    tenant = _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(f'SELECT device_name FROM "{schema}".devices WHERE device_id = :did'),
+            {"did": device_id},
+        ).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+        device_name = row.device_name or device_id
+        conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
+        conn.commit()
+    if tenant.influxdb_org_id:
+        retire_device_in_influxdb(tenant.influxdb_org_id, device_name)
+
+
 @router.get("", response_model=list[DeviceOut])
 def list_tenant_devices(tenant_id: UUID, _: dict = Depends(_require_platform)):
     tenant_id_str = str(tenant_id)
@@ -47,7 +68,7 @@ def list_tenant_devices(tenant_id: UUID, _: dict = Depends(_require_platform)):
     with engine.connect() as conn:
         rows = conn.execute(
             text(f'''
-                SELECT id, device_id, connection_status, last_seen_at,
+                SELECT id, device_id, device_name, connection_status, last_seen_at,
                        fw_version, cert_not_after, created_at
                 FROM "{schema}".devices
                 ORDER BY created_at DESC
@@ -58,6 +79,7 @@ def list_tenant_devices(tenant_id: UUID, _: dict = Depends(_require_platform)):
         DeviceOut(
             id=str(r.id),
             device_id=r.device_id,
+            device_name=r.device_name,
             connection_status=r.connection_status,
             last_seen_at=r.last_seen_at.isoformat() if r.last_seen_at else None,
             fw_version=r.fw_version,

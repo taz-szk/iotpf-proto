@@ -3,20 +3,25 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>テナント管理 - IoT Platform</title>
+  <title>テナント管理 - IoTAir-X</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/api.js?v=10"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
   <!-- ナビゲーション -->
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-    <h1 class="text-lg font-bold text-gray-800">IoT Platform 管理</h1>
-    <button @click="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+    <div class="text-2xl font-black tracking-tight text-blue-600">IoTAir<span class="text-gray-700">-X</span></div>
+    <div class="flex items-center gap-4">
+      <a id="nav-grafana-link" href="#" target="_blank"
+         class="text-sm text-gray-500 hover:text-gray-700 hidden">Grafana</a>
+      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+    </div>
   </nav>
 
-  <div x-data="tenantsApp()" class="max-w-4xl mx-auto px-6 py-8">
+  <div x-data="tenantsApp()" class="max-w-5xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-semibold text-gray-800">テナント一覧</h2>
       <button @click="showForm = !showForm"
@@ -56,37 +61,77 @@
     <!-- エラー表示 -->
     <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 text-sm rounded px-4 py-3 mb-4" x-text="error"></div>
 
+    <!-- 検索バー -->
+    <div x-show="!loading" class="mb-4">
+      <input type="text" x-model="search" placeholder="テナント名またはスラッグで検索..."
+             class="w-full border border-gray-300 rounded-lg px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+    </div>
+
     <!-- テナント一覧テーブル -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200">
       <div x-show="loading" class="py-12 text-center text-gray-400">読み込み中...</div>
       <div x-show="!loading && tenants.length === 0" class="py-12 text-center text-gray-400">
         テナントがありません
       </div>
-      <table x-show="!loading && tenants.length > 0" class="w-full">
+      <div x-show="!loading && tenants.length > 0 && filteredTenants().length === 0" class="py-12 text-center text-gray-400">
+        検索結果がありません
+      </div>
+      <table x-show="!loading && filteredTenants().length > 0" class="w-full">
         <thead class="bg-gray-50 border-b border-gray-200">
           <tr>
-            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">テナント名</th>
-            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">スラッグ</th>
-            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">ステータス</th>
-            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">作成日</th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+              <button @click="setSort('name')" class="flex items-center gap-1 hover:text-gray-800 uppercase font-medium">
+                テナント名 <span x-text="sortIcon('name')" class="text-gray-400"></span>
+              </button>
+            </th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+              <button @click="setSort('slug')" class="flex items-center gap-1 hover:text-gray-800 uppercase font-medium">
+                スラッグ <span x-text="sortIcon('slug')" class="text-gray-400"></span>
+              </button>
+            </th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+              <button @click="setSort('status')" class="flex items-center gap-1 hover:text-gray-800 uppercase font-medium">
+                ステータス <span x-text="sortIcon('status')" class="text-gray-400"></span>
+              </button>
+            </th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">
+              <button @click="setSort('created_at')" class="flex items-center gap-1 hover:text-gray-800 uppercase font-medium">
+                作成日 <span x-text="sortIcon('created_at')" class="text-gray-400"></span>
+              </button>
+            </th>
             <th class="px-6 py-3"></th>
           </tr>
         </thead>
         <tbody class="divide-y divide-gray-100">
-          <template x-for="tenant in tenants" :key="tenant.id">
-            <tr class="hover:bg-gray-50">
+          <template x-for="tenant in filteredTenants()" :key="tenant.id">
+            <tr class="hover:bg-gray-50" :class="tenant.status !== 'active' ? 'opacity-60' : ''">
               <td class="px-6 py-4 font-medium text-gray-800" x-text="tenant.name"></td>
               <td class="px-6 py-4 text-sm text-gray-500" x-text="tenant.slug"></td>
               <td class="px-6 py-4">
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
-                      :class="tenant.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'"
-                      x-text="tenant.status"></span>
+                <button @click="toggleStatus(tenant)"
+                        :disabled="tenant._toggling"
+                        class="inline-flex items-center px-2.5 py-1 rounded text-xs font-medium transition-colors cursor-pointer disabled:cursor-wait"
+                        :class="tenant.status === 'active'
+                          ? 'bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700'
+                          : 'bg-gray-100 text-gray-500 hover:bg-green-100 hover:text-green-700'">
+                  <span x-show="!tenant._toggling" x-text="tenant.status === 'active' ? 'Active' : 'Inactive'"></span>
+                  <span x-show="tenant._toggling">...</span>
+                </button>
               </td>
               <td class="px-6 py-4 text-sm text-gray-500"
                   x-text="new Date(tenant.created_at).toLocaleDateString('ja-JP')"></td>
               <td class="px-6 py-4 text-right">
-                <a :href="'/admin/tenant.html?id=' + tenant.id"
-                   class="text-blue-600 hover:text-blue-800 text-sm font-medium">詳細 →</a>
+                <div class="flex items-center justify-end gap-2">
+                  <button @click="window.location.href='/admin/tenant.html?id='+tenant.id"
+                          class="px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-300 rounded hover:bg-blue-50">詳細</button>
+                  <button @click="openDeleteModal(tenant)"
+                          :disabled="tenant.status === 'active'"
+                          :title="tenant.status === 'active' ? 'Inactiveにしてから削除できます' : 'テナントを削除'"
+                          class="px-3 py-1.5 text-sm font-medium rounded border"
+                          :class="tenant.status === 'active'
+                            ? 'text-gray-300 border-gray-200 cursor-not-allowed'
+                            : 'text-red-600 border-red-300 hover:bg-red-50'">削除</button>
+                </div>
               </td>
             </tr>
           </template>
@@ -95,10 +140,92 @@
     </div>
   </div>
 
+  <!-- 削除確認モーダル -->
+  <div x-data x-show="$store.deleteModal.open" x-transition
+       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div @click.stop class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6" x-data>
+      <h3 class="text-lg font-bold text-red-600 mb-2">テナントの完全削除</h3>
+      <p class="text-sm text-gray-700 mb-4">
+        テナント <span class="font-semibold" x-text="$store.deleteModal.tenant?.name"></span> を削除します。
+      </p>
+      <div class="bg-red-50 border border-red-200 rounded p-3 mb-4 text-sm text-red-700 space-y-1">
+        <p class="font-medium">以下のデータがすべて完全に削除されます（復元不可）:</p>
+        <ul class="list-disc list-inside space-y-0.5 text-red-600">
+          <li>テナントユーザーアカウント</li>
+          <li>登録デバイスと証明書情報</li>
+          <li>すべてのテレメトリデータ（InfluxDB）</li>
+          <li>Grafana ダッシュボード・データソース</li>
+          <li>ファームウェアファイル</li>
+          <li>アラートルール・イベント</li>
+        </ul>
+      </div>
+      <p class="text-sm text-gray-600 mb-2">
+        確認のため、スラッグ
+        <code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-xs" x-text="$store.deleteModal.tenant?.slug"></code>
+        を入力してください:
+      </p>
+      <input type="text" x-model="$store.deleteModal.confirmInput"
+             placeholder="スラッグを入力..."
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-red-400">
+      <div x-show="$store.deleteModal.error" class="text-sm text-red-600 mb-3" x-text="$store.deleteModal.error"></div>
+      <div class="flex gap-2 justify-end">
+        <button @click="$store.deleteModal.close()"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">キャンセル</button>
+        <button @click="$store.deleteModal.execute()"
+                :disabled="$store.deleteModal.confirmInput !== $store.deleteModal.tenant?.slug || $store.deleteModal.deleting"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 rounded">
+          <span x-show="!$store.deleteModal.deleting">完全に削除する</span>
+          <span x-show="$store.deleteModal.deleting">削除中...</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.store('deleteModal', {
+        open: false,
+        tenant: null,
+        confirmInput: '',
+        deleting: false,
+        error: '',
+        _onDelete: null,
+        show(tenant, onDelete) {
+          this.tenant = tenant;
+          this.confirmInput = '';
+          this.error = '';
+          this.deleting = false;
+          this._onDelete = onDelete;
+          this.open = true;
+        },
+        close() {
+          this.open = false;
+          this.tenant = null;
+          this.confirmInput = '';
+          this.error = '';
+        },
+        async execute() {
+          if (this.confirmInput !== this.tenant?.slug) return;
+          this.deleting = true;
+          this.error = '';
+          try {
+            await api.tenants.delete(this.tenant.id);
+            this.close();
+            if (this._onDelete) this._onDelete(this.tenant.id);
+          } catch(e) {
+            this.error = e.message || '削除に失敗しました';
+            this.deleting = false;
+          }
+        },
+      });
+    });
+
     function tenantsApp() {
       return {
         tenants: [],
+        search: '',
+        sortKey: 'name',
+        sortDir: 'asc',
         loading: true,
         error: '',
         showForm: false,
@@ -106,20 +233,91 @@
         newSlug: '',
         creating: false,
         formError: '',
+
+        setSort(key) {
+          if (this.sortKey === key) {
+            this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+          } else {
+            this.sortKey = key;
+            this.sortDir = 'asc';
+          }
+        },
+
+        sortIcon(key) {
+          if (this.sortKey !== key) return '↕';
+          return this.sortDir === 'asc' ? '↑' : '↓';
+        },
+
+        filteredTenants() {
+          const q = this.search.trim().toLowerCase();
+          let result = this.tenants;
+          if (q) {
+            result = result.filter(t =>
+              t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q)
+            );
+          }
+          const key = this.sortKey;
+          const dir = this.sortDir;
+          return result.slice().sort((a, b) => {
+            let av = a[key] ?? '';
+            let bv = b[key] ?? '';
+            if (key === 'created_at') {
+              av = new Date(av).getTime();
+              bv = new Date(bv).getTime();
+            } else {
+              av = av.toString().toLowerCase();
+              bv = bv.toString().toLowerCase();
+            }
+            if (av < bv) return dir === 'asc' ? -1 : 1;
+            if (av > bv) return dir === 'asc' ? 1 : -1;
+            return 0;
+          });
+        },
+
+        openDeleteModal(tenant) {
+          Alpine.store('deleteModal').show(tenant, (id) => {
+            this.tenants = this.tenants.filter(t => t.id !== id);
+          });
+        },
+
+        async toggleStatus(tenant) {
+          tenant._toggling = true;
+          const newStatus = tenant.status === 'active' ? 'suspended' : 'active';
+          try {
+            const updated = await api.tenants.setStatus(tenant.id, newStatus);
+            const idx = this.tenants.findIndex(t => t.id === tenant.id);
+            if (idx !== -1) this.tenants[idx] = { ...updated, _toggling: false };
+          } catch(e) {
+            this.error = e.message;
+            tenant._toggling = false;
+          }
+        },
+
         async init() {
           if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
           await this.loadTenants();
+          // Grafana ナビリンクを設定
+          api.platform.grafanaOrgId().then(r => {
+            const el = document.getElementById('nav-grafana-link');
+            if (el && r?.grafana_org_id) {
+              el.href = `/grafana/?orgId=${r.grafana_org_id}`;
+              el.classList.remove('hidden');
+            }
+          }).catch(() => {});
         },
+
         async loadTenants() {
           this.loading = true;
           try {
-            this.tenants = await api.tenants.list();
+            const list = await api.tenants.list();
+            this.tenants = list.map(t => ({ ...t, _toggling: false }));
           } catch(e) {
             this.error = e.message;
           } finally {
             this.loading = false;
           }
         },
+
         async createTenant() {
           this.creating = true;
           this.formError = '';

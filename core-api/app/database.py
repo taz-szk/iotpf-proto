@@ -37,6 +37,8 @@ def create_tenant_schema(tenant_id: str) -> None:
             CREATE TABLE IF NOT EXISTS "{schema}".devices (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                 device_id VARCHAR(255) NOT NULL UNIQUE,
+                device_name VARCHAR(255),
+                provisioning_token_id UUID,
                 cert_serial VARCHAR(255),
                 cert_not_after TIMESTAMPTZ,
                 connection_status VARCHAR(20) NOT NULL DEFAULT 'unknown'
@@ -124,3 +126,55 @@ def migrate_add_grafana_org_id() -> None:
             ADD COLUMN IF NOT EXISTS grafana_org_id VARCHAR(255)
         """))
         conn.commit()
+
+
+def migrate_add_provisioning_token_id() -> None:
+    """全テナントの devices テーブルに provisioning_token_id カラムを追加する。
+    トークンが1つだけのテナントは、NULL デバイスをそのトークンに遡及紐付けする。"""
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM tenants WHERE status = 'active'")).fetchall()
+    for row in rows:
+        tenant_id = str(row.id)
+        schema = f"tenant_{tenant_id.replace('-', '_')}"
+        with engine.connect() as conn:
+            conn.execute(text(f"""
+                ALTER TABLE "{schema}".devices
+                ADD COLUMN IF NOT EXISTS provisioning_token_id UUID
+            """))
+            # アクティブトークンが1つだけなら、NULL デバイスをそのトークンに紐付ける
+            token_rows = conn.execute(
+                text("SELECT id FROM provisioning_tokens WHERE tenant_id = :tid AND is_active = TRUE"),
+                {"tid": tenant_id},
+            ).fetchall()
+            if len(token_rows) == 1:
+                conn.execute(text(f"""
+                    UPDATE "{schema}".devices
+                    SET provisioning_token_id = :tok_id
+                    WHERE provisioning_token_id IS NULL
+                """), {"tok_id": str(token_rows[0].id)})
+            conn.commit()
+
+
+def migrate_add_public_token() -> None:
+    """tenants テーブルに public_token カラムを追加する。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS public_token VARCHAR(255) UNIQUE
+        """))
+        conn.commit()
+
+
+def migrate_add_device_name() -> None:
+    """全テナントの devices テーブルに device_name カラムを追加する。"""
+    from app.models.public import Tenant
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM tenants WHERE status = 'active'")).fetchall()
+    for row in rows:
+        schema = f"tenant_{str(row.id).replace('-', '_')}"
+        with engine.connect() as conn:
+            conn.execute(text(f"""
+                ALTER TABLE "{schema}".devices
+                ADD COLUMN IF NOT EXISTS device_name VARCHAR(255)
+            """))
+            conn.commit()

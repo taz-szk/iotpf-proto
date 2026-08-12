@@ -50,6 +50,15 @@ def delete_firmware(minio_key: str) -> None:
     client.remove_object(settings.minio_firmware_bucket, minio_key)
 
 
+def delete_all_tenant_firmware(tenant_id: str) -> None:
+    client = _get_client()
+    if not client.bucket_exists(settings.minio_firmware_bucket):
+        return
+    objects = client.list_objects(settings.minio_firmware_bucket, prefix=f"{tenant_id}/", recursive=True)
+    for obj in objects:
+        client.remove_object(settings.minio_firmware_bucket, obj.object_name)
+
+
 def create_firmware_download_token(firmware_id: str, tenant_id: str, minio_key: str) -> str:
     payload = {
         "firmware_id": firmware_id,

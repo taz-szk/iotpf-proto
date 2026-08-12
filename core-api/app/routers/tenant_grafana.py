@@ -4,7 +4,7 @@ from fastapi.responses import RedirectResponse
 from app.models.public import Tenant
 from app.database import SessionLocal
 from app.services.auth import verify_token
-from app.services.grafana import add_user_to_grafana_org, get_org_home_dashboard_url
+from app.services.grafana import add_user_to_grafana_org, ensure_platform_admin_in_grafana, get_org_home_dashboard_url
 
 router = APIRouter(prefix="/tenants/{tenant_id}/grafana", tags=["tenant-grafana"])
 
@@ -34,6 +34,8 @@ def grafana_redirect(tenant_id: UUID, request: Request):
     email = payload["email"]
 
     try:
+        # Grafana にユーザーが存在しない場合は先に作成する（初回アクセス対応）
+        ensure_platform_admin_in_grafana(email)
         # プラットフォーム管理者をテナント org に追加（既存なら 409 → 無視）
         add_user_to_grafana_org(org_id, email, "Admin")
         # ホームダッシュボード URL を取得

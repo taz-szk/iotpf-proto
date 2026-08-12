@@ -3,6 +3,36 @@ import psycopg2
 from app.config import settings
 
 _cache: dict[str, tuple[dict, float]] = {}
+_device_name_cache: dict[str, tuple[str, float]] = {}
+
+
+def get_device_name(tenant_id: str, device_id: str) -> str:
+    key = f"{tenant_id}:{device_id}"
+    now = time.time()
+    if key in _device_name_cache:
+        name, ts = _device_name_cache[key]
+        if now - ts < settings.tenant_cache_ttl_sec:
+            return name
+
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    try:
+        conn = psycopg2.connect(settings.postgres_dsn)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    f'SELECT device_name FROM "{schema}".devices WHERE device_id = %s',
+                    (device_id,)
+                )
+                row = cur.fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        row = None
+
+    name = (row[0] if row and row[0] else None) or device_id
+    _device_name_cache[key] = (name, now)
+    return name
+
 
 def get_tenant_influx_config(tenant_id: str) -> dict | None:
     now = time.time()

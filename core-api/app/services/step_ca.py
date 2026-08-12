@@ -34,6 +34,10 @@ def _run_step(cn: str, ca_root: str) -> tuple[str, str]:
         cert_path = os.path.join(tmpdir, "device.crt")
         key_path = os.path.join(tmpdir, "device.key")
 
+        # 空パスワードファイルを使ってキーを平文PEMで出力（--no-password は 0.24+ で廃止）
+        empty_pass = os.path.join(tmpdir, "empty.txt")
+        open(empty_pass, "w").close()
+
         result = subprocess.run(
             [
                 "step", "ca", "certificate", cn,
@@ -45,8 +49,7 @@ def _run_step(cn: str, ca_root: str) -> tuple[str, str]:
                 "--not-after", "8760h",
                 "--san", cn,
                 "--force",
-                "--no-password",
-                "--insecure",
+                "--password-file", empty_pass,
             ],
             capture_output=True,
             text=True,

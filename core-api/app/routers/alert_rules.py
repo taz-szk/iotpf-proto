@@ -4,8 +4,10 @@ from pydantic import BaseModel
 from typing import Optional, Literal
 from app.services.auth import verify_token
 from app.database import SessionLocal
-from sqlalchemy import text
-import uuid, re
+from app.models.public import Tenant
+from app.config import settings
+from sqlalchemy import text, bindparam, ARRAY, String as SaString
+import uuid, re, httpx
 
 router = APIRouter(prefix="/tenants")
 _bearer = HTTPBearer()
@@ -21,6 +23,55 @@ def _schema(tenant_id: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid tenant_id")
     return f"tenant_{tenant_id.replace('-', '_')}"
 
+def _fetch_sensor_keys(influxdb_org_id: str) -> list[str]:
+    query = (
+        'import "influxdata/influxdb/schema"\n'
+        'schema.fieldKeys(\n'
+        '  bucket: "telemetry",\n'
+        '  predicate: (r) => r._measurement == "telemetry",\n'
+        '  start: -30d\n'
+        ')'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={
+                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Content-Type": "application/json",
+            },
+            json={"query": query, "type": "flux"},
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return []
+        keys = []
+        header = None
+        for line in resp.text.splitlines():
+            if line.startswith("#") or not line.strip():
+                continue
+            parts = line.split(",")
+            if header is None:
+                header = parts
+                continue
+            if "_value" in header:
+                v = parts[header.index("_value")].strip()
+                if v:
+                    keys.append(v)
+        return sorted(set(keys))
+    except Exception:
+        return []
+
+
+@router.get("/{tenant_id}/sensor-keys", response_model=list[str])
+def list_sensor_keys(tenant_id: str, _: dict = Depends(_require_platform)):
+    _schema(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant or not tenant.influxdb_org_id:
+            return []
+    return _fetch_sensor_keys(tenant.influxdb_org_id)
+
+
 class AlertRuleCreate(BaseModel):
     device_id: Optional[str] = None
     sensor_key: str
@@ -31,6 +82,17 @@ class AlertRuleCreate(BaseModel):
     duration_sec: int = 60
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
+
+class AlertRuleUpdate(BaseModel):
+    device_id: Optional[str] = None
+    sensor_key: Optional[str] = None
+    condition: Optional[Literal["above", "below", "equal", "device_offline"]] = None
+    threshold: Optional[float] = None
+    trigger_mode: Optional[Literal["consecutive", "duration", "consecutive_and_duration"]] = None
+    consecutive_count: Optional[int] = None
+    duration_sec: Optional[int] = None
+    severity: Optional[Literal["info", "warning", "critical"]] = None
+    notify_emails: Optional[list[str]] = None
 
 class AlertRuleOut(BaseModel):
     id: str
@@ -49,19 +111,21 @@ class AlertRuleOut(BaseModel):
 def create_alert_rule(tenant_id: str, body: AlertRuleCreate, _: dict = Depends(_require_platform)):
     schema = _schema(tenant_id)
     rule_id = str(uuid.uuid4())
-    emails = "{" + ",".join(f'"{e}"' for e in body.notify_emails) + "}"
     with SessionLocal() as db:
-        db.execute(text(f'''
-            INSERT INTO "{schema}".alert_rules
-              (id, device_id, sensor_key, condition, threshold, trigger_mode,
-               consecutive_count, duration_sec, severity, notify_emails)
-            VALUES (:id, :did, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails::TEXT[])
-        '''), {
-            "id": rule_id, "did": body.device_id, "sk": body.sensor_key,
-            "cond": body.condition, "thr": body.threshold, "tm": body.trigger_mode,
-            "cc": body.consecutive_count, "ds": body.duration_sec,
-            "sev": body.severity, "emails": emails,
-        })
+        db.execute(
+            text(f'''
+                INSERT INTO "{schema}".alert_rules
+                  (id, device_id, sensor_key, condition, threshold, trigger_mode,
+                   consecutive_count, duration_sec, severity, notify_emails)
+                VALUES (:id, :did, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
+            ''').bindparams(bindparam("emails", type_=ARRAY(SaString))),
+            {
+                "id": rule_id, "did": body.device_id, "sk": body.sensor_key,
+                "cond": body.condition, "thr": body.threshold, "tm": body.trigger_mode,
+                "cc": body.consecutive_count, "ds": body.duration_sec,
+                "sev": body.severity, "emails": list(body.notify_emails),
+            }
+        )
         db.commit()
     return AlertRuleOut(
         id=rule_id, device_id=body.device_id, sensor_key=body.sensor_key,
@@ -88,6 +152,47 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
         notify_emails=list(r.notify_emails) if r.notify_emails else [],
         is_active=r.is_active,
     ) for r in rows]
+
+@router.patch("/{tenant_id}/alert-rules/{rule_id}", response_model=AlertRuleOut)
+def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: dict = Depends(_require_platform)):
+    schema = _schema(tenant_id)
+    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    if not updates:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    with SessionLocal() as db:
+        row = db.execute(text(f'''
+            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+                   consecutive_count, duration_sec, severity, notify_emails, is_active
+            FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
+        '''), {"rid": rule_id}).fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="Rule not found")
+        set_clauses = ", ".join(
+            f"{col} = :{col}" for col in updates if col != "notify_emails"
+        )
+        params = {"rid": rule_id, **{k: v for k, v in updates.items() if k != "notify_emails"}}
+        if "notify_emails" in updates:
+            set_clauses = (set_clauses + ", notify_emails = :notify_emails").lstrip(", ")
+            stmt = text(f'UPDATE "{schema}".alert_rules SET {set_clauses} WHERE id = :rid'
+                        ).bindparams(bindparam("notify_emails", type_=ARRAY(SaString)))
+            params["notify_emails"] = updates["notify_emails"]
+        else:
+            stmt = text(f'UPDATE "{schema}".alert_rules SET {set_clauses} WHERE id = :rid')
+        db.execute(stmt, params)
+        db.commit()
+        updated = db.execute(text(f'''
+            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+                   consecutive_count, duration_sec, severity, notify_emails, is_active
+            FROM "{schema}".alert_rules WHERE id = :rid
+        '''), {"rid": rule_id}).fetchone()
+    return AlertRuleOut(
+        id=str(updated.id), device_id=updated.device_id, sensor_key=updated.sensor_key,
+        condition=updated.condition, threshold=float(updated.threshold) if updated.threshold is not None else None,
+        trigger_mode=updated.trigger_mode, consecutive_count=updated.consecutive_count,
+        duration_sec=updated.duration_sec, severity=updated.severity,
+        notify_emails=list(updated.notify_emails) if updated.notify_emails else [],
+        is_active=updated.is_active,
+    )
 
 @router.delete("/{tenant_id}/alert-rules/{rule_id}", status_code=204)
 def delete_alert_rule(tenant_id: str, rule_id: str, _: dict = Depends(_require_platform)):

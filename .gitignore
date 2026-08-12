@@ -22,3 +22,11 @@ grafana/data/
 Thumbs.db
 __pycache__/
 *.pyc
+*.egg-info/
+
+# Build outputs
+simulator/build/
+simulator/dist/
+
+# Migration exports (large data blobs)
+iot-platform-migration/

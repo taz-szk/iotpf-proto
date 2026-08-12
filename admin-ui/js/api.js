@@ -24,6 +24,10 @@ async function request(method, path, body = null) {
     });
 
     if (resp.status === 401) {
+        if (path === '/auth/login') {
+            const err = await resp.json().catch(() => ({ detail: 'メールアドレスまたはパスワードが正しくありません' }));
+            throw new Error(err.detail || 'メールアドレスまたはパスワードが正しくありません');
+        }
         clearTokens();
         window.location.href = '/admin/';
         return;
@@ -42,9 +46,13 @@ const api = {
         list: () => request('GET', '/tenants'),
         create: (name, slug) => request('POST', '/tenants', { name, slug }),
         get: (id) => request('GET', `/tenants/${id}`),
+        update: (id, name) => request('PATCH', `/tenants/${id}`, { name }),
+        setStatus: (id, status) => request('PATCH', `/tenants/${id}/status`, { status }),
+        delete: (id) => request('DELETE', `/tenants/${id}`),
     },
     tenantDevices: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/devices`),
+        delete: (tenantId, deviceId) => request('DELETE', `/tenants/${tenantId}/devices/${deviceId}`),
     },
     provisioningTokens: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/provisioning-tokens`),
@@ -52,16 +60,38 @@ const api = {
             request('POST', `/tenants/${tenantId}/provisioning-tokens`, { max_devices: maxDevices, expires_days: expiresDays }),
         revoke: (tenantId, tokenId) =>
             request('DELETE', `/tenants/${tenantId}/provisioning-tokens/${tokenId}`),
+        listDevices: (tenantId, tokenId) =>
+            request('GET', `/tenants/${tenantId}/provisioning-tokens/${tokenId}/devices`),
     },
     alertRules: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/alert-rules`),
         create: (tenantId, rule) => request('POST', `/tenants/${tenantId}/alert-rules`, rule),
+        update: (tenantId, ruleId, rule) => request('PATCH', `/tenants/${tenantId}/alert-rules/${ruleId}`, rule),
         delete: (tenantId, ruleId) => request('DELETE', `/tenants/${tenantId}/alert-rules/${ruleId}`),
+        sensorKeys: (tenantId) => request('GET', `/tenants/${tenantId}/sensor-keys`),
     },
     tenantUsers: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/users`),
         create: (tenantId, email, password, role) =>
             request('POST', `/tenants/${tenantId}/users`, { email, password, role }),
+        resetPassword: (tenantId, userId, password) =>
+            request('PATCH', `/tenants/${tenantId}/users/${userId}/password`, { password }),
+    },
+    auth: {
+        changePassword: (currentPassword, newPassword) =>
+            request('POST', '/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
+    },
+    platform: {
+        grafanaOrgId: () => request('GET', '/tenants/platform/grafana-org-id'),
+    },
+    tenantAuth: {
+        changePassword: (currentPassword, newPassword) =>
+            fetch(`${API_BASE}/tenant-auth/change-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+            }).then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail) }); }),
     },
     isLoggedIn: () => !!getToken(),
     logout: () => { clearTokens(); window.location.href = '/admin/'; },

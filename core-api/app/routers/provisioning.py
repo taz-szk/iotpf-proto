@@ -49,10 +49,11 @@ def provision(req: ProvisionRequest):
             logger.error("Certificate issuance failed for %s:%s — %s", tenant_id, req.device_id, exc)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Certificate issuance failed")
 
+        device_name = req.device_name.strip() or req.device_id
         db.execute(
-            text(f'''INSERT INTO "{schema}".devices (id, device_id, connection_status)
-                     VALUES (:id, :did, 'offline')'''),
-            {"id": str(uuid.uuid4()), "did": req.device_id}
+            text(f'''INSERT INTO "{schema}".devices (id, device_id, device_name, provisioning_token_id, connection_status)
+                     VALUES (:id, :did, :dname, :tok_id, 'offline')'''),
+            {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name, "tok_id": str(token.id)}
         )
         token.registered_count += 1
         db.commit()

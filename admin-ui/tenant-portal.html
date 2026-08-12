@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>テナントポータル - IoTAir-X</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+</head>
+<body class="bg-gray-50" style="overflow:hidden;height:100vh;">
+
+<div x-data="portalApp()" x-init="init()" class="flex h-screen overflow-hidden">
+
+  <!-- ===== 左サイドバー ===== -->
+  <aside class="w-52 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+
+    <!-- ロゴ + テナント名 -->
+    <div class="px-4 py-4 border-b border-gray-100">
+      <div class="mb-2">
+        <div class="text-lg font-black tracking-tight text-blue-600 leading-none">IoTAir<span class="text-gray-800">-X</span></div>
+      </div>
+      <p class="text-xs font-semibold text-gray-700 leading-tight" x-text="me.tenant_name || '読み込み中...'"></p>
+    </div>
+
+    <!-- ナビゲーション -->
+    <nav class="flex-1 py-2 overflow-y-auto">
+      <template x-for="tab in tabs" :key="tab.id">
+        <button @click="switchTab(tab.id)"
+                :class="activeTab === tab.id
+                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600 font-medium'
+                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'"
+                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors">
+          <span x-text="tab.icon" class="w-4 text-center text-base leading-none"></span>
+          <span x-text="tab.label"></span>
+        </button>
+      </template>
+    </nav>
+
+    <!-- ユーザー情報 + ログアウト -->
+    <div class="border-t border-gray-100 px-4 py-3 space-y-2">
+      <p class="text-xs text-gray-400 truncate" x-text="me.email"></p>
+      <div class="flex gap-3">
+        <a href="/admin/change-password.html" class="text-xs text-blue-500 hover:underline">PW変更</a>
+        <button @click="logout" class="text-xs text-gray-400 hover:text-gray-600">ログアウト</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== メインコンテンツ ===== -->
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+
+    <!-- エラーバー -->
+    <div x-show="error" class="bg-red-50 border-b border-red-200 text-red-600 px-6 py-2 text-sm flex-shrink-0" x-text="error"></div>
+
+    <!-- ローディング -->
+    <div x-show="pageLoading" class="flex-1 flex items-center justify-center text-gray-400 text-sm">読み込み中...</div>
+
+    <div x-show="!pageLoading" class="flex-1 overflow-hidden flex flex-col">
+
+      <!-- ===== ダッシュボード (iframe 全画面) ===== -->
+      <div x-show="activeTab === 'dashboard'" class="flex-1 overflow-hidden">
+        <iframe x-bind:src="activeTab === 'dashboard' ? grafanaUrl : ''"
+                class="w-full h-full border-0" allow="fullscreen"></iframe>
+      </div>
+
+      <!-- ===== その他タブ (スクロール可能) ===== -->
+      <div x-show="activeTab !== 'dashboard'" class="flex-1 overflow-y-auto">
+        <div class="max-w-5xl mx-auto px-6 py-8">
+
+          <!-- ===== ユーザー管理 ===== -->
+          <div x-show="activeTab === 'users'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">テナントユーザー</h3>
+              <button x-show="isAdmin" @click="showUserForm = !showUserForm"
+                      class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+                + ユーザー追加
+              </button>
+            </div>
+            <div x-show="showUserForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+              <form @submit.prevent="createUser" class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">メールアドレス</label>
+                  <input type="email" x-model="newUser.email" required class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
+                  <input type="password" x-model="newUser.password" required minlength="8" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">ロール</label>
+                  <select x-model="newUser.role" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="viewer">Viewer（閲覧のみ）</option>
+                    <option value="operator">Operator（編集可）</option>
+                    <option value="admin">Admin（管理者）</option>
+                  </select>
+                </div>
+                <div class="col-span-2 flex justify-end gap-2">
+                  <button type="button" @click="showUserForm = false" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                  <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded">作成</button>
+                </div>
+              </form>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div x-show="users.length === 0" class="py-8 text-center text-gray-400 text-sm">ユーザーがいません</div>
+              <table x-show="users.length > 0" class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">メール</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">ロール</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">作成日</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="u in users" :key="u.id">
+                    <tr>
+                      <td class="px-4 py-3 text-sm font-medium" x-text="u.email"></td>
+                      <td class="px-4 py-3">
+                        <span class="text-xs px-2 py-0.5 rounded font-medium"
+                              :class="{'bg-purple-100 text-purple-700': u.role === 'admin', 'bg-blue-100 text-blue-700': u.role === 'operator', 'bg-gray-100 text-gray-600': u.role === 'viewer'}"
+                              x-text="u.role"></span>
+                      </td>
+                      <td class="px-4 py-3 text-sm" x-text="u.is_active ? '有効' : '無効'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="u.created_at ? new Date(u.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                      <td class="px-4 py-3 text-right">
+                        <button x-show="isAdmin" @click="resetUserPassword(u.id, u.email)"
+                                class="text-xs text-blue-500 hover:text-blue-700">PW変更</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ===== プロビジョニングトークン ===== -->
+          <div x-show="activeTab === 'tokens'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">ブートストラップトークン</h3>
+              <button x-show="canEdit" @click="createToken()" :disabled="creatingToken"
+                      class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-3 py-1.5 rounded text-sm">
+                + トークン発行
+              </button>
+            </div>
+            <div x-show="newTokenValue" class="bg-green-50 border border-green-200 rounded p-4 mb-4">
+              <p class="text-sm font-medium text-green-800 mb-1">新しいトークンが発行されました（この画面のみ表示）</p>
+              <code class="text-xs bg-white border border-green-200 rounded px-2 py-1 break-all" x-text="newTokenValue"></code>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div x-show="tokens.length === 0" class="py-8 text-center text-gray-400 text-sm">トークンがありません</div>
+              <table x-show="tokens.length > 0" class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="w-6 px-4 py-3"></th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス上限</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">利用中</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">削除済</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">有効期限</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <template x-for="t in tokens" :key="t.id">
+                  <tbody>
+                    <tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        @click="toggleTokenDevices(t.id)">
+                      <td class="px-4 py-3 text-gray-400 text-xs select-none"
+                          x-text="expandedToken === t.id ? '▾' : '▸'"></td>
+                      <td class="px-4 py-3 text-sm" x-text="t.max_devices + ' 台'"></td>
+                      <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="t.active_count + ' 台'"></td>
+                      <td class="px-4 py-3 text-sm" :class="t.deleted_count > 0 ? 'text-red-500' : 'text-gray-300'"
+                          x-text="t.deleted_count + ' 台'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="new Date(t.expires_at).toLocaleDateString('ja-JP')"></td>
+                      <td class="px-4 py-3 text-right" @click.stop>
+                        <button x-show="canEdit" @click="revokeToken(t.id)" class="text-red-500 hover:text-red-700 text-xs">失効</button>
+                      </td>
+                    </tr>
+                    <tr x-show="expandedToken === t.id" class="bg-blue-50">
+                      <td colspan="6" class="px-8 py-3">
+                        <div x-show="tokenDevicesLoading" class="text-xs text-gray-400 py-1">読み込み中...</div>
+                        <div x-show="!tokenDevicesLoading && tokenDevices.length === 0 && expandedToken === t.id"
+                             class="text-xs text-gray-400 py-1">このトークンで登録されたデバイスはありません</div>
+                        <table x-show="!tokenDevicesLoading && tokenDevices.length > 0 && expandedToken === t.id" class="w-full text-xs">
+                          <thead>
+                            <tr class="text-gray-500">
+                              <th class="text-left py-1 pr-6 font-medium">デバイス名</th>
+                              <th class="text-left py-1 pr-6 font-medium">デバイスID</th>
+                              <th class="text-left py-1 pr-6 font-medium">状態</th>
+                              <th class="text-left py-1 font-medium">登録日時</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="d in tokenDevices" :key="d.device_id">
+                              <tr class="border-t border-blue-100">
+                                <td class="py-1.5 pr-6 font-medium text-gray-700" x-text="d.device_name"></td>
+                                <td class="py-1.5 pr-6 font-mono text-gray-400" x-text="d.device_id"></td>
+                                <td class="py-1.5 pr-6">
+                                  <span :class="d.connection_status === 'online' ? 'text-green-600' : 'text-gray-400'"
+                                        x-text="d.connection_status === 'online' ? 'オンライン' : 'オフライン'"></span>
+                                </td>
+                                <td class="py-1.5 text-gray-500"
+                                    x-text="d.created_at ? new Date(d.created_at).toLocaleString('ja-JP') : '-'"></td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  </tbody>
+                </template>
+              </table>
+            </div>
+            <p class="text-xs text-gray-400 mt-2">※ 削除済みデバイスも登録台数としてカウントされます。利用中＋削除済の合計がデバイス上限に達すると新規登録できなくなります。</p>
+          </div>
+
+          <!-- ===== デバイス ===== -->
+          <div x-show="activeTab === 'devices'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">登録デバイス</h3>
+              <button @click="loadDevices()" :disabled="devicesLoading"
+                      class="text-sm text-blue-600 hover:text-blue-800 disabled:text-blue-300">
+                <span x-show="!devicesLoading">↻ 更新</span>
+                <span x-show="devicesLoading">更新中...</span>
+              </button>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div x-show="!devicesLoading && devices.length === 0" class="py-8 text-center text-gray-400 text-sm">デバイスが登録されていません</div>
+              <div class="overflow-x-auto">
+                <table x-show="devices.length > 0" class="w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス名</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイスID</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終通信</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">FWバージョン</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
+                      <th class="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="d in devices" :key="d.id">
+                      <tr>
+                        <td class="px-4 py-3 font-medium" x-text="d.device_name || d.device_id"></td>
+                        <td class="px-4 py-3 font-mono text-xs text-gray-400" x-text="d.device_id"></td>
+                        <td class="px-4 py-3">
+                          <span class="text-xs px-2 py-0.5 rounded font-medium"
+                                :class="{'bg-green-100 text-green-700': d.connection_status === 'online', 'bg-red-100 text-red-700': d.connection_status === 'offline', 'bg-gray-100 text-gray-500': d.connection_status === 'unknown'}"
+                                x-text="d.connection_status"></span>
+                        </td>
+                        <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.last_seen_at)"></td>
+                        <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
+                        <td class="px-4 py-3" :class="certClass(d.cert_not_after)"
+                            x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
+                        <td class="px-4 py-3 text-gray-400" x-text="d.created_at ? new Date(d.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                        <td class="px-4 py-3 text-right">
+                          <button x-show="canEdit" @click="deleteDevice(d.device_id)"
+                                  class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="text-xs text-gray-400 mt-2 text-right">30秒ごとに自動更新</p>
+          </div>
+
+          <!-- ===== アラートルール ===== -->
+          <div x-show="activeTab === 'alerts'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">アラートルール</h3>
+              <button x-show="canEdit" @click="openAlertForm()"
+                      class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+                + ルール追加
+              </button>
+            </div>
+            <div x-show="showAlertForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+              <p class="text-sm font-medium text-gray-700 mb-3" x-text="editingRuleId ? 'ルール編集' : 'ルール追加'"></p>
+              <form @submit.prevent="saveAlertRule" class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">センサーキー</label>
+                  <select x-show="sensorKeys.length > 0" x-model="sensorKeySelect"
+                          @change="sensorKeySelect !== '__other__' ? (newRule.sensor_key = sensorKeySelect) : (newRule.sensor_key = '')"
+                          :required="sensorKeys.length > 0 && sensorKeySelect !== '__other__'"
+                          class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="">-- 選択してください --</option>
+                    <template x-for="k in sensorKeys" :key="k">
+                      <option :value="k" x-text="k"></option>
+                    </template>
+                    <option value="__other__">その他（手入力）</option>
+                  </select>
+                  <input x-show="sensorKeys.length === 0 || sensorKeySelect === '__other__'"
+                         type="text" x-model="newRule.sensor_key"
+                         :required="sensorKeys.length === 0 || sensorKeySelect === '__other__'"
+                         placeholder="temperature"
+                         :class="{'mt-1': sensorKeySelect === '__other__'}"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">デバイス（空=全デバイス）</label>
+                  <div class="relative">
+                    <input type="text" x-model="deviceSearch" autocomplete="off"
+                           @focus="showDeviceDropdown = true"
+                           @blur="onDeviceBlur()"
+                           placeholder="全デバイス対象（名前/IDで検索）"
+                           class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm pr-6">
+                    <button type="button" x-show="deviceSearch"
+                            @click="clearDevice()"
+                            class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs leading-none">✕</button>
+                    <div x-show="showDeviceDropdown"
+                         class="absolute z-20 w-full bg-white border border-gray-200 rounded shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+                      <button type="button" @mousedown.prevent @click="clearDevice()"
+                              class="w-full text-left px-3 py-2 text-sm text-gray-400 italic hover:bg-gray-50 border-b border-gray-100">
+                        全デバイス対象
+                      </button>
+                      <template x-for="d in filteredDevices()" :key="d.device_id">
+                        <button type="button" @mousedown.prevent @click="selectDevice(d)"
+                                :class="d.device_id === newRule.device_id ? 'bg-blue-50' : 'hover:bg-blue-50'"
+                                class="w-full text-left px-3 py-2 text-sm">
+                          <span class="font-medium" x-text="d.device_name || d.device_id"></span>
+                          <span x-show="d.device_name" class="text-xs text-gray-400 ml-1" x-text="d.device_id"></span>
+                        </button>
+                      </template>
+                      <div x-show="filteredDevices().length === 0"
+                           class="px-3 py-2 text-sm text-gray-400 text-center">一致するデバイスがありません</div>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">条件</label>
+                  <select x-model="newRule.condition" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="above">以上（above）</option>
+                    <option value="below">以下（below）</option>
+                    <option value="equal">等しい（equal）</option>
+                    <option value="device_offline">デバイス offline</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">閾値</label>
+                  <input type="number" x-model="newRule.threshold" step="any"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">トリガーモード</label>
+                  <select x-model="newRule.trigger_mode" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="consecutive">連続N回</option>
+                    <option value="duration">N秒継続</option>
+                    <option value="consecutive_and_duration">連続N回 かつ N秒継続</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">連続回数</label>
+                  <input type="number" x-model.number="newRule.consecutive_count" min="1" max="100"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">継続秒数</label>
+                  <input type="number" x-model.number="newRule.duration_sec" min="1"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">重大度</label>
+                  <select x-model="newRule.severity" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="info">情報</option>
+                    <option value="warning">警告</option>
+                    <option value="critical">重大</option>
+                  </select>
+                </div>
+                <div class="col-span-2">
+                  <label class="block text-xs font-medium text-gray-600 mb-1">通知先メール（カンマ区切り）</label>
+                  <input type="text" x-model="emailsInput" placeholder="ops@example.com"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div class="col-span-2 flex justify-end gap-2">
+                  <button type="button" @click="closeAlertForm()" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                  <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded"
+                          x-text="editingRuleId ? '更新' : '作成'"></button>
+                </div>
+              </form>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div x-show="alertRules.length === 0" class="py-8 text-center text-gray-400 text-sm">アラートルールがありません</div>
+              <table x-show="alertRules.length > 0" class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">センサー</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">条件</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">重大度</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">通知先</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終アラート</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="r in alertRules" :key="r.id">
+                    <tr>
+                      <td class="px-4 py-3 text-sm font-medium" x-text="r.sensor_key + (r.device_id ? ' / ' + r.device_id : '')"></td>
+                      <td class="px-4 py-3 text-sm" x-text="r.condition + (r.threshold != null ? ' ' + r.threshold : '')"></td>
+                      <td class="px-4 py-3">
+                        <span class="text-xs px-2 py-0.5 rounded font-medium"
+                              :class="{'bg-red-100 text-red-700': r.severity === 'critical', 'bg-yellow-100 text-yellow-700': r.severity === 'warning', 'bg-blue-100 text-blue-700': r.severity === 'info'}"
+                              x-text="r.severity"></span>
+                      </td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="(r.notify_emails || []).join(', ') || '-'"></td>
+                      <td class="px-4 py-3 text-sm"
+                          :class="r.last_triggered_at ? 'text-gray-700' : 'text-gray-300'"
+                          x-text="r.last_triggered_at ? timeAgo(r.last_triggered_at) : '未発火'"></td>
+                      <td class="px-4 py-3 text-right space-x-3">
+                        <button x-show="canEdit" @click="editAlertRule(r)" class="text-blue-500 hover:text-blue-700 text-xs">編集</button>
+                        <button x-show="canEdit" @click="deleteAlertRule(r.id)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- ===== ファームウェア ===== -->
+          <div x-show="activeTab === 'firmware'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">ファームウェア一覧</h3>
+              <label x-show="canEdit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm cursor-pointer">
+                + アップロード
+                <input type="file" class="hidden" @change="selectFirmwareFile($event)">
+              </label>
+            </div>
+            <div x-show="uploadFile" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+              <p class="text-sm font-medium text-gray-700 mb-3" x-text="'ファイル: ' + uploadFile?.name"></p>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">バージョン</label>
+                  <input type="text" x-model="fwVersion" placeholder="1.0.0"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">対象モデル（任意）</label>
+                  <input type="text" x-model="fwTargetModel" placeholder="SensorNode-v2"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div class="col-span-2">
+                  <label class="block text-xs font-medium text-gray-600 mb-1">説明（任意）</label>
+                  <input type="text" x-model="fwDescription"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+              </div>
+              <div class="flex justify-end gap-2 mt-3">
+                <button @click="uploadFile = null; fwVersion = ''; fwTargetModel = ''; fwDescription = ''"
+                        class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                <button @click="submitFirmwareUpload()" :disabled="!fwVersion || uploading"
+                        class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+                  <span x-show="!uploading">アップロード</span>
+                  <span x-show="uploading">アップロード中...</span>
+                </button>
+              </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+              <div x-show="firmwareList.length === 0" class="py-8 text-center text-gray-400 text-sm">ファームウェアがありません</div>
+              <table x-show="firmwareList.length > 0" class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">バージョン</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">モデル</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">サイズ</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">アップロード日</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="fw in firmwareList" :key="fw.id">
+                    <tr>
+                      <td class="px-4 py-3 text-sm font-medium" x-text="fw.version"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="fw.target_model || '全デバイス'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="(fw.file_size / 1024).toFixed(1) + ' KB'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="fw.uploaded_at ? new Date(fw.uploaded_at).toLocaleDateString('ja-JP') : '-'"></td>
+                      <td class="px-4 py-3 text-right flex gap-2 justify-end">
+                        <button x-show="canEdit" @click="sendOta(fw.id, fw.version)" class="text-blue-500 hover:text-blue-700 text-xs">OTA送信</button>
+                        <button x-show="canEdit" @click="deactivateFirmware(fw.id)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+            <!-- OTA ダイアログ -->
+            <div x-show="otaTargetFirmware" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+              <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+                <h3 class="font-medium text-gray-800 mb-1" x-text="'OTA送信: v' + otaTargetFirmware?.version"></h3>
+                <p class="text-xs text-gray-400 mb-4">送信対象のデバイスを選択してください</p>
+
+                <!-- ローディング -->
+                <div x-show="otaLoading" class="py-6 text-center text-gray-400 text-sm">読み込み中...</div>
+
+                <div x-show="!otaLoading">
+                  <!-- 全選択 -->
+                  <div class="flex items-center gap-2 pb-2 border-b border-gray-100 mb-2">
+                    <input type="checkbox" id="ota-select-all"
+                           :checked="otaAllSelected()"
+                           :indeterminate.prop="otaIndeterminate()"
+                           @change="otaToggleAll($event.target.checked)"
+                           class="rounded">
+                    <label for="ota-select-all" class="text-sm font-medium text-gray-700 cursor-pointer select-none">
+                      全選択
+                      <span class="text-xs text-gray-400 font-normal ml-1" x-text="'(' + otaDevices.length + ' 台)'"></span>
+                    </label>
+                  </div>
+
+                  <!-- デバイスリスト -->
+                  <div class="max-h-56 overflow-y-auto space-y-0.5 mb-3">
+                    <div x-show="otaDevices.length === 0" class="text-center text-gray-400 text-sm py-4">デバイスがありません</div>
+                    <template x-for="d in otaDevices" :key="d.device_id">
+                      <label class="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                        <input type="checkbox"
+                               :checked="otaSelectedIds[d.device_id]"
+                               @change="otaToggleDevice(d.device_id, $event.target.checked)"
+                               class="rounded flex-shrink-0">
+                        <span class="flex-1 min-w-0">
+                          <span class="text-sm font-medium text-gray-800" x-text="d.device_name || d.device_id"></span>
+                          <span x-show="d.device_name" class="text-xs text-gray-400 ml-1 font-mono" x-text="d.device_id"></span>
+                        </span>
+                        <span class="text-xs px-1.5 py-0.5 rounded flex-shrink-0"
+                              :class="d.connection_status === 'online' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'"
+                              x-text="d.connection_status === 'online' ? 'オンライン' : 'オフライン'"></span>
+                      </label>
+                    </template>
+                  </div>
+
+                  <!-- 送信結果 -->
+                  <div x-show="otaResults.length > 0" class="mb-3 space-y-1">
+                    <template x-for="r in otaResults" :key="r.device_id">
+                      <div class="text-xs px-2 py-1 rounded"
+                           :class="r.status === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                           x-text="(r.name || r.device_id) + ': ' + (r.status === 'ok' ? '送信完了' : '送信失敗')"></div>
+                    </template>
+                  </div>
+
+                  <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-400" x-text="otaSelectedCount() + ' 台を選択中'"></span>
+                    <div class="flex gap-2">
+                      <button @click="otaClose()" :disabled="otaSubmitting"
+                              class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                      <button @click="submitOta()" :disabled="otaSelectedCount() === 0 || otaSubmitting"
+                              class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+                        <span x-show="!otaSubmitting">送信</span>
+                        <span x-show="otaSubmitting">送信中...</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ===== 公開ダッシュボード（管理者のみ） ===== -->
+          <div x-show="activeTab === 'public' && isAdmin">
+            <div class="bg-white border border-gray-200 rounded-xl p-6 max-w-2xl">
+              <h3 class="text-base font-semibold text-gray-800 mb-1">公開ダッシュボードURL</h3>
+              <p class="text-sm text-gray-500 mb-5">
+                URLを知っている人なら誰でもログインなしでGrafanaダッシュボードを閲覧できます。<br>
+                有効にするとランダムなトークンURLが発行されます。無効にするとURLは即座に使えなくなります。
+              </p>
+
+              <!-- 有効時 -->
+              <div x-show="me.public_url" class="mb-5">
+                <p class="text-xs font-medium text-gray-500 mb-1.5">公開URL</p>
+                <div class="flex items-center gap-2">
+                  <code class="flex-1 bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm font-mono break-all"
+                        x-text="location.origin + me.public_url"></code>
+                  <button @click="copyPublicUrl()"
+                          class="flex-shrink-0 text-xs text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-3 py-2">
+                    コピー
+                  </button>
+                </div>
+                <p class="text-xs text-gray-400 mt-1.5">このURLを共有するとGrafanaダッシュボードを閲覧できます（編集・設定変更は不可）。</p>
+              </div>
+
+              <!-- 無効時 -->
+              <div x-show="!me.public_url" class="mb-5">
+                <div class="bg-gray-50 border border-gray-200 rounded px-4 py-3 text-sm text-gray-400">
+                  公開アクセスは現在無効です。
+                </div>
+              </div>
+
+              <!-- 有効化/無効化ボタン -->
+              <div class="flex items-center gap-3">
+                <button x-show="!me.public_url"
+                        @click="setPublicAccess(true)"
+                        :disabled="publicAccessLoading"
+                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded">
+                  <span x-show="!publicAccessLoading">公開URLを有効にする</span>
+                  <span x-show="publicAccessLoading">処理中...</span>
+                </button>
+                <button x-show="me.public_url"
+                        @click="setPublicAccess(false)"
+                        :disabled="publicAccessLoading"
+                        class="bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white text-sm px-4 py-2 rounded">
+                  <span x-show="!publicAccessLoading">公開URLを無効にする</span>
+                  <span x-show="publicAccessLoading">処理中...</span>
+                </button>
+              </div>
+              <div x-show="publicAccessError" class="mt-3 text-sm text-red-600" x-text="publicAccessError"></div>
+            </div>
+          </div>
+
+          <!-- ===== テナント削除（管理者のみ） ===== -->
+          <div x-show="activeTab === 'danger' && isAdmin">
+            <div class="bg-red-50 border border-red-200 rounded-xl p-6">
+              <h3 class="text-lg font-bold text-red-700 mb-2">テナントの完全削除</h3>
+              <p class="text-sm text-gray-700 mb-4">
+                このテナントとその全データを完全に削除します。この操作は取り消せません。
+              </p>
+              <div class="bg-white border border-red-200 rounded p-4 mb-4 text-sm text-red-700 space-y-1">
+                <p class="font-medium">削除されるデータ:</p>
+                <ul class="list-disc list-inside space-y-0.5 text-red-600">
+                  <li>テナントユーザーアカウント</li>
+                  <li>登録デバイスと証明書情報</li>
+                  <li>すべてのテレメトリデータ（InfluxDB）</li>
+                  <li>Grafana ダッシュボード・データソース</li>
+                  <li>ファームウェアファイル</li>
+                  <li>アラートルール・イベント</li>
+                </ul>
+              </div>
+              <div x-show="!deleteConfirmOpen">
+                <button @click="deleteConfirmOpen = true"
+                        class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded text-sm font-medium">
+                  このテナントを削除する...
+                </button>
+              </div>
+              <div x-show="deleteConfirmOpen" class="space-y-3">
+                <p class="text-sm text-gray-700">
+                  確認のため、スラッグ
+                  <code class="bg-gray-100 px-1 py-0.5 rounded font-mono text-xs" x-text="me.tenant_slug"></code>
+                  を入力してください:
+                </p>
+                <input type="text" x-model="deleteSlugInput" placeholder="スラッグを入力..."
+                       class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-400">
+                <div x-show="deleteError" class="text-sm text-red-600" x-text="deleteError"></div>
+                <div class="flex gap-2">
+                  <button @click="deleteConfirmOpen = false; deleteSlugInput = ''; deleteError = ''"
+                          class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">キャンセル</button>
+                  <button @click="deleteTenant()"
+                          :disabled="deleteSlugInput !== me.tenant_slug || deletingTenant"
+                          class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:bg-red-300 rounded">
+                    <span x-show="!deletingTenant">完全に削除する</span>
+                    <span x-show="deletingTenant">削除中...</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/api/tenant-portal';
+
+async function portalFetch(method, path, body = null) {
+  const opts = { method, credentials: 'include', headers: {} };
+  if (body && !(body instanceof FormData)) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  } else if (body) {
+    opts.body = body;
+  }
+  const resp = await fetch(`${API}${path}`, opts);
+  if (resp.status === 401) { window.location.href = '/admin/tenant-login.html'; return; }
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+    throw new Error(err.detail || 'Request failed');
+  }
+  if (resp.status === 204) return null;
+  return resp.json();
+}
+
+function portalApp() {
+  return {
+    me: {},
+    pageLoading: true,
+    error: '',
+    activeTab: 'dashboard',
+    grafanaUrl: '',
+
+    get tabs() {
+      const base = [
+        { id: 'dashboard', label: 'ダッシュボード', icon: '▦' },
+        { id: 'users',     label: 'ユーザー管理',            icon: '👤' },
+        { id: 'tokens',    label: 'プロビジョニングトークン', icon: '🔑' },
+        { id: 'devices',   label: 'デバイス',                icon: '📡' },
+        { id: 'alerts',    label: 'アラートルール',           icon: '🔔' },
+        { id: 'firmware',  label: 'ファームウェア',           icon: '💾' },
+      ];
+      if (this.isAdmin) {
+        base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
+        base.push({ id: 'danger', label: 'テナント削除', icon: '⚠' });
+      }
+      return base;
+    },
+    get isAdmin()   { return this.me.role === 'admin'; },
+    get canEdit()   { return ['admin', 'operator'].includes(this.me.role); },
+
+    // 公開ダッシュボード
+    publicAccessLoading: false,
+    publicAccessError: '',
+    async setPublicAccess(enable) {
+      this.publicAccessLoading = true;
+      this.publicAccessError = '';
+      try {
+        const result = await portalFetch('POST', '/me/public-access', { enable });
+        this.me = { ...this.me, public_url: result.public_url, public_token: result.public_token };
+      } catch(e) {
+        this.publicAccessError = e.message || '操作に失敗しました';
+      } finally {
+        this.publicAccessLoading = false;
+      }
+    },
+    copyPublicUrl() {
+      const url = location.origin + this.me.public_url;
+      navigator.clipboard.writeText(url).catch(() => {});
+    },
+
+    // テナント削除
+    deleteConfirmOpen: false,
+    deleteSlugInput: '',
+    deleteError: '',
+    deletingTenant: false,
+    async deleteTenant() {
+      if (this.deleteSlugInput !== this.me.tenant_slug) return;
+      this.deletingTenant = true;
+      this.deleteError = '';
+      try {
+        await portalFetch('DELETE', '/me/tenant');
+        window.location.href = '/admin/tenant-login.html';
+      } catch(e) {
+        this.deleteError = e.message || '削除に失敗しました';
+        this.deletingTenant = false;
+      }
+    },
+
+    // トークン
+    tokens: [], newTokenValue: '', creatingToken: false,
+    expandedToken: null, tokenDevices: [], tokenDevicesLoading: false,
+    // アラート
+    alertRules: [], sensorKeys: [], sensorKeySelect: '',
+    alertDevices: [], deviceSearch: '', showDeviceDropdown: false,
+    showAlertForm: false, editingRuleId: null, emailsInput: '',
+    newRule: { sensor_key: '', device_id: '', condition: 'above', threshold: null,
+               trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
+               severity: 'warning', notify_emails: [] },
+    // ファームウェア
+    firmwareList: [], uploadFile: null, fwVersion: '', fwTargetModel: '', fwDescription: '',
+    uploading: false,
+    otaTargetFirmware: null, otaDevices: [], otaSelectedIds: {},
+    otaLoading: false, otaSubmitting: false, otaResults: [],
+    // ユーザー
+    users: [], showUserForm: false, newUser: { email: '', password: '', role: 'viewer' },
+    // デバイス
+    devices: [], devicesLoading: false, _devTimer: null,
+
+    async init() {
+      try {
+        const [me, tokens, rules] = await Promise.all([
+          portalFetch('GET', '/me'),
+          portalFetch('GET', '/me/tokens'),
+          portalFetch('GET', '/me/alert-rules'),
+        ]);
+        if (!me) return;
+        this.me = me;
+        this.tokens = tokens || [];
+        this.alertRules = rules || [];
+        document.title = `${me.tenant_name} - IoTAir-X`;
+        if (me.grafana_url) this.grafanaUrl = me.grafana_url;
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.pageLoading = false;
+      }
+    },
+
+    async switchTab(tab) {
+      this.activeTab = tab;
+      this.error = '';
+      if (tab === 'firmware') await this.loadFirmware();
+      if (tab === 'users')    await this.loadUsers();
+      if (tab === 'devices')  this.startDevicesRefresh();
+      if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
+    },
+
+    async logout() {
+      await fetch('/api/tenant-auth/logout', { method: 'POST', credentials: 'include' });
+      window.location.href = '/admin/tenant-login.html';
+    },
+
+    // ----- トークン -----
+    async toggleTokenDevices(tokenId) {
+      if (this.expandedToken === tokenId) { this.expandedToken = null; return; }
+      this.expandedToken = tokenId;
+      this.tokenDevices = [];
+      this.tokenDevicesLoading = true;
+      try {
+        this.tokenDevices = await portalFetch('GET', `/me/tokens/${tokenId}/devices`) || [];
+      } catch(e) { this.error = e.message; } finally { this.tokenDevicesLoading = false; }
+    },
+    async createToken() {
+      this.creatingToken = true; this.newTokenValue = '';
+      try {
+        const t = await portalFetch('POST', '/me/tokens', { max_devices: 100, expires_days: 365 });
+        if (t) { this.newTokenValue = t.token; this.tokens = await portalFetch('GET', '/me/tokens') || []; }
+      } catch(e) { this.error = e.message; } finally { this.creatingToken = false; }
+    },
+    async revokeToken(id) {
+      if (!confirm('このトークンを失効させますか？')) return;
+      try { await portalFetch('DELETE', `/me/tokens/${id}`); this.tokens = await portalFetch('GET', '/me/tokens') || []; }
+      catch(e) { this.error = e.message; }
+    },
+
+    // ----- アラート -----
+    filteredDevices() {
+      const q = this.deviceSearch.toLowerCase();
+      if (!q) return this.alertDevices;
+      return this.alertDevices.filter(d =>
+        (d.device_id || '').toLowerCase().includes(q) ||
+        (d.device_name || '').toLowerCase().includes(q)
+      );
+    },
+    selectDevice(device) {
+      this.newRule.device_id = device.device_id;
+      this.deviceSearch = device.device_name || device.device_id;
+      this.showDeviceDropdown = false;
+    },
+    clearDevice() {
+      this.newRule.device_id = '';
+      this.deviceSearch = '';
+      this.showDeviceDropdown = false;
+    },
+    onDeviceBlur() {
+      setTimeout(() => {
+        this.showDeviceDropdown = false;
+        if (!this.newRule.device_id) {
+          this.deviceSearch = '';
+        } else {
+          const d = this.alertDevices.find(d => d.device_id === this.newRule.device_id);
+          this.deviceSearch = d ? (d.device_name || d.device_id) : this.newRule.device_id;
+        }
+      }, 150);
+    },
+    async openAlertForm() {
+      this.editingRuleId = null;
+      this.sensorKeySelect = '';
+      this.deviceSearch = '';
+      this.newRule = { sensor_key: '', device_id: '', condition: 'above', threshold: null,
+                       trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
+                       severity: 'warning', notify_emails: [] };
+      this.emailsInput = '';
+      this.showAlertForm = true;
+      try {
+        const [keys, devs] = await Promise.all([
+          portalFetch('GET', '/me/sensor-keys'),
+          portalFetch('GET', '/me/devices'),
+        ]);
+        this.sensorKeys = keys || [];
+        this.alertDevices = devs || [];
+      } catch(_) {}
+    },
+    closeAlertForm() {
+      this.showAlertForm = false;
+      this.editingRuleId = null;
+      this.emailsInput = '';
+      this.sensorKeySelect = '';
+      this.deviceSearch = '';
+      this.showDeviceDropdown = false;
+    },
+    async editAlertRule(rule) {
+      this.editingRuleId = rule.id;
+      this.sensorKeySelect = '__other__';
+      this.deviceSearch = rule.device_id || '';
+      this.newRule = {
+        sensor_key: rule.sensor_key, device_id: rule.device_id || '',
+        condition: rule.condition, threshold: rule.threshold,
+        trigger_mode: rule.trigger_mode, consecutive_count: rule.consecutive_count,
+        duration_sec: rule.duration_sec, severity: rule.severity,
+        notify_emails: rule.notify_emails || [],
+      };
+      this.emailsInput = (rule.notify_emails || []).join(', ');
+      this.showAlertForm = true;
+      try {
+        const [keys, devs] = await Promise.all([
+          portalFetch('GET', '/me/sensor-keys'),
+          portalFetch('GET', '/me/devices'),
+        ]);
+        this.sensorKeys = keys || [];
+        this.alertDevices = devs || [];
+        this.sensorKeySelect = this.sensorKeys.includes(rule.sensor_key)
+          ? rule.sensor_key : '__other__';
+        if (rule.device_id) {
+          const d = this.alertDevices.find(d => d.device_id === rule.device_id);
+          this.deviceSearch = d ? (d.device_name || d.device_id) : rule.device_id;
+        }
+      } catch(_) {}
+    },
+    async saveAlertRule() {
+      const rule = { ...this.newRule };
+      rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
+      if (rule.condition === 'device_offline') rule.threshold = null;
+      try {
+        if (this.editingRuleId) {
+          await portalFetch('PATCH', `/me/alert-rules/${this.editingRuleId}`, rule);
+        } else {
+          await portalFetch('POST', '/me/alert-rules', rule);
+        }
+        this.alertRules = await portalFetch('GET', '/me/alert-rules') || [];
+        this.closeAlertForm();
+      } catch(e) { this.error = e.message; }
+    },
+    async deleteAlertRule(id) {
+      if (!confirm('このアラートルールを削除しますか？')) return;
+      try { await portalFetch('DELETE', `/me/alert-rules/${id}`); this.alertRules = await portalFetch('GET', '/me/alert-rules') || []; }
+      catch(e) { this.error = e.message; }
+    },
+
+    // ----- ファームウェア -----
+    async loadFirmware() {
+      try { this.firmwareList = await portalFetch('GET', '/me/firmware') || []; }
+      catch(e) { this.error = e.message; }
+    },
+    selectFirmwareFile(e) { this.uploadFile = e.target.files[0] || null; e.target.value = ''; },
+    async submitFirmwareUpload() {
+      if (!this.uploadFile || !this.fwVersion) return;
+      this.uploading = true;
+      try {
+        const fd = new FormData();
+        fd.append('file', this.uploadFile);
+        fd.append('version', this.fwVersion);
+        if (this.fwTargetModel) fd.append('target_model', this.fwTargetModel);
+        if (this.fwDescription) fd.append('description', this.fwDescription);
+        await portalFetch('POST', '/me/firmware', fd);
+        this.uploadFile = null; this.fwVersion = ''; this.fwTargetModel = ''; this.fwDescription = '';
+        await this.loadFirmware();
+      } catch(e) { this.error = e.message; } finally { this.uploading = false; }
+    },
+    async sendOta(id, version) {
+      this.otaTargetFirmware = { id, version };
+      this.otaSelectedIds = {};
+      this.otaResults = [];
+      this.otaLoading = true;
+      try {
+        this.otaDevices = await portalFetch('GET', '/me/devices') || [];
+      } catch(e) {
+        this.error = e.message;
+      } finally {
+        this.otaLoading = false;
+      }
+    },
+    otaAllSelected() {
+      return this.otaDevices.length > 0 && this.otaDevices.every(d => this.otaSelectedIds[d.device_id]);
+    },
+    otaIndeterminate() {
+      const cnt = this.otaDevices.filter(d => this.otaSelectedIds[d.device_id]).length;
+      return cnt > 0 && cnt < this.otaDevices.length;
+    },
+    otaToggleAll(checked) {
+      const ids = {};
+      if (checked) this.otaDevices.forEach(d => { ids[d.device_id] = true; });
+      this.otaSelectedIds = ids;
+    },
+    otaToggleDevice(deviceId, checked) {
+      this.otaSelectedIds = { ...this.otaSelectedIds, [deviceId]: checked };
+    },
+    otaSelectedCount() {
+      return Object.values(this.otaSelectedIds).filter(Boolean).length;
+    },
+    otaClose() {
+      if (this.otaSubmitting) return;
+      this.otaTargetFirmware = null;
+      this.otaDevices = [];
+      this.otaSelectedIds = {};
+      this.otaResults = [];
+    },
+    async submitOta() {
+      if (!this.otaTargetFirmware) return;
+      const targets = this.otaDevices.filter(d => this.otaSelectedIds[d.device_id]);
+      if (targets.length === 0) return;
+      this.otaSubmitting = true;
+      this.otaResults = [];
+      for (const d of targets) {
+        try {
+          await portalFetch('POST', `/me/devices/${d.device_id}/ota`, { firmware_id: this.otaTargetFirmware.id });
+          this.otaResults = [...this.otaResults, { device_id: d.device_id, name: d.device_name, status: 'ok' }];
+        } catch(_) {
+          this.otaResults = [...this.otaResults, { device_id: d.device_id, name: d.device_name, status: 'error' }];
+        }
+      }
+      this.otaSubmitting = false;
+      if (this.otaResults.every(r => r.status === 'ok')) {
+        setTimeout(() => { this.otaClose(); }, 1500);
+      }
+    },
+    async deactivateFirmware(id) {
+      if (!confirm('このファームウェアを無効化しますか？')) return;
+      try { await portalFetch('DELETE', `/me/firmware/${id}`); await this.loadFirmware(); }
+      catch(e) { this.error = e.message; }
+    },
+
+    // ----- ユーザー -----
+    async loadUsers() {
+      try { this.users = await portalFetch('GET', '/me/users') || []; }
+      catch(e) { this.error = e.message; }
+    },
+    async createUser() {
+      try {
+        await portalFetch('POST', '/me/users', { email: this.newUser.email, password: this.newUser.password, role: this.newUser.role });
+        this.users = await portalFetch('GET', '/me/users') || [];
+        this.showUserForm = false; this.newUser = { email: '', password: '', role: 'viewer' };
+      } catch(e) { this.error = e.message; }
+    },
+    async resetUserPassword(userId, email) {
+      const newPass = prompt(`${email} の新しいパスワードを入力してください（8文字以上）:`);
+      if (!newPass) return;
+      if (newPass.length < 8) { this.error = 'パスワードは8文字以上必要です'; return; }
+      try {
+        await portalFetch('PATCH', `/me/users/${userId}/password`, { password: newPass });
+        alert(`${email} のパスワードを変更しました`);
+      } catch(e) { this.error = e.message; }
+    },
+
+    // ----- デバイス -----
+    async loadDevices() {
+      this.devicesLoading = true;
+      try { this.devices = await portalFetch('GET', '/me/devices') || []; }
+      catch(e) { this.error = e.message; } finally { this.devicesLoading = false; }
+    },
+    startDevicesRefresh() {
+      if (this._devTimer) clearInterval(this._devTimer);
+      this.loadDevices();
+      this._devTimer = setInterval(() => { if (this.activeTab === 'devices') this.loadDevices(); }, 30000);
+    },
+    async deleteDevice(deviceId) {
+      if (!confirm(`デバイス "${deviceId}" を削除しますか？\nこの操作は取り消せません。`)) return;
+      try {
+        await portalFetch('DELETE', `/me/devices/${deviceId}`);
+        this.devices = this.devices.filter(d => d.device_id !== deviceId);
+      } catch(e) { this.error = e.message; }
+    },
+
+    // ----- ユーティリティ -----
+    timeAgo(isoStr) {
+      if (!isoStr) return '-';
+      const diff = Date.now() - new Date(isoStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return '今';
+      if (mins < 60) return `${mins}分前`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}時間前`;
+      return `${Math.floor(hrs / 24)}日前`;
+    },
+    certClass(certNotAfter) {
+      if (!certNotAfter) return 'text-gray-400';
+      const days = (new Date(certNotAfter) - Date.now()) / 86400000;
+      if (days < 0)  return 'text-red-600 font-medium';
+      if (days < 7)  return 'text-yellow-600 font-medium';
+      return 'text-gray-500';
+    },
+  };
+}
+</script>
+</body>
+</html>
