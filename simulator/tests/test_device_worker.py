@@ -10,6 +10,7 @@ from device_worker import DeviceWorker
 
 def _make_worker(cert_dir: str, event_queue: queue.Queue, **kwargs) -> DeviceWorker:
     defaults = dict(
+        wid=0,
         device_id="test-001",
         api_url="https://localhost/api",
         broker_host="localhost",
@@ -35,7 +36,7 @@ class TestDeviceWorkerProvisioning(unittest.TestCase):
             time.sleep(0.4)
             worker.stop()
             worker.join(timeout=2)
-        MockClient.return_value.provision.assert_called_once_with("tok", "test-001", cert_dir)
+        MockClient.return_value.provision.assert_called_once_with("tok", "test-001", cert_dir, verify=True)
 
     @patch("device_worker.IotClient")
     def test_loads_creds_when_cert_exists(self, MockClient):
@@ -107,7 +108,9 @@ class TestDeviceWorkerSending(unittest.TestCase):
             events.append(q.get_nowait())
         tel = [d for _, typ, d in events if typ == "telemetry"]
         self.assertGreater(len(tel), 0)
-        self.assertEqual(tel[0]["payload"], {"v": 42})
+        self.assertIn("v", tel[0]["payload"])
+        self.assertEqual(tel[0]["payload"]["v"], 42)
+        self.assertIn("fw_version", tel[0]["payload"])
 
     @patch("device_worker.IotClient")
     def test_stop_sending_halts_telemetry(self, MockClient):
@@ -131,6 +134,101 @@ class TestDeviceWorkerSending(unittest.TestCase):
             self.assertEqual(len(tel_after), 0)
             worker.stop()
             worker.join(timeout=2)
+
+
+class TestDeviceWorkerOta(unittest.TestCase):
+
+    def test_fw_version_default(self):
+        """fw_version の初期値が "1.0.0" であること"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            q = queue.Queue()
+            w = _make_worker(os.path.join(tmpdir, "dev"), q)
+        self.assertEqual(w.fw_version, "1.0.0")
+
+    def test_handle_command_ota_puts_event(self):
+        """_handle_command("ota", payload) で ota_start イベントがキューに積まれる"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            q = queue.Queue()
+            w = _make_worker(os.path.join(tmpdir, "dev"), q)
+            payload = {
+                "firmware_id": "fw-abc",
+                "version": "2.0.0",
+                "download_url": "https://example.com/fw.bin",
+                "checksum": "sha256:deadbeef",
+                "file_size": 1024,
+            }
+            w._handle_command("ota", payload)
+
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+
+        types = [typ for _, typ, _ in events]
+        self.assertIn("ota_start", types)
+        _, _, data = next((e for e in events if e[1] == "ota_start"), (None, None, {}))
+        self.assertEqual(data["device_id"], "test-001")
+        self.assertEqual(data["payload"], payload)
+        self.assertIn("ssl_verify", data)
+
+    def test_handle_command_unknown_puts_log(self):
+        """未知のコマンドタイプはログイベントになり ota_start は積まれない"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            q = queue.Queue()
+            w = _make_worker(os.path.join(tmpdir, "dev"), q)
+            w._handle_command("unknown_cmd", {})
+
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        types = [typ for _, typ, _ in events]
+        self.assertNotIn("ota_start", types)
+        self.assertIn("log", types)
+
+    @patch("device_worker.IotClient")
+    def test_telemetry_includes_fw_version(self, MockClient):
+        """テレメトリペイロードに fw_version キーが含まれること"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "test-001")
+            q = queue.Queue()
+            w = _make_worker(cert_dir, q)
+            w.start()
+            time.sleep(0.3)
+            w.start_sending(0.05, lambda: {"temp": 25.0})
+            time.sleep(0.3)
+            w.stop_sending()
+            w.stop()
+            w.join(timeout=2)
+
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        tel = [d for _, typ, d in events if typ == "telemetry"]
+        self.assertGreater(len(tel), 0)
+        self.assertIn("fw_version", tel[0]["payload"])
+        self.assertEqual(tel[0]["payload"]["fw_version"], "1.0.0")
+
+    @patch("device_worker.IotClient")
+    def test_telemetry_reflects_updated_fw_version(self, MockClient):
+        """fw_version を変更すると次のテレメトリに反映される"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "test-001")
+            q = queue.Queue()
+            w = _make_worker(cert_dir, q)
+            w.start()
+            time.sleep(0.3)
+            w.fw_version = "2.0.0"
+            w.start_sending(0.05, lambda: {"temp": 25.0})
+            time.sleep(0.3)
+            w.stop_sending()
+            w.stop()
+            w.join(timeout=2)
+
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        tel = [d for _, typ, d in events if typ == "telemetry"]
+        self.assertGreater(len(tel), 0)
+        self.assertEqual(tel[0]["payload"]["fw_version"], "2.0.0")
 
 
 if __name__ == "__main__":

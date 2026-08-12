@@ -14,6 +14,7 @@ from iot_platform import IotClient
 class DeviceWorker(threading.Thread):
     def __init__(
         self,
+        wid: int,
         device_id: str,
         api_url: str,
         broker_host: str,
@@ -23,7 +24,8 @@ class DeviceWorker(threading.Thread):
         event_queue: queue.Queue,
         ssl_verify: bool = True,
     ):
-        super().__init__(daemon=True, name=f"worker-{device_id}")
+        super().__init__(daemon=True, name=f"worker-{wid}-{device_id}")
+        self.wid = wid
         self.device_id = device_id
         self._api_url = api_url
         self._broker_host = broker_host
@@ -37,6 +39,7 @@ class DeviceWorker(threading.Thread):
         self._connected_flag = threading.Event()
         self._stop_send = threading.Event()
         self._send_thread: Optional[threading.Thread] = None
+        self.fw_version: str = "1.0.0"
 
     def run(self) -> None:
         self._put_event("status", {"state": "provisioning"})
@@ -59,6 +62,7 @@ class DeviceWorker(threading.Thread):
             self._client.connect()
             self._connected_flag.set()
             self._put_event("status", {"state": "connected"})
+            self._client.on_command(self._handle_command)
             self._put_event("log", {"message": f"{self.device_id}: 接続完了", "level": "info"})
         except Exception as exc:
             self._put_event("status", {"state": "error"})
@@ -100,6 +104,7 @@ class DeviceWorker(threading.Thread):
             if self._client and self._connected_flag.is_set():
                 try:
                     payload = payload_fn()
+                    payload["fw_version"] = self.fw_version
                     self._client.publish_telemetry(payload)
                     self._put_event("telemetry", {"payload": payload})
                 except Exception as exc:
@@ -109,4 +114,17 @@ class DeviceWorker(threading.Thread):
             self._stop_send.wait(interval)
 
     def _put_event(self, event_type: str, data: dict) -> None:
-        self._queue.put((self.device_id, event_type, data))
+        self._queue.put((self.wid, event_type, data))
+
+    def _handle_command(self, cmd_type: str, payload: dict) -> None:
+        if cmd_type == "ota":
+            self._put_event("ota_start", {
+                "device_id": self.device_id,
+                "payload": payload,
+                "ssl_verify": self._ssl_verify,
+            })
+        else:
+            self._put_event("log", {
+                "message": f"{self.device_id}: 未知のコマンド — {cmd_type}",
+                "level": "warn",
+            })
