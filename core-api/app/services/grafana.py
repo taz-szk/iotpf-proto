@@ -695,6 +695,88 @@ def add_tenant_datasource_to_platform_org(platform_org_id: int, tenant_name: str
         httpx.post(f"{settings.grafana_url}/api/user/using/1", auth=auth, timeout=5.0)
 
 
+def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
+    """テナントのホームダッシュボードを最新パネル定義に更新する。"""
+    import copy
+    auth = _admin_auth()
+
+    prefs = httpx.get(
+        f"{settings.grafana_url}/api/org/preferences",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    prefs.raise_for_status()
+    uid = prefs.json().get("homeDashboardUID")
+
+    if not uid:
+        create_default_dashboard(org_id, tenant_name)
+        return
+
+    dash_resp = httpx.get(
+        f"{settings.grafana_url}/api/dashboards/uid/{uid}",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    if dash_resp.status_code != 200:
+        return
+    current_version = dash_resp.json()["dashboard"].get("version", 0)
+
+    dashboard = copy.deepcopy(_DEFAULT_DASHBOARD)
+    dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
+    dashboard["dashboard"]["uid"] = uid
+    dashboard["dashboard"]["version"] = current_version
+
+    httpx.post(
+        f"{settings.grafana_url}/api/dashboards/db",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        json=dashboard,
+        timeout=10.0,
+    ).raise_for_status()
+
+
+def sync_platform_dashboard(platform_org_id: int) -> None:
+    """platform-admin ダッシュボードを最新パネル定義に更新する。"""
+    import copy
+    auth = _admin_auth()
+
+    prefs = httpx.get(
+        f"{settings.grafana_url}/api/org/preferences",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(platform_org_id)},
+        timeout=10.0,
+    )
+    prefs.raise_for_status()
+    uid = prefs.json().get("homeDashboardUID")
+
+    if not uid:
+        return
+
+    dash_resp = httpx.get(
+        f"{settings.grafana_url}/api/dashboards/uid/{uid}",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(platform_org_id)},
+        timeout=10.0,
+    )
+    if dash_resp.status_code != 200:
+        return
+    current_version = dash_resp.json()["dashboard"].get("version", 0)
+
+    dashboard = copy.deepcopy(_PLATFORM_DASHBOARD)
+    dashboard["dashboard"]["uid"] = uid
+    dashboard["dashboard"]["version"] = current_version
+
+    httpx.post(
+        f"{settings.grafana_url}/api/dashboards/db",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(platform_org_id)},
+        json=dashboard,
+        timeout=10.0,
+    ).raise_for_status()
+
+
 def sync_all_tenants_to_platform_org(platform_org_id: int, tenants: list[dict]) -> None:
     """全テナントのデータソースを platform-admin org に同期する。
     tenants: [{"name": str, "influxdb_org_id": str}, ...]

@@ -6,7 +6,7 @@ from app.models.public import Tenant
 from app.database import SessionLocal
 from app.services.auth import verify_token
 from app.services.tenant import setup_tenant, teardown_tenant
-from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy
+from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
 import time
 import uuid
 
@@ -133,3 +133,26 @@ def get_platform_grafana_org_id(payload: dict = Depends(_require_platform)):
         return {"grafana_org_id": org_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Grafana platform org error: {e}")
+
+
+@router.post("/platform/sync-dashboards", status_code=200)
+def sync_all_dashboards(_: dict = Depends(_require_platform)):
+    """管理者向け: 全テナントと platform-admin ダッシュボードを最新パネル定義に更新する。"""
+    results = []
+    with SessionLocal() as db:
+        tenants = db.query(Tenant).filter(
+            Tenant.status == "active", Tenant.grafana_org_id.isnot(None)
+        ).all()
+    for t in tenants:
+        try:
+            sync_tenant_dashboard(t.grafana_org_id, t.name)
+            results.append({"tenant": t.name, "status": "ok"})
+        except Exception as e:
+            results.append({"tenant": t.name, "status": "error", "detail": str(e)})
+    try:
+        platform_org_id = get_or_create_platform_org()
+        sync_platform_dashboard(platform_org_id)
+        results.append({"tenant": "platform-admin", "status": "ok"})
+    except Exception as e:
+        results.append({"tenant": "platform-admin", "status": "error", "detail": str(e)})
+    return {"synced": results}
