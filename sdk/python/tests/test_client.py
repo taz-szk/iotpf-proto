@@ -62,6 +62,21 @@ def test_publish_status_correct_topic():
         )
 
 
+def test_publish_status_with_fw_version():
+    with tempfile.TemporaryDirectory() as d:
+        c = _setup_creds(d)
+        mock_mqtt = MagicMock()
+        c._mqtt = mock_mqtt
+
+        c.publish_status("online", fw_version="2.1.0")
+
+        mock_mqtt.publish.assert_called_once_with(
+            "/t-abc/devices/dev-001/status",
+            json.dumps({"status": "online", "fw_version": "2.1.0"}),
+            qos=1,
+        )
+
+
 def test_on_command_callback_dispatched():
     with tempfile.TemporaryDirectory() as d:
         c = _setup_creds(d)

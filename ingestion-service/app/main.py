@@ -27,7 +27,8 @@ def ingest(req: IngestRequest):
 
     if req.topic_type == "status":
         status = req.payload.get("status", "online")
-        update_last_seen(req.tenant_id, req.device_id, status)
+        fw_version = req.payload.get("fw_version") or None
+        update_last_seen(req.tenant_id, req.device_id, status, fw_version)
         device_name = get_device_name(req.tenant_id, req.device_id)
         write_device_status(
             org_id=config["org_id"],

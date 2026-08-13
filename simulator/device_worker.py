@@ -39,7 +39,24 @@ class DeviceWorker(threading.Thread):
         self._connected_flag = threading.Event()
         self._stop_send = threading.Event()
         self._send_thread: Optional[threading.Thread] = None
-        self.fw_version: str = "1.0.0"
+        self.fw_version: str = self._load_fw_version()
+
+    def _load_fw_version(self) -> str:
+        path = os.path.join(self._cert_dir, "fw_version")
+        try:
+            with open(path) as f:
+                return f.read().strip() or "1.0.0"
+        except (FileNotFoundError, OSError):
+            return "1.0.0"
+
+    def save_fw_version(self) -> None:
+        path = os.path.join(self._cert_dir, "fw_version")
+        try:
+            os.makedirs(self._cert_dir, exist_ok=True)
+            with open(path, "w") as f:
+                f.write(self.fw_version)
+        except OSError:
+            pass
 
     def run(self) -> None:
         self._put_event("status", {"state": "provisioning"})
@@ -62,6 +79,7 @@ class DeviceWorker(threading.Thread):
             self._client.connect()
             self._connected_flag.set()
             self._put_event("status", {"state": "connected"})
+            self._client.publish_status("online", fw_version=self.fw_version)
             self._client.on_command(self._handle_command)
             self._put_event("log", {"message": f"{self.device_id}: 接続完了", "level": "info"})
         except Exception as exc:

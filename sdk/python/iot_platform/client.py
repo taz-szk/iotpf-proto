@@ -73,9 +73,12 @@ class IotClient:
         topic = f"/{self._tenant_id}/devices/{self._device_id}/telemetry"
         self._mqtt.publish(topic, json.dumps(measurements), qos=1)
 
-    def publish_status(self, status: str = "online") -> None:
+    def publish_status(self, status: str = "online", fw_version: str | None = None) -> None:
         topic = f"/{self._tenant_id}/devices/{self._device_id}/status"
-        self._mqtt.publish(topic, json.dumps({"status": status}), qos=1)
+        payload: dict = {"status": status}
+        if fw_version is not None:
+            payload["fw_version"] = fw_version
+        self._mqtt.publish(topic, json.dumps(payload), qos=1)
 
     def on_command(self, callback: Callable[[str, dict], None]) -> None:
         self._command_callback = callback

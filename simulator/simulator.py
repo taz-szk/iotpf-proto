@@ -805,6 +805,12 @@ class SimulatorApp(tk.Tk):
                     worker = self._workers.get(wid)
                     if worker:
                         worker.fw_version = new_ver
+                        worker.save_fw_version()
+                        if worker._client:
+                            try:
+                                worker._client.publish_status("online", fw_version=new_ver)
+                            except Exception:
+                                pass
                     lbl = self._fw_version_labels.get(wid)
                     if lbl:
                         lbl.config(text=f"fw: {new_ver}", fg="blue")
