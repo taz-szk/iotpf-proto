@@ -51,8 +51,8 @@ def provision(req: ProvisionRequest):
 
         device_name = req.device_name.strip() or req.device_id
         db.execute(
-            text(f'''INSERT INTO "{schema}".devices (id, device_id, device_name, provisioning_token_id, connection_status)
-                     VALUES (:id, :did, :dname, :tok_id, 'offline')'''),
+            text(f'''INSERT INTO "{schema}".devices (id, device_id, device_name, provisioning_token_id, connection_status, fw_version)
+                     VALUES (:id, :did, :dname, :tok_id, 'offline', '1.0.0')'''),
             {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name, "tok_id": str(token.id)}
         )
         token.registered_count += 1
