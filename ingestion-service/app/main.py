@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import Any, Optional
 from datetime import datetime
 from app.tenant_cache import get_tenant_influx_config, get_device_name
-from app.influx_writer import write_telemetry
+from app.influx_writer import write_telemetry, write_device_status
 from app.device_updater import update_last_seen
 
 app = FastAPI(title="IoT Ingestion Service", version="0.1.0")
@@ -28,6 +28,14 @@ def ingest(req: IngestRequest):
     if req.topic_type == "status":
         status = req.payload.get("status", "online")
         update_last_seen(req.tenant_id, req.device_id, status)
+        device_name = get_device_name(req.tenant_id, req.device_id)
+        write_device_status(
+            org_id=config["org_id"],
+            tenant_id=req.tenant_id,
+            device_id=req.device_id,
+            device_name=device_name,
+            status=status,
+        )
         return {"result": "status_updated"}
 
     measurements = {k: v for k, v in req.payload.items()

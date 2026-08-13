@@ -24,6 +24,15 @@ _FLUX_DELETED = (
     '  |> last()'
 )
 
+_FLUX_STATUS = (
+    'from(bucket: "telemetry")\n'
+    '  |> range(start: -30d)\n'
+    '  |> filter(fn: (r) => r._measurement == "device_status")\n'
+    '  |> filter(fn: (r) => r._field == "online")\n'
+    '  |> filter(fn: (r) => r.device_name =~ /^${device_name:regex}$/)\n'
+    '  |> last()'
+)
+
 _DEFAULT_DASHBOARD = {
     "dashboard": {
         "title": "テレメトリ監視",
@@ -62,7 +71,7 @@ _DEFAULT_DASHBOARD = {
             {
                 "id": 2,
                 "type": "stat",
-                "title": "状態",
+                "title": "登録状態",
                 "gridPos": {"x": 0, "y": 1, "w": 3, "h": 4},
                 "targets": [
                     {
@@ -100,12 +109,55 @@ _DEFAULT_DASHBOARD = {
                     }
                 },
             },
+            # 接続状態 Stat パネル
+            {
+                "id": 4,
+                "type": "stat",
+                "title": "接続状態",
+                "gridPos": {"x": 3, "y": 1, "w": 3, "h": 4},
+                "targets": [
+                    {
+                        "refId": "A",
+                        "datasource": {"type": "influxdb"},
+                        "query": _FLUX_STATUS,
+                    }
+                ],
+                "options": {
+                    "reduceOptions": {"calcs": ["last"]},
+                    "orientation": "auto",
+                    "textMode": "auto",
+                    "colorMode": "background",
+                    "graphMode": "none",
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "noValue": "不明",
+                        "mappings": [
+                            {
+                                "type": "value",
+                                "options": {
+                                    "0": {"text": "オフライン", "index": 0},
+                                    "1": {"text": "オンライン", "index": 1},
+                                },
+                            }
+                        ],
+                        "thresholds": {
+                            "mode": "absolute",
+                            "steps": [
+                                {"value": None, "color": "red"},
+                                {"value": 1, "color": "green"},
+                            ],
+                        },
+                        "color": {"mode": "thresholds"},
+                    }
+                },
+            },
             # テレメトリ Timeseries パネル
             {
                 "id": 3,
                 "type": "timeseries",
                 "title": "テレメトリ",
-                "gridPos": {"x": 3, "y": 1, "w": 21, "h": 8},
+                "gridPos": {"x": 6, "y": 1, "w": 18, "h": 8},
                 "targets": [
                     {
                         "refId": "A",
@@ -503,7 +555,7 @@ _PLATFORM_DASHBOARD = {
                 "datasource": _DS_REF,
             },
             {
-                "id": 2, "type": "stat", "title": "状態",
+                "id": 2, "type": "stat", "title": "登録状態",
                 "gridPos": {"x": 0, "y": 1, "w": 3, "h": 4},
                 "datasource": _DS_REF,
                 "targets": [{"refId": "A", "datasource": _DS_REF, "query": _FLUX_DELETED}],
@@ -523,8 +575,31 @@ _PLATFORM_DASHBOARD = {
                 },
             },
             {
+                "id": 4, "type": "stat", "title": "接続状態",
+                "gridPos": {"x": 3, "y": 1, "w": 3, "h": 4},
+                "datasource": _DS_REF,
+                "targets": [{"refId": "A", "datasource": _DS_REF, "query": _FLUX_STATUS}],
+                "options": {
+                    "reduceOptions": {"calcs": ["last"]},
+                    "orientation": "auto", "textMode": "auto",
+                    "colorMode": "background", "graphMode": "none",
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "noValue": "不明",
+                        "mappings": [{"type": "value", "options": {
+                            "0": {"text": "オフライン", "index": 0},
+                            "1": {"text": "オンライン", "index": 1},
+                        }}],
+                        "thresholds": {"mode": "absolute", "steps": [
+                            {"value": None, "color": "red"}, {"value": 1, "color": "green"}]},
+                        "color": {"mode": "thresholds"},
+                    }
+                },
+            },
+            {
                 "id": 3, "type": "timeseries", "title": "テレメトリ",
-                "gridPos": {"x": 3, "y": 1, "w": 21, "h": 8},
+                "gridPos": {"x": 6, "y": 1, "w": 18, "h": 8},
                 "datasource": _DS_REF,
                 "targets": [{"refId": "A", "datasource": _DS_REF, "query": _FLUX_TELEMETRY}],
                 "fieldConfig": {
