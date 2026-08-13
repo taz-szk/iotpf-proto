@@ -2,6 +2,9 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import text
 
@@ -49,11 +52,19 @@ def provision(req: ProvisionRequest):
             logger.error("Certificate issuance failed for %s:%s — %s", tenant_id, req.device_id, exc)
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Certificate issuance failed")
 
+        try:
+            cert_obj = x509.load_pem_x509_certificate(cert_pem.encode(), default_backend())
+            cert_not_after = cert_obj.not_valid_after_utc
+        except Exception:
+            cert_not_after = None
+
         device_name = req.device_name.strip() or req.device_id
         db.execute(
-            text(f'''INSERT INTO "{schema}".devices (id, device_id, device_name, provisioning_token_id, connection_status, fw_version)
-                     VALUES (:id, :did, :dname, :tok_id, 'offline', '1.0.0')'''),
-            {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name, "tok_id": str(token.id)}
+            text(f'''INSERT INTO "{schema}".devices
+                         (id, device_id, device_name, provisioning_token_id, connection_status, fw_version, cert_not_after)
+                     VALUES (:id, :did, :dname, :tok_id, 'offline', '1.0.0', :cert_not_after)'''),
+            {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name,
+             "tok_id": str(token.id), "cert_not_after": cert_not_after}
         )
         token.registered_count += 1
         db.commit()
