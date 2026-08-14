@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Platform インストール</title>
+<style>
+:root {
+  --bg: #0D1117;
+  --surface: #161B22;
+  --surface-2: #1C2128;
+  --surface-3: #21262D;
+  --border: #30363D;
+  --accent: #58A6FF;
+  --accent-dim: #1C3147;
+  --green: #3FB950;
+  --green-bg: #0A2A14;
+  --yellow: #D29922;
+  --yellow-bg: #2A1F00;
+  --red: #F85149;
+  --text-1: #E6EDF3;
+  --text-2: #8B949E;
+  --text-3: #484F58;
+  --win: #0078D4;
+  --mac: #999;
+  --ubuntu: #E95420;
+  --tag-win: #0D2B4A;
+  --tag-mac: #1E1E1E;
+  --tag-ubuntu: #3A1200;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F6F8FA;
+    --surface: #FFFFFF;
+    --surface-2: #F0F2F4;
+    --surface-3: #E8ECF0;
+    --border: #D0D7DE;
+    --accent: #0969DA;
+    --accent-dim: #DDF4FF;
+    --green: #1A7F37;
+    --green-bg: #DAFBE1;
+    --yellow: #9A6700;
+    --yellow-bg: #FFF8C5;
+    --red: #CF222E;
+    --text-1: #1F2328;
+    --text-2: #656D76;
+    --text-3: #AFB8C1;
+    --win: #0078D4;
+    --mac: #555;
+    --ubuntu: #E95420;
+    --tag-win: #DDF4FF;
+    --tag-mac: #F0F0F0;
+    --tag-ubuntu: #FFDDD4;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F6F8FA;
+  --surface: #FFFFFF;
+  --surface-2: #F0F2F4;
+  --surface-3: #E8ECF0;
+  --border: #D0D7DE;
+  --accent: #0969DA;
+  --accent-dim: #DDF4FF;
+  --green: #1A7F37;
+  --green-bg: #DAFBE1;
+  --yellow: #9A6700;
+  --yellow-bg: #FFF8C5;
+  --red: #CF222E;
+  --text-1: #1F2328;
+  --text-2: #656D76;
+  --text-3: #AFB8C1;
+  --win: #0078D4;
+  --mac: #555;
+  --ubuntu: #E95420;
+  --tag-win: #DDF4FF;
+  --tag-mac: #F0F0F0;
+  --tag-ubuntu: #FFDDD4;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-serif;font-size:14.5px;line-height:1.7;min-height:100vh}
+
+/* header */
+.hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;position:sticky;top:0;z-index:100}
+.hdr-inner{max-width:860px;margin:0 auto;display:flex;align-items:center;gap:20px;height:52px}
+.logo{font-family:'Cascadia Code','Consolas','Courier New',monospace;font-size:13px;font-weight:700;color:var(--accent);white-space:nowrap}
+.os-tabs{display:flex;flex:1;gap:0;overflow-x:auto;scrollbar-width:none}
+.os-tabs::-webkit-scrollbar{display:none}
+.os-btn{display:flex;align-items:center;gap:6px;padding:0 16px;height:52px;border:none;background:none;color:var(--text-2);font-size:13.5px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:color .15s,border-color .15s;white-space:nowrap}
+.os-btn:hover{color:var(--text-1)}
+.os-btn.active.win{color:var(--win);border-bottom-color:var(--win)}
+.os-btn.active.mac{color:var(--mac);border-bottom-color:var(--mac)}
+.os-btn.active.ubuntu{color:var(--ubuntu);border-bottom-color:var(--ubuntu)}
+.os-icon{font-size:16px}
+
+/* main */
+.main{max-width:860px;margin:0 auto;padding:36px 24px 80px}
+.os-section{display:none}
+.os-section.active{display:block}
+
+/* hero */
+.hero{margin-bottom:36px}
+.hero-title{font-size:26px;font-weight:700;margin-bottom:8px;line-height:1.2}
+.hero-sub{color:var(--text-2);font-size:14px;max-width:56ch}
+.tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;font-family:'Cascadia Code','Consolas',monospace;margin-right:6px;margin-bottom:4px}
+.tag-win{background:var(--tag-win);color:var(--win)}
+.tag-mac{background:var(--tag-mac);color:var(--mac)}
+.tag-ubuntu{background:var(--tag-ubuntu);color:var(--ubuntu)}
+
+/* prereq badges */
+.prereqs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:32px}
+.prereq{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px}
+.prereq-icon{font-size:18px}
+.prereq-name{font-weight:600;color:var(--text-1)}
+.prereq-detail{color:var(--text-2);font-size:12px}
+
+/* steps */
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:36px 1fr;gap:0 16px;padding-bottom:32px;position:relative}
+.step:not(:last-child)::before{content:'';position:absolute;left:17px;top:36px;bottom:0;width:2px;background:var(--border)}
+.step-num{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;font-family:'Cascadia Code','Consolas',monospace;flex-shrink:0;position:relative;z-index:1}
+.step-num-win{background:var(--accent-dim);color:var(--accent);border:2px solid var(--accent)}
+.step-num-mac{background:var(--surface-3);color:var(--text-2);border:2px solid var(--border)}
+.step-num-ubuntu{background:var(--tag-ubuntu);color:var(--ubuntu);border:2px solid var(--ubuntu)}
+.step-body{padding-top:6px}
+.step-title{font-size:15px;font-weight:700;color:var(--text-1);margin-bottom:8px}
+.step-desc{color:var(--text-2);font-size:13.5px;margin-bottom:12px;max-width:62ch}
+
+/* code block */
+.code-block{background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:12px;font-family:'Cascadia Code','Consolas','Courier New',monospace}
+.code-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;background:var(--surface-2);border-bottom:1px solid var(--border)}
+.code-lang{font-size:11px;color:var(--text-3);letter-spacing:.05em;text-transform:uppercase}
+.copy-btn{background:var(--surface-3);border:1px solid var(--border);border-radius:5px;color:var(--text-2);font-size:11.5px;padding:3px 10px;cursor:pointer;transition:background .15s,color .15s;font-family:inherit}
+.copy-btn:hover{background:var(--accent-dim);color:var(--accent)}
+.copy-btn.copied{background:var(--green-bg);color:var(--green);border-color:var(--green)}
+pre{padding:14px 16px;overflow-x:auto;font-size:13px;line-height:1.6;color:var(--text-1)}
+pre .kw{color:#FF7B72}
+pre .str{color:#A5D6FF}
+pre .cmt{color:var(--text-3);font-style:italic}
+pre .var{color:#FFA657}
+pre .flag{color:#D2A8FF}
+
+/* callout */
+.callout{border-radius:7px;padding:12px 16px;margin-bottom:14px;font-size:13.5px;display:flex;gap:10px}
+.callout-info{background:var(--accent-dim);border:1px solid var(--accent)}
+.callout-warn{background:var(--yellow-bg);border:1px solid var(--yellow)}
+.callout-ok{background:var(--green-bg);border:1px solid var(--green)}
+.callout-icon{font-size:16px;flex-shrink:0;line-height:1.5}
+.callout-body{color:var(--text-2)}
+.callout-body strong{color:var(--text-1)}
+
+/* endpoint table */
+.ep-table{width:100%;border-collapse:collapse;font-size:13px;background:var(--surface);border:1px solid var(--border);border-radius:7px;overflow:hidden;margin-bottom:14px}
+.ep-table th{background:var(--surface-2);color:var(--text-3);font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:7px 12px;text-align:left;border-bottom:1px solid var(--border);font-family:'Cascadia Code','Consolas',monospace}
+.ep-table td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--text-2);vertical-align:top}
+.ep-table tr:last-child td{border-bottom:none}
+.ep-table td:first-child{color:var(--text-1);font-family:'Cascadia Code','Consolas',monospace;font-size:12.5px}
+
+@media(max-width:600px){.main{padding:20px 16px 60px}.hero-title{font-size:20px}.step{grid-template-columns:28px 1fr}}
+</style>
+</head>
+<body>
+
+<header class="hdr">
+  <div class="hdr-inner">
+    <div class="logo">iot://install</div>
+    <nav class="os-tabs" role="tablist">
+      <button class="os-btn win active" onclick="switchOS('win')" role="tab">
+        <span class="os-icon">🪟</span> Windows
+      </button>
+      <button class="os-btn mac" onclick="switchOS('mac')" role="tab">
+        <span class="os-icon">🍎</span> macOS
+      </button>
+      <button class="os-btn ubuntu" onclick="switchOS('ubuntu')" role="tab">
+        <span class="os-icon">🐧</span> Ubuntu
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<!-- ==================== WINDOWS ==================== -->
+<div class="os-section active" id="os-win">
+  <div class="hero">
+    <div class="hero-title">🪟 Windows インストール手順</div>
+    <div class="hero-sub">Docker Desktop for Windows がインストール済みの前提です。PowerShell 5.1 以上で実行します。</div>
+  </div>
+
+  <div class="prereqs">
+    <div class="prereq">
+      <span class="prereq-icon">🐳</span>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">WSL2 backend 推奨</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">💻</span>
+      <div><div class="prereq-name">PowerShell 5.1+</div><div class="prereq-detail">Windows 10/11 標準搭載</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">💾</span>
+      <div><div class="prereq-name">ディスク空き容量</div><div class="prereq-detail">6 GB 以上推奨</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">🌐</span>
+      <div><div class="prereq-name">インターネット接続</div><div class="prereq-detail">Docker イメージ取得に必要</div></div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <!-- STEP 1 -->
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title">Docker Desktop を起動する</div>
+        <div class="step-desc">スタートメニューから Docker Desktop を起動し、タスクトレイのクジラアイコンが「Running」になるまで待ちます。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># Docker が起動しているか確認</span>
+docker info</pre>
+        </div>
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <span class="callout-body"><strong>WSL2 バックエンド推奨:</strong> Docker Desktop の Settings → General → "Use the WSL 2 based engine" を有効にすると I/O 性能が向上します。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 2 -->
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title">リポジトリを配置する</div>
+        <div class="step-desc">iotpf-proto ディレクトリをダウンロードまたは git clone で取得し、プロジェクトルートに移動します。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># git clone する場合</span>
+git clone https://github.com/taz-szk/iotpf-proto.git
+cd iotpf-proto
+
+<span class="cmt"># または ZIP 展開後に移動</span>
+cd C:\Users\YourName\iotpf-proto</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 3 -->
+    <div class="step">
+      <div class="step-num step-num-win">3</div>
+      <div class="step-body">
+        <div class="step-title">インストーラーを実行する</div>
+        <div class="step-desc">プロジェクトルートで <code>install-windows.ps1</code> を実行します。シークレットを自動生成し、Docker イメージのプルと全サービスの起動を行います。</div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>実行ポリシー:</strong> スクリプトが実行できない場合は下記コマンドで一時的に許可します。</span>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 実行ポリシーを一時的に変更（現在のプロセスのみ）</span>
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
+
+<span class="cmt"># インストーラー実行</span>
+.\install-windows.ps1</pre>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>シークレットを保存してください:</strong> スクリプト実行時に表示されるパスワード類を安全な場所（パスワードマネージャー等）に記録します。<code>.env</code> ファイルにも同じ値が保存されますが、Git にはコミットしないでください。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 4 -->
+    <div class="step">
+      <div class="step-num step-num-win">4</div>
+      <div class="step-body">
+        <div class="step-title">動作確認する</div>
+        <div class="step-desc">全コンテナが healthy になったら、以下のURLにアクセスして動作を確認します。</div>
+        <table class="ep-table">
+          <thead><tr><th>URL</th><th>サービス</th><th>認証情報</th></tr></thead>
+          <tbody>
+            <tr><td>http://localhost:8000/docs</td><td>Core API (Swagger UI)</td><td>JWT トークン（ログイン後）</td></tr>
+            <tr><td>http://localhost:3000</td><td>Grafana</td><td>admin / .env の GRAFANA_ADMIN_PASSWORD</td></tr>
+            <tr><td>http://localhost:18083</td><td>EMQX Dashboard</td><td>admin / .env の EMQX_DASHBOARD_PASSWORD</td></tr>
+            <tr><td>http://localhost:9001</td><td>MinIO Console</td><td>minioadmin / .env の MINIO_ROOT_PASSWORD</td></tr>
+            <tr><td>http://localhost:8025</td><td>MailHog (メール確認)</td><td>認証不要</td></tr>
+            <tr><td>http://localhost:8086</td><td>InfluxDB UI</td><td>admin / .env の INFLUXDB_ADMIN_PASSWORD</td></tr>
+          </tbody>
+        </table>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell — コンテナ状態確認</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose ps</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 5 -->
+    <div class="step">
+      <div class="step-num step-num-win">5</div>
+      <div class="step-body">
+        <div class="step-title">初期テナントを作成する</div>
+        <div class="step-desc">Swagger UI でプラットフォーム管理者としてログインし、最初のテナントを作成します。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell — curl でテナント作成例</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 1. ログインしてトークン取得</span>
+$resp = Invoke-RestMethod -Uri http://localhost:8000/auth/login `
+    -Method Post -ContentType "application/json" `
+    -Body '{"email":"admin@example.com","password":"your_password"}'
+$token = $resp.access_token
+
+<span class="cmt"># 2. テナント作成</span>
+Invoke-RestMethod -Uri http://localhost:8000/tenants `
+    -Method Post -ContentType "application/json" `
+    -Headers @{Authorization="Bearer $token"} `
+    -Body '{"name":"My Tenant","slug":"my-tenant"}'</pre>
+        </div>
+        <div class="callout callout-ok">
+          <span class="callout-icon">✅</span>
+          <span class="callout-body"><strong>セットアップ完了:</strong> テナント作成後、プロビジョニングトークンを発行してデバイスを登録できます。詳細は <a href="http://localhost:8000/docs" style="color:var(--accent)">Swagger UI</a> を参照してください。</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- STEP 6 -->
+    <div class="step">
+      <div class="step-num step-num-win">6</div>
+      <div class="step-body">
+        <div class="step-title">よく使うコマンド</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 停止</span>
+docker compose down
+
+<span class="cmt"># 再起動</span>
+docker compose up -d
+
+<span class="cmt"># ログ確認（全サービス）</span>
+docker compose logs -f
+
+<span class="cmt"># 特定サービスのログ</span>
+docker compose logs -f core-api
+
+<span class="cmt"># データを完全削除して再構築</span>
+docker compose down -v
+.\install-windows.ps1</pre>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+</div><!-- /win -->
+
+<!-- ==================== macOS ==================== -->
+<div class="os-section" id="os-mac">
+  <div class="hero">
+    <div class="hero-title">🍎 macOS インストール手順</div>
+    <div class="hero-sub">Docker Desktop for Mac がインストール済みの前提です。bash / zsh シェルで実行します。</div>
+  </div>
+
+  <div class="prereqs">
+    <div class="prereq">
+      <span class="prereq-icon">🐳</span>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">Apple Silicon (M1/M2/M3) 対応版</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">🔐</span>
+      <div><div class="prereq-name">openssl</div><div class="prereq-detail">macOS 標準搭載 / brew install openssl</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">💾</span>
+      <div><div class="prereq-name">ディスク空き容量</div><div class="prereq-detail">6 GB 以上推奨</div></div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-mac">1</div>
+      <div class="step-body">
+        <div class="step-title">Docker Desktop を起動する</div>
+        <div class="step-desc">Applications から Docker.app を起動し、メニューバーのクジラアイコンが「Docker Desktop is running」になるまで待ちます。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># Docker が起動しているか確認</span>
+docker info</pre>
+        </div>
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <span class="callout-body"><strong>Apple Silicon (M1/M2/M3):</strong> Docker Desktop 4.x は arm64 ネイティブ対応しています。<code>DOCKER_DEFAULT_PLATFORM=linux/arm64</code> の設定は不要です。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-mac">2</div>
+      <div class="step-body">
+        <div class="step-title">リポジトリを配置する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>git clone https://github.com/taz-szk/iotpf-proto.git
+cd iotpf-proto</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-mac">3</div>
+      <div class="step-body">
+        <div class="step-title">インストーラーを実行する</div>
+        <div class="step-desc">実行権限を付与してインストーラーを起動します。シークレットの自動生成・イメージプル・サービス起動をすべて自動で行います。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>chmod +x install-mac.sh
+./install-mac.sh</pre>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>シークレットを保存してください:</strong> 表示されるパスワード類をパスワードマネージャーに記録します。<code>.env</code> を Git にコミットしないでください（.gitignore に含まれています）。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-mac">4</div>
+      <div class="step-body">
+        <div class="step-title">動作確認する</div>
+        <table class="ep-table">
+          <thead><tr><th>URL</th><th>サービス</th><th>認証情報</th></tr></thead>
+          <tbody>
+            <tr><td>http://localhost:8000/docs</td><td>Core API (Swagger UI)</td><td>JWT トークン（ログイン後）</td></tr>
+            <tr><td>http://localhost:3000</td><td>Grafana</td><td>admin / .env の GRAFANA_ADMIN_PASSWORD</td></tr>
+            <tr><td>http://localhost:18083</td><td>EMQX Dashboard</td><td>admin / .env の EMQX_DASHBOARD_PASSWORD</td></tr>
+            <tr><td>http://localhost:9001</td><td>MinIO Console</td><td>minioadmin / .env の MINIO_ROOT_PASSWORD</td></tr>
+            <tr><td>http://localhost:8025</td><td>MailHog</td><td>認証不要</td></tr>
+            <tr><td>http://localhost:8086</td><td>InfluxDB UI</td><td>admin / .env の INFLUXDB_ADMIN_PASSWORD</td></tr>
+          </tbody>
+        </table>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — コンテナ状態確認</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose ps</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-mac">5</div>
+      <div class="step-body">
+        <div class="step-title">初期テナントを作成する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — curl でテナント作成例</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 1. ログインしてトークン取得</span>
+TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@example.com","password":"your_password"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+<span class="cmt"># 2. テナント作成</span>
+curl -X POST http://localhost:8000/tenants \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"name":"My Tenant","slug":"my-tenant"}'</pre>
+        </div>
+        <div class="callout callout-ok">
+          <span class="callout-icon">✅</span>
+          <span class="callout-body"><strong>セットアップ完了。</strong> プロビジョニングトークンを発行してデバイスを登録できます。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-mac">6</div>
+      <div class="step-body">
+        <div class="step-title">よく使うコマンド</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 停止</span>
+docker compose down
+
+<span class="cmt"># 再起動</span>
+docker compose up -d
+
+<span class="cmt"># ログ確認</span>
+docker compose logs -f core-api
+
+<span class="cmt"># データを完全削除して再構築</span>
+docker compose down -v
+./install-mac.sh</pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /mac -->
+
+<!-- ==================== UBUNTU ==================== -->
+<div class="os-section" id="os-ubuntu">
+  <div class="hero">
+    <div class="hero-title">🐧 Ubuntu インストール手順</div>
+    <div class="hero-sub">Docker Desktop for Linux がインストール済みの前提です。Ubuntu 22.04 LTS / 24.04 LTS で動作確認済みです。</div>
+  </div>
+
+  <div class="prereqs">
+    <div class="prereq">
+      <span class="prereq-icon">🐳</span>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">deb パッケージでインストール</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">🔐</span>
+      <div><div class="prereq-name">openssl</div><div class="prereq-detail">apt でインストール可（スクリプトが自動対応）</div></div>
+    </div>
+    <div class="prereq">
+      <span class="prereq-icon">💾</span>
+      <div><div class="prereq-name">ディスク空き容量</div><div class="prereq-detail">6 GB 以上推奨</div></div>
+    </div>
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">1</div>
+      <div class="step-body">
+        <div class="step-title">Docker Desktop をインストール・起動する</div>
+        <div class="step-desc">Docker Desktop for Linux の .deb パッケージを Docker 公式サイトから取得してインストールします。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — インストール済みの場合は起動のみ</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># Docker Desktop 起動（systemd ユーザーサービス）</span>
+systemctl --user start docker-desktop
+
+<span class="cmt"># または Applications メニューから Docker Desktop を起動</span>
+
+<span class="cmt"># 起動確認</span>
+docker info</pre>
+        </div>
+        <div class="callout callout-info">
+          <span class="callout-icon">ℹ️</span>
+          <span class="callout-body"><strong>Docker Engine (CLI のみ) を使う場合:</strong> Docker Desktop ではなく <code>docker-ce</code> + <code>docker-compose-plugin</code> をインストールしても動作します。その場合 <code>sudo</code> が必要になることがあります。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">2</div>
+      <div class="step-body">
+        <div class="step-title">リポジトリを配置する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>git clone https://github.com/taz-szk/iotpf-proto.git
+cd iotpf-proto</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">3</div>
+      <div class="step-body">
+        <div class="step-title">インストーラーを実行する</div>
+        <div class="step-desc">実行権限を付与してインストーラーを起動します。openssl が未インストールの場合は <code>apt install openssl</code> を自動実行します（sudo パスワードの入力を求められます）。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>chmod +x install-ubuntu.sh
+./install-ubuntu.sh</pre>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>.env のパーミッション:</strong> Ubuntu 版スクリプトは生成した <code>.env</code> に <code>chmod 600</code> を適用します（所有者のみ読み取り可能）。</span>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>シークレットを保存してください:</strong> 表示されるパスワード類をパスワードマネージャーに記録します。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">4</div>
+      <div class="step-body">
+        <div class="step-title">ファイアウォールの設定（UFW）</div>
+        <div class="step-desc">UFW が有効な環境では、MQTT ポートへの外部アクセスを許可します（ローカル開発環境では不要）。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — 本番/外部公開環境のみ</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># MQTT over TLS</span>
+sudo ufw allow 8883/tcp
+
+<span class="cmt"># HTTPS (nginx)</span>
+sudo ufw allow 443/tcp
+sudo ufw allow 80/tcp
+
+<span class="cmt"># 開発環境（localhost アクセスのみ）の場合は UFW 設定不要</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">5</div>
+      <div class="step-body">
+        <div class="step-title">動作確認する</div>
+        <table class="ep-table">
+          <thead><tr><th>URL</th><th>サービス</th><th>認証情報</th></tr></thead>
+          <tbody>
+            <tr><td>http://localhost:8000/docs</td><td>Core API (Swagger UI)</td><td>JWT トークン（ログイン後）</td></tr>
+            <tr><td>http://localhost:3000</td><td>Grafana</td><td>admin / .env の GRAFANA_ADMIN_PASSWORD</td></tr>
+            <tr><td>http://localhost:18083</td><td>EMQX Dashboard</td><td>admin / .env の EMQX_DASHBOARD_PASSWORD</td></tr>
+            <tr><td>http://localhost:9001</td><td>MinIO Console</td><td>minioadmin / .env の MINIO_ROOT_PASSWORD</td></tr>
+            <tr><td>http://localhost:8025</td><td>MailHog</td><td>認証不要</td></tr>
+            <tr><td>http://localhost:8086</td><td>InfluxDB UI</td><td>admin / .env の INFLUXDB_ADMIN_PASSWORD</td></tr>
+          </tbody>
+        </table>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — コンテナ状態確認</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose ps</pre>
+        </div>
+        <div class="callout callout-ok">
+          <span class="callout-icon">✅</span>
+          <span class="callout-body">全コンテナが <strong>healthy</strong> になればセットアップ完了です。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-ubuntu">6</div>
+      <div class="step-body">
+        <div class="step-title">よく使うコマンド</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># 停止</span>
+docker compose down
+
+<span class="cmt"># 再起動</span>
+docker compose up -d
+
+<span class="cmt"># ログ確認</span>
+docker compose logs -f core-api
+
+<span class="cmt"># 起動時に自動起動する設定</span>
+systemctl --user enable docker-desktop
+
+<span class="cmt"># データを完全削除して再構築</span>
+docker compose down -v
+./install-ubuntu.sh</pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div><!-- /ubuntu -->
+
+</main>
+
+<script>
+function switchOS(os) {
+  document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.os-section').forEach(s => s.classList.remove('active'));
+  document.querySelector(`.os-btn.${os}`).classList.add('active');
+  document.getElementById(`os-${os}`).classList.add('active');
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function copyCode(btn) {
+  const pre = btn.closest('.code-block').querySelector('pre');
+  const text = pre.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

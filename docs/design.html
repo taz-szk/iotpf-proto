@@ -1,0 +1,1645 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT プラットフォーム設計書</title>
+<style>
+:root {
+  --bg: #F1F4F9;
+  --surface: #FFFFFF;
+  --surface-2: #F7F9FC;
+  --accent: #0048CC;
+  --accent-light: #EAF0FF;
+  --text-1: #131921;
+  --text-2: #505A6B;
+  --text-3: #8895A7;
+  --border: #DCE3EE;
+  --mono-bg: #EEF2F8;
+  --tag-bg: #E2EAFB;
+  --tag-text: #1A42A0;
+  --ok: #0E7A45;
+  --ok-bg: #E6F5EE;
+  --warn: #B45309;
+  --warn-bg: #FEF3CD;
+  --danger: #B91C1C;
+  --danger-bg: #FEE2E2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0B0E17;
+    --surface: #131724;
+    --surface-2: #1A1F30;
+    --accent: #5B8AF5;
+    --accent-light: #19253F;
+    --text-1: #EDF1F8;
+    --text-2: #8B9AB0;
+    --text-3: #566070;
+    --border: #222840;
+    --mono-bg: #191F32;
+    --tag-bg: #1E2E52;
+    --tag-text: #7BA3F7;
+    --ok: #34D399;
+    --ok-bg: #052C1A;
+    --warn: #FCD34D;
+    --warn-bg: #1C1400;
+    --danger: #F87171;
+    --danger-bg: #2C0B0B;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0B0E17;
+  --surface: #131724;
+  --surface-2: #1A1F30;
+  --accent: #5B8AF5;
+  --accent-light: #19253F;
+  --text-1: #EDF1F8;
+  --text-2: #8B9AB0;
+  --text-3: #566070;
+  --border: #222840;
+  --mono-bg: #191F32;
+  --tag-bg: #1E2E52;
+  --tag-text: #7BA3F7;
+  --ok: #34D399;
+  --ok-bg: #052C1A;
+  --warn: #FCD34D;
+  --warn-bg: #1C1400;
+  --danger: #F87171;
+  --danger-bg: #2C0B0B;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+/* ---- Header ---- */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.header-inner {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 52px;
+}
+.site-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  white-space: nowrap;
+}
+.site-title span { color: var(--accent); }
+
+/* ---- Tabs ---- */
+.tab-bar {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tab-bar::-webkit-scrollbar { display: none; }
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  height: 52px;
+  border: none;
+  background: none;
+  color: var(--text-2);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text-1); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-label {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: var(--tag-bg);
+  color: var(--tag-text);
+  padding: 2px 5px;
+  border-radius: 3px;
+}
+
+/* ---- Main ---- */
+.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+.doc-section { display: none; }
+.doc-section.active { display: block; }
+
+/* ---- Doc header ---- */
+.doc-header { margin-bottom: 40px; }
+.doc-eyebrow {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 10px;
+}
+.doc-title {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-1);
+  line-height: 1.25;
+  text-wrap: balance;
+  margin-bottom: 10px;
+}
+.doc-meta {
+  font-size: 13px;
+  color: var(--text-3);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+/* ---- Sections ---- */
+.section { margin-bottom: 44px; }
+.section-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.section-num {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 11px;
+  color: var(--text-3);
+  min-width: 28px;
+}
+.section-title h2 {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.subsection { margin-bottom: 28px; }
+.subsection h3 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.subsection h3::before {
+  content: '';
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+p { color: var(--text-2); margin-bottom: 10px; max-width: 68ch; }
+
+/* ---- Tables ---- */
+.table-wrap { overflow-x: auto; margin-bottom: 16px; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  min-width: 480px;
+}
+th {
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-weight: 600;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+}
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+table { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+td:first-child { color: var(--text-1); font-weight: 500; }
+code {
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  font-size: 12.5px;
+  background: var(--mono-bg);
+  color: var(--text-1);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+td code { font-size: 12px; }
+
+/* ---- Badges ---- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  letter-spacing: 0.03em;
+}
+.badge-ok { background: var(--ok-bg); color: var(--ok); }
+.badge-warn { background: var(--warn-bg); color: var(--warn); }
+.badge-danger { background: var(--danger-bg); color: var(--danger); }
+.badge-neutral { background: var(--tag-bg); color: var(--tag-text); }
+
+/* ---- Callout ---- */
+.callout {
+  background: var(--accent-light);
+  border-left: 3px solid var(--accent);
+  padding: 12px 16px;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 16px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.callout strong { color: var(--text-1); }
+
+/* ---- Check list ---- */
+.checklist { list-style: none; display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+.checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 13.5px;
+  color: var(--text-2);
+}
+.checklist li::before {
+  content: '▸';
+  color: var(--accent);
+  font-size: 12px;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+/* ---- Flow ---- */
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.flow-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  color: var(--text-1);
+}
+.flow-arrow { color: var(--text-3); font-size: 13px; }
+
+/* ---- Architecture SVG card ---- */
+.arch-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 24px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.arch-card svg text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+/* ---- Grid ---- */
+.req-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.req-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 14px 16px;
+}
+.req-card-id {
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  font-size: 10.5px;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  margin-bottom: 5px;
+}
+.req-card-title { font-size: 13px; font-weight: 700; color: var(--text-1); margin-bottom: 6px; }
+.req-card-body { font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
+
+/* ---- Test checklist ---- */
+.test-group { margin-bottom: 28px; }
+.test-group h3 {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-1);
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.test-item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 16px;
+  align-items: start;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+}
+.test-item:first-of-type { border-top: 1px solid var(--border); border-radius: 6px 6px 0 0; }
+.test-item:last-of-type { border-radius: 0 0 6px 6px; border-bottom: none; }
+.test-item:first-of-type:last-of-type { border-radius: 6px; }
+.test-id { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 11px; color: var(--text-3); }
+.test-desc { color: var(--text-2); grid-column: 1; }
+.test-expected { font-size: 12px; color: var(--text-3); grid-column: 1; margin-top: 2px; }
+.test-priority { grid-column: 2; grid-row: 1 / 3; align-self: center; }
+
+.seq-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+}
+.seq-card .mermaid {
+  min-width: 480px;
+}
+
+@media (max-width: 600px) {
+  .main { padding: 24px 16px 60px; }
+  .header-inner { gap: 12px; }
+  .doc-title { font-size: 22px; }
+}
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <div class="site-title">iot<span>://</span>platform</div>
+    <nav class="tab-bar" role="tablist">
+      <button class="tab-btn active" role="tab" onclick="switchTab(0)">
+        <span class="tab-label">REQ</span>要件定義書
+      </button>
+      <button class="tab-btn" role="tab" onclick="switchTab(1)">
+        <span class="tab-label">ARCH</span>基本設計
+      </button>
+      <button class="tab-btn" role="tab" onclick="switchTab(2)">
+        <span class="tab-label">DETAIL</span>詳細設計
+      </button>
+      <button class="tab-btn" role="tab" onclick="switchTab(3)">
+        <span class="tab-label">TEST</span>試験実施観点
+      </button>
+      <button class="tab-btn" role="tab" onclick="switchTab(4)">
+        <span class="tab-label">SEQ</span>シーケンス図
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main class="main">
+
+<!-- ==================== TAB 0: 要件定義書 ==================== -->
+<section class="doc-section active" id="tab-0">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Requirements Specification</div>
+    <h1 class="doc-title">IoT プラットフォーム 要件定義書</h1>
+    <div class="doc-meta">
+      <span>版: 1.0</span>
+      <span>対象: マルチテナント型 IoT デバイス管理基盤</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>目的・背景</h2></div>
+    <p>複数の企業（テナント）が同一インフラ上で自社 IoT デバイスのテレメトリ収集・監視・管理を行えるマルチテナント型プラットフォームを構築する。各テナントのデータは論理的・物理的に分離され、テナント管理者が独自にデバイス・ユーザー・アラートを管理できる。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>ステークホルダー・ロール</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ロール</th><th>区分</th><th>主な権限</th></tr></thead>
+        <tbody>
+          <tr><td>プラットフォーム管理者</td><td><span class="badge badge-danger">Platform</span></td><td>テナント CRUD、ファームウェア管理、OTA 配信、全テナント統計閲覧</td></tr>
+          <tr><td>テナント管理者</td><td><span class="badge badge-warn">Tenant / admin</span></td><td>デバイス・ユーザー・アラートルールの管理、OTA 配信（自テナント）</td></tr>
+          <tr><td>テナントオペレーター</td><td><span class="badge badge-warn">Tenant / operator</span></td><td>デバイス操作、OTA 配信（自テナント）、センサーデータ閲覧</td></tr>
+          <tr><td>テナントビューア</td><td><span class="badge badge-neutral">Tenant / viewer</span></td><td>ダッシュボード閲覧のみ</td></tr>
+          <tr><td>IoT デバイス</td><td><span class="badge badge-ok">Device</span></td><td>MQTT 経由テレメトリ送信、OTA コマンド受信（mTLS 認証）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>機能要件</h2></div>
+    <div class="req-grid">
+      <div class="req-card">
+        <div class="req-card-id">FR-01 テナント管理</div>
+        <div class="req-card-title">マルチテナント自動プロビジョニング</div>
+        <div class="req-card-body">テナント作成時に PostgreSQL スキーマ・InfluxDB org・Grafana org を自動作成。ステータス: active / suspended / deleted。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-02 ユーザー管理</div>
+        <div class="req-card-title">プラットフォーム／テナントユーザー認証</div>
+        <div class="req-card-body">email + bcrypt パスワード認証。JWT アクセストークン (15分) + リフレッシュトークン (30日)。パスワード変更機能付き。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-03 デバイスプロビジョニング</div>
+        <div class="req-card-title">ブートストラップトークンと mTLS 証明書発行</div>
+        <div class="req-card-body">一時ブートストラップトークンで認証後、Step-CA が mTLS クライアント証明書を自動発行。デバイス上限数・有効期限を設定可能。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-04 テレメトリ収集</div>
+        <div class="req-card-title">MQTT → InfluxDB パイプライン</div>
+        <div class="req-card-body">EMQX Webhook → Ingestion Service → InfluxDB 2.x。センサーキーは動的（固定スキーマなし）。テナントごとに InfluxDB org で分離。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-05 接続状態管理</div>
+        <div class="req-card-title">デバイス online / offline 記録</div>
+        <div class="req-card-body">EMQX の接続・切断イベントを Webhook で受信し、PostgreSQL とInfluxDB に時系列ステータスを記録。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-06 アラート管理</div>
+        <div class="req-card-title">ルールベース通知</div>
+        <div class="req-card-body">条件: above / below / equal / device_offline。トリガーモード: consecutive / duration。重要度: info / warning / critical。メール通知。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-07 OTA ファームウェア更新</div>
+        <div class="req-card-title">署名付き URL によるセキュアな配信</div>
+        <div class="req-card-body">最大 100MB のファームウェアを MinIO に格納。署名付き JWT トークン（24時間有効、UUID/UUID 形式検証）でダウンロード。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-08 ダッシュボード</div>
+        <div class="req-card-title">Grafana SSO 統合</div>
+        <div class="req-card-body">Auth Proxy による SSO。テナントごとに Grafana org を分離。テレメトリ・デバイス稼働率を可視化。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-09 プロビジョニングトークン</div>
+        <div class="req-card-title">テナント発行トークン管理</div>
+        <div class="req-card-body">テナントごとに複数トークンを発行。最大デバイス台数・有効期限の設定。登録済みデバイス数を追跡。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-10 公開アクセス</div>
+        <div class="req-card-title">認証なしデータ閲覧</div>
+        <div class="req-card-body">テナントが発行する public_token で、特定テナントのセンサーデータを認証なしで閲覧可能な API を提供。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>非機能要件（概要）</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>分類</th><th>要件</th><th>目標値</th></tr></thead>
+        <tbody>
+          <tr><td>性能</td><td>テレメトリ取り込みスループット</td><td>1,000 msg/sec 以上</td></tr>
+          <tr><td>性能</td><td>API レスポンスタイム</td><td>95パーセンタイル &lt; 300ms</td></tr>
+          <tr><td>可用性</td><td>コアサービス稼働率</td><td>99.9% 以上</td></tr>
+          <tr><td>セキュリティ</td><td>通信暗号化</td><td>HTTPS (TLS 1.2+)、MQTT over TLS (mTLS)</td></tr>
+          <tr><td>セキュリティ</td><td>ログイン保護</td><td>IP別レート制限（5回/15分）、リフレッシュトークン失効</td></tr>
+          <tr><td>保守性</td><td>デプロイ</td><td>Docker Compose 単一コマンド起動</td></tr>
+          <tr><td>保守性</td><td>スキーマ変更</td><td>無停止 ADD COLUMN IF NOT EXISTS マイグレーション</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>制約条件</h2></div>
+    <ul class="checklist">
+      <li>デプロイ環境: Linux サーバー + Docker Compose（単一ホスト構成）</li>
+      <li>MQTT ブローカー: EMQX 5.x（ACL は設定ファイルおよびデータベース認証で管理）</li>
+      <li>時系列データベース: InfluxDB 2.x（Flux クエリ言語を使用）</li>
+      <li>PKI: smallstep/step-ca による自己署名 CA（外部 CA への依存なし）</li>
+      <li>MailHog を SMTP 中継として使用（本番では外部 SMTP に切り替え可能）</li>
+      <li>インメモリのレート制限・JTI ブロックリストはプロセス再起動でリセットされる（単一プロセス前提）</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== TAB 1: 基本設計 ==================== -->
+<section class="doc-section" id="tab-1">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Basic Design — Architecture &amp; Non-Functional Requirements</div>
+    <h1 class="doc-title">IoT プラットフォーム 基本設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>対象: システムアーキテクチャ・非機能設計</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>アーキテクチャ概要</h2></div>
+    <div class="arch-card">
+      <svg viewBox="0 0 820 440" width="100%" style="max-width:820px;display:block;margin:0 auto;" aria-label="システムアーキテクチャ図">
+        <defs>
+          <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L8,3 z" fill="currentColor" opacity="0.4"/>
+          </marker>
+        </defs>
+        <style>
+          .arch-zone { fill: none; stroke: currentColor; stroke-opacity: 0.1; stroke-width: 1; rx: 8; }
+          .arch-box { stroke: currentColor; stroke-opacity: 0.25; stroke-width: 1; rx: 5; }
+          .arch-box-accent { stroke: #0048CC; stroke-opacity: 0.5; stroke-width: 1.5; fill: #EAF0FF; rx: 5; }
+          .arch-line { stroke: currentColor; stroke-opacity: 0.3; stroke-width: 1.5; fill: none; marker-end: url(#arr); }
+          .arch-label { font-size: 11px; text-anchor: middle; dominant-baseline: middle; fill: currentColor; opacity: 0.85; }
+          .arch-sub { font-size: 9px; text-anchor: middle; dominant-baseline: middle; fill: currentColor; opacity: 0.5; }
+          .zone-label { font-size: 9px; letter-spacing: 0.08em; text-transform: uppercase; fill: currentColor; opacity: 0.35; font-family: monospace; }
+        </style>
+        <!-- Zone: External -->
+        <rect x="8" y="8" width="160" height="424" class="arch-zone" style="fill:currentColor;fill-opacity:0.02"/>
+        <text x="88" y="26" class="zone-label" text-anchor="middle">External</text>
+        <!-- Zone: Internal -->
+        <rect x="176" y="8" width="636" height="424" class="arch-zone" style="fill:currentColor;fill-opacity:0.015"/>
+        <text x="494" y="26" class="zone-label" text-anchor="middle">Internal Network</text>
+
+        <!-- External: Device -->
+        <rect x="24" y="50" width="112" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="80" y="68" class="arch-label">IoT Device</text>
+        <text x="80" y="82" class="arch-sub">mTLS / MQTT</text>
+
+        <!-- External: Browser -->
+        <rect x="24" y="116" width="112" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="80" y="134" class="arch-label">Browser</text>
+        <text x="80" y="148" class="arch-sub">HTTPS :443</text>
+
+        <!-- EMQX -->
+        <rect x="192" y="50" width="106" height="44" class="arch-box-accent" style="fill:#EAF0FF"/>
+        <text x="245" y="67" class="arch-label" style="fill:#0048CC;font-weight:600">EMQX 5.x</text>
+        <text x="245" y="81" class="arch-sub" style="fill:#0048CC">MQTT Broker :8883</text>
+
+        <!-- nginx -->
+        <rect x="192" y="116" width="106" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="245" y="134" class="arch-label">nginx 1.25</text>
+        <text x="245" y="148" class="arch-sub">TLS Termination</text>
+
+        <!-- core-api -->
+        <rect x="332" y="116" width="112" height="44" class="arch-box-accent" style="fill:#EAF0FF"/>
+        <text x="388" y="133" class="arch-label" style="fill:#0048CC;font-weight:600">core-api</text>
+        <text x="388" y="147" class="arch-sub" style="fill:#0048CC">FastAPI :8000</text>
+
+        <!-- ingestion-service -->
+        <rect x="332" y="50" width="112" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="388" y="67" class="arch-label">ingestion-service</text>
+        <text x="388" y="81" class="arch-sub">FastAPI :8001</text>
+
+        <!-- alert-service -->
+        <rect x="332" y="196" width="112" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="388" y="213" class="arch-label">alert-service</text>
+        <text x="388" y="227" class="arch-sub">Scheduler</text>
+
+        <!-- PostgreSQL -->
+        <rect x="490" y="116" width="106" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="543" y="133" class="arch-label">PostgreSQL 16</text>
+        <text x="543" y="147" class="arch-sub">:5432</text>
+
+        <!-- InfluxDB -->
+        <rect x="490" y="50" width="106" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="543" y="67" class="arch-label">InfluxDB 2.x</text>
+        <text x="543" y="81" class="arch-sub">:8086</text>
+
+        <!-- Grafana -->
+        <rect x="490" y="196" width="106" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="543" y="213" class="arch-label">Grafana OSS</text>
+        <text x="543" y="227" class="arch-sub">Auth Proxy SSO</text>
+
+        <!-- MinIO -->
+        <rect x="648" y="50" width="100" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="698" y="67" class="arch-label">MinIO</text>
+        <text x="698" y="81" class="arch-sub">Firmware :9000</text>
+
+        <!-- Step-CA -->
+        <rect x="648" y="116" width="100" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="698" y="133" class="arch-label">Step-CA</text>
+        <text x="698" y="147" class="arch-sub">PKI :9000</text>
+
+        <!-- MailHog -->
+        <rect x="648" y="196" width="100" height="44" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
+        <text x="698" y="213" class="arch-label">MailHog</text>
+        <text x="698" y="227" class="arch-sub">SMTP :1025</text>
+
+        <!-- Lines -->
+        <!-- Device → EMQX -->
+        <line x1="136" y1="72" x2="192" y2="72" class="arch-line"/>
+        <!-- Browser → nginx -->
+        <line x1="136" y1="138" x2="192" y2="138" class="arch-line"/>
+        <!-- nginx → core-api -->
+        <line x1="298" y1="138" x2="332" y2="138" class="arch-line"/>
+        <!-- nginx → Grafana -->
+        <line x1="245" y1="160" x2="245" y2="218" x2="490" y2="218" class="arch-line" style="display:none"/>
+        <polyline points="245,160 245,218 490,218" class="arch-line"/>
+        <!-- EMQX → ingestion-service -->
+        <line x1="298" y1="72" x2="332" y2="72" class="arch-line"/>
+        <!-- EMQX → core-api (events) -->
+        <polyline points="245,94 245,104 388,104 388,116" class="arch-line"/>
+        <!-- core-api → PostgreSQL -->
+        <line x1="444" y1="138" x2="490" y2="138" class="arch-line"/>
+        <!-- core-api → InfluxDB -->
+        <polyline points="444,120 444,72 490,72" class="arch-line"/>
+        <!-- core-api → Grafana -->
+        <line x1="444" y1="156" x2="544" y2="196" class="arch-line"/>
+        <!-- core-api → MinIO -->
+        <polyline points="444,128 470,128 470,34 698,34 698,50" class="arch-line"/>
+        <!-- core-api → Step-CA -->
+        <line x1="444" y1="138" x2="648" y2="138" class="arch-line"/>
+        <!-- ingestion-service → InfluxDB -->
+        <line x1="444" y1="72" x2="490" y2="72" class="arch-line"/>
+        <!-- ingestion-service → PostgreSQL -->
+        <polyline points="388,94 388,108 543,108 543,116" class="arch-line"/>
+        <!-- alert-service → InfluxDB -->
+        <polyline points="388,196 388,180 543,180 543,94" class="arch-line"/>
+        <!-- alert-service → PostgreSQL -->
+        <line x1="444" y1="218" x2="490" y2="160" class="arch-line"/>
+        <!-- alert-service → MailHog -->
+        <line x1="444" y1="218" x2="648" y2="218" class="arch-line"/>
+
+        <!-- Network labels -->
+        <text x="88" y="390" class="zone-label" text-anchor="middle">MQTT :8883 (public)</text>
+        <text x="88" y="405" class="zone-label" text-anchor="middle">HTTPS :443 (public)</text>
+        <text x="494" y="390" class="zone-label" text-anchor="middle">Docker internal network — not exposed to internet</text>
+        <text x="494" y="405" class="zone-label" text-anchor="middle">grafana-net: 172.30.0.0/24 (Auth Proxy 専用)</text>
+      </svg>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>サービス構成</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>サービス</th><th>イメージ</th><th>ネットワーク</th><th>役割</th></tr></thead>
+        <tbody>
+          <tr><td>nginx</td><td><code>nginx:1.25-alpine</code></td><td>internal, external, grafana-net</td><td>TLS 終端・リバースプロキシ</td></tr>
+          <tr><td>core-api</td><td>カスタムビルド (FastAPI)</td><td>internal, grafana-net</td><td>プラットフォーム管理 API</td></tr>
+          <tr><td>ingestion-service</td><td>カスタムビルド (FastAPI)</td><td>internal</td><td>テレメトリ取り込み</td></tr>
+          <tr><td>alert-service</td><td>カスタムビルド (Python)</td><td>internal</td><td>アラートルール評価・メール通知</td></tr>
+          <tr><td>emqx</td><td><code>emqx:5</code></td><td>internal, external</td><td>MQTT ブローカー（mTLS :8883）</td></tr>
+          <tr><td>postgres</td><td><code>postgres:16-alpine</code></td><td>internal</td><td>メタデータ・テナントユーザー</td></tr>
+          <tr><td>influxdb</td><td><code>influxdb:2-alpine</code></td><td>internal</td><td>時系列テレメトリ・デバイス状態</td></tr>
+          <tr><td>grafana</td><td><code>grafana/grafana-oss</code></td><td>internal, grafana-net</td><td>ダッシュボード（Auth Proxy SSO）</td></tr>
+          <tr><td>minio</td><td><code>minio/minio</code></td><td>internal</td><td>ファームウェアオブジェクトストレージ</td></tr>
+          <tr><td>step-ca</td><td><code>smallstep/step-ca</code></td><td>internal</td><td>デバイス証明書 PKI</td></tr>
+          <tr><td>mailhog</td><td><code>mailhog/mailhog</code></td><td>internal, external</td><td>SMTP（アラートメール中継）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>ネットワーク設計</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ネットワーク</th><th>用途</th><th>参加サービス</th></tr></thead>
+        <tbody>
+          <tr><td><code>external</code></td><td>インターネット公開（MQTT・HTTP）</td><td>nginx, emqx, mailhog</td></tr>
+          <tr><td><code>internal</code></td><td>バックエンドサービス間通信</td><td>全サービス</td></tr>
+          <tr><td><code>grafana-net</code> (172.30.0.0/24)</td><td>Grafana Auth Proxy 専用。<code>GF_AUTH_PROXY_WHITELIST</code> でこのサブネットのみ許可</td><td>nginx, core-api, grafana</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>データストア設計方針</h2></div>
+    <div class="subsection">
+      <h3>PostgreSQL — メタデータ・テナントデータ</h3>
+      <ul class="checklist">
+        <li>public スキーマにプラットフォーム共通テーブル（tenants, platform_users, provisioning_tokens）</li>
+        <li>テナントごとに <code>tenant_{uuid}</code> スキーマを動的作成（CREATE SCHEMA IF NOT EXISTS）</li>
+        <li>スキーマ変更は <code>ALTER TABLE ... ADD COLUMN IF NOT EXISTS</code> で無停止マイグレーション</li>
+      </ul>
+    </div>
+    <div class="subsection">
+      <h3>InfluxDB 2.x — 時系列データ</h3>
+      <ul class="checklist">
+        <li>テナントごとに org を分離し、テナント専用トークンで読み書き（最小権限）</li>
+        <li>バケット: <code>telemetry</code>（センサーデータ）、接続状態は measurement <code>device_status</code></li>
+        <li>Flux クエリを使用。センサーキーは固定スキーマなし（動的フィールド）</li>
+      </ul>
+    </div>
+    <div class="subsection">
+      <h3>MinIO — ファームウェア</h3>
+      <ul class="checklist">
+        <li>バケット <code>firmware</code> に <code>{tenant_id}/{firmware_id}</code> キーで保存</li>
+        <li>ダウンロードは署名付き JWT トークン経由（直接公開しない）</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>非機能要件</h2></div>
+    <div class="subsection">
+      <h3>性能要件</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>指標</th><th>目標値</th><th>備考</th></tr></thead>
+          <tbody>
+            <tr><td>テレメトリ取り込みスループット</td><td>1,000 msg/sec</td><td>ingestion-service 単一プロセス</td></tr>
+            <tr><td>API レスポンスタイム（P95）</td><td>&lt; 300ms</td><td>DB クエリを含む</td></tr>
+            <tr><td>Grafana ダッシュボード初期描画</td><td>&lt; 5秒</td><td>過去30日のデータ表示</td></tr>
+            <tr><td>OTA ダウンロードトークン検証</td><td>&lt; 50ms</td><td>インメモリ JWT 検証</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>可用性・信頼性</h3>
+      <ul class="checklist">
+        <li>全サービスに Docker healthcheck を設定、<code>restart: unless-stopped</code> で自動復旧</li>
+        <li>PostgreSQL・InfluxDB・MinIO・Grafana は named volume でデータ永続化</li>
+        <li>サービス起動順序を <code>depends_on: condition: service_healthy</code> で制御</li>
+        <li>core-api の DB スキーママイグレーションはスタートアップ時に冪等実行</li>
+      </ul>
+    </div>
+    <div class="subsection">
+      <h3>セキュリティ要件</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>領域</th><th>実装内容</th></tr></thead>
+          <tbody>
+            <tr><td>通信</td><td>HTTPS (TLS 1.2+)、MQTT over TLS、mTLS（デバイス↔EMQX）</td></tr>
+            <tr><td>認証</td><td>JWT HS256（access: 15分、refresh: 30日）、bcrypt パスワードハッシュ</td></tr>
+            <tr><td>レート制限</td><td>ログイン IP 別 5回失敗/15分でブロック（インメモリ、スレッドセーフ）</td></tr>
+            <tr><td>トークン失効</td><td>JTI ブロックリスト + token_version（パスワード変更で全 refresh 無効化）</td></tr>
+            <tr><td>SSRF/パストラバーサル</td><td>minio_key を <code>^UUID/UUID$</code> 正規表現で検証、firmware_id UUID 検証</td></tr>
+            <tr><td>Webhook 認証</td><td>EMQX Webhook Secret（HMAC-SHA256）</td></tr>
+            <tr><td>Grafana</td><td>Auth Proxy を <code>172.30.0.0/24</code> のみに制限</td></tr>
+            <tr><td>秘密情報管理</td><td>全シークレットを環境変数で注入（コードへのハードコード禁止）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>保守性・拡張性</h3>
+      <ul class="checklist">
+        <li>Docker Compose 単一コマンドでの環境構築</li>
+        <li>テナント追加時の自動スキーマ・org プロビジョニング（テナント数スケール可能）</li>
+        <li>アラートサービスは EVAL_INTERVAL_SEC・DEVICE_OFFLINE_THRESHOLD_SEC を環境変数で調整</li>
+        <li>ingestion-service と core-api は独立デプロイ・独立スケール可能な構成</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 2: 詳細設計 ==================== -->
+<section class="doc-section" id="tab-2">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Detailed Design</div>
+    <h1 class="doc-title">IoT プラットフォーム 詳細設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>対象: API仕様・データモデル・フロー・セキュリティ実装</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>Core API エンドポイント一覧</h2></div>
+    <div class="subsection">
+      <h3>認証 — プラットフォーム (/auth)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/auth/login</code></td><td>ログイン（アクセス + リフレッシュトークン発行）</td><td>なし（レート制限あり）</td></tr>
+            <tr><td><code>POST</code></td><td><code>/auth/refresh</code></td><td>トークンリフレッシュ（JTI ローテーション）</td><td>Refresh JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/auth/logout</code></td><td>ログアウト（JTI 失効 + Cookie 削除）</td><td>任意 Refresh JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/auth/change-password</code></td><td>パスワード変更（token_version インクリメント）</td><td>Platform JWT</td></tr>
+            <tr><td><code>GET</code></td><td><code>/auth/verify-jwt</code></td><td>Grafana Auth Proxy 用 JWT 検証</td><td>Cookie (iot_token)</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>テナント管理 (/tenants)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/tenants</code></td><td>テナント作成（PG スキーマ・InfluxDB org・Grafana org 自動作成）</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenants</code></td><td>テナント一覧</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenants/{id}</code></td><td>テナント詳細</td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/tenants/{id}</code></td><td>テナント名更新</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/tenants/{id}</code></td><td>テナント削除（非同期 teardown）</td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/tenants/{id}/status</code></td><td>ステータス変更（active / suspended）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>デバイス・ファームウェア</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/provision</code></td><td>デバイスプロビジョニング（mTLS 証明書発行）</td><td>Bootstrap Token</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/firmware</code></td><td>ファームウェアアップロード（最大 100MB）</td><td>Platform JWT</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenants/{id}/firmware</code></td><td>ファームウェア一覧</td><td>Platform JWT</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/tenants/{id}/firmware/{fid}</code></td><td>ファームウェア無効化</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/devices/{did}/ota</code></td><td>OTA コマンド配信</td><td>Platform JWT</td></tr>
+            <tr><td><code>GET</code></td><td><code>/firmware-download</code></td><td>ファームウェアダウンロード（ストリーミング）</td><td>署名付き JWT Token</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>テナントポータル (/tenant-auth, /me)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>必要ロール</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/login</code></td><td>テナントユーザーログイン（Cookie 発行）</td><td>—</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/logout</code></td><td>ログアウト（Cookie 削除）</td><td>—</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenant-auth/me</code></td><td>ログインユーザー情報</td><td>任意 tenant</td></tr>
+            <tr><td><code>GET</code></td><td><code>/me/sensor-keys</code></td><td>センサーキー一覧（InfluxDB から取得）</td><td>admin / operator</td></tr>
+            <tr><td><code>POST</code></td><td><code>/me/devices/{did}/ota</code></td><td>OTA コマンド配信</td><td>admin / operator</td></tr>
+            <tr><td><code>GET</code></td><td><code>/me/stats</code></td><td>テナント統計（デバイス数・センサー件数）</td><td>admin / operator</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>データモデル</h2></div>
+    <div class="subsection">
+      <h3>public.platform_users</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>制約</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID</td><td>PK, DEFAULT uuid4</td><td>ユーザー ID</td></tr>
+            <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>UNIQUE, NOT NULL</td><td>メールアドレス</td></tr>
+            <tr><td><code>password_hash</code></td><td>TEXT</td><td>NOT NULL</td><td>bcrypt ハッシュ</td></tr>
+            <tr><td><code>is_active</code></td><td>BOOLEAN</td><td>DEFAULT TRUE</td><td>アカウント有効フラグ</td></tr>
+            <tr><td><code>token_version</code></td><td>INTEGER</td><td>DEFAULT 1</td><td>Refresh トークン世代（パスワード変更でインクリメント）</td></tr>
+            <tr><td><code>created_at</code></td><td>TIMESTAMPTZ</td><td>DEFAULT NOW()</td><td>作成日時</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.tenants</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>テナント ID（スキーマ名に使用）</td></tr>
+            <tr><td><code>name</code></td><td>VARCHAR(255) UNIQUE</td><td>表示名</td></tr>
+            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>ログイン用識別子</td></tr>
+            <tr><td><code>influxdb_org_id</code></td><td>VARCHAR</td><td>テナント専用 InfluxDB org ID</td></tr>
+            <tr><td><code>influxdb_token</code></td><td>TEXT</td><td>テナント専用 InfluxDB トークン（最小権限）</td></tr>
+            <tr><td><code>grafana_org_id</code></td><td>VARCHAR</td><td>Grafana org ID</td></tr>
+            <tr><td><code>public_token</code></td><td>VARCHAR(255) UNIQUE</td><td>認証なし閲覧用トークン</td></tr>
+            <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>active / suspended / deleted</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>tenant_{uuid}.devices（テナントスキーマ）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>レコード ID</td></tr>
+            <tr><td><code>device_id</code></td><td>VARCHAR(255) UNIQUE</td><td>デバイス識別子（MQTT クライアント ID に対応）</td></tr>
+            <tr><td><code>device_name</code></td><td>VARCHAR(255)</td><td>表示名</td></tr>
+            <tr><td><code>provisioning_token_id</code></td><td>UUID</td><td>登録時に使用したトークン</td></tr>
+            <tr><td><code>connection_status</code></td><td>VARCHAR(20)</td><td>online / offline / unknown</td></tr>
+            <tr><td><code>cert_not_after</code></td><td>TIMESTAMPTZ</td><td>クライアント証明書有効期限</td></tr>
+            <tr><td><code>fw_version</code></td><td>VARCHAR(100)</td><td>現在のファームウェアバージョン</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>tenant_{uuid}.alert_rules（抜粋）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>sensor_key</code></td><td>VARCHAR(255)</td><td>対象センサーキー</td></tr>
+            <tr><td><code>condition</code></td><td>VARCHAR</td><td>above / below / equal / device_offline</td></tr>
+            <tr><td><code>trigger_mode</code></td><td>VARCHAR</td><td>consecutive / duration / consecutive_and_duration</td></tr>
+            <tr><td><code>consecutive_count</code></td><td>INT DEFAULT 3</td><td>連続回数閾値</td></tr>
+            <tr><td><code>duration_sec</code></td><td>INT DEFAULT 60</td><td>継続時間閾値（秒）</td></tr>
+            <tr><td><code>severity</code></td><td>VARCHAR</td><td>info / warning / critical</td></tr>
+            <tr><td><code>notify_emails</code></td><td>TEXT[]</td><td>通知先メールアドレス一覧</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>主要フロー</h2></div>
+    <div class="subsection">
+      <h3>プラットフォーム認証フロー</h3>
+      <div class="flow">
+        <div class="flow-step">POST /auth/login</div><span class="flow-arrow">→</span>
+        <div class="flow-step">IP レート制限チェック</div><span class="flow-arrow">→</span>
+        <div class="flow-step">DB ユーザー検索・bcrypt 検証</div><span class="flow-arrow">→</span>
+        <div class="flow-step">access_token (15分) + refresh_token (30日, jti+tok_ver 付き)</div>
+      </div>
+      <div class="flow">
+        <div class="flow-step">POST /auth/refresh</div><span class="flow-arrow">→</span>
+        <div class="flow-step">JTI ブロックリスト確認</div><span class="flow-arrow">→</span>
+        <div class="flow-step">DB で tok_ver 照合</div><span class="flow-arrow">→</span>
+        <div class="flow-step">旧 JTI をブロックリストに登録</div><span class="flow-arrow">→</span>
+        <div class="flow-step">新トークンペア発行</div>
+      </div>
+      <div class="flow">
+        <div class="flow-step">POST /auth/change-password</div><span class="flow-arrow">→</span>
+        <div class="flow-step">password_hash 更新</div><span class="flow-arrow">→</span>
+        <div class="flow-step">token_version + 1</div><span class="flow-arrow">→</span>
+        <div class="flow-step">既存 refresh_token 全失効</div>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>デバイスプロビジョニングフロー</h3>
+      <div class="flow">
+        <div class="flow-step">デバイス: POST /provision + bootstrap_token</div><span class="flow-arrow">→</span>
+        <div class="flow-step">トークン有効性・上限確認</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Step-CA へ証明書発行リクエスト</div><span class="flow-arrow">→</span>
+        <div class="flow-step">devices テーブルに登録</div><span class="flow-arrow">→</span>
+        <div class="flow-step">cert_pem + key_pem + ca_cert を返却</div>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>テレメトリ取り込みフロー</h3>
+      <div class="flow">
+        <div class="flow-step">デバイス: MQTT Publish (mTLS)</div><span class="flow-arrow">→</span>
+        <div class="flow-step">EMQX: Webhook (HMAC 認証)</div><span class="flow-arrow">→</span>
+        <div class="flow-step">ingestion-service: テナント特定</div><span class="flow-arrow">→</span>
+        <div class="flow-step">InfluxDB テナント org に書き込み</div>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>OTA 配信フロー</h3>
+      <div class="flow">
+        <div class="flow-step">POST /ota (firmware_id: UUID)</div><span class="flow-arrow">→</span>
+        <div class="flow-step">firmware_releases から minio_key 取得</div><span class="flow-arrow">→</span>
+        <div class="flow-step">JWT に minio_key を含む署名付きトークン生成（24h）</div><span class="flow-arrow">→</span>
+        <div class="flow-step">EMQX 経由でデバイスに download_url を配信</div>
+      </div>
+      <div class="flow">
+        <div class="flow-step">デバイス: GET /firmware-download?token=…</div><span class="flow-arrow">→</span>
+        <div class="flow-step">JWT 検証 + minio_key 形式検証 (UUID/UUID)</div><span class="flow-arrow">→</span>
+        <div class="flow-step">MinIO からストリーミングレスポンス</div>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>アラート評価フロー</h3>
+      <div class="flow">
+        <div class="flow-step">alert-service: スケジューラ (EVAL_INTERVAL_SEC 毎)</div><span class="flow-arrow">→</span>
+        <div class="flow-step">テナント一覧取得（influxdb_token 付き）</div><span class="flow-arrow">→</span>
+        <div class="flow-step">Flux クエリでルール評価</div><span class="flow-arrow">→</span>
+        <div class="flow-step">閾値超過 → alert_events 登録 + メール送信</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>セキュリティ実装詳細</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>機能</th><th>実装クラス／ファイル</th><th>詳細</th></tr></thead>
+        <tbody>
+          <tr><td>レート制限</td><td><code>app/services/rate_limiter.py</code></td><td>IP をキーとする失敗カウント辞書。<code>threading.Lock</code> でスレッドセーフ。WINDOW_SEC=900、MAX_FAILURES=5。TTL 超過エントリは次回アクセス時に自動削除。</td></tr>
+          <tr><td>JTI ブロックリスト</td><td><code>app/services/token_blocklist.py</code></td><td>JTI → 失効 monotonic 時刻 の辞書。<code>is_revoked()</code> / <code>revoke_jti(jti, ttl_sec)</code>。ログアウト・トークンローテーション時に登録。</td></tr>
+          <tr><td>token_version</td><td><code>platform_users.token_version</code></td><td>パスワード変更で +1。/auth/refresh 時に DB と照合し、不一致なら 401。全リフレッシュトークンを一括無効化できる。</td></tr>
+          <tr><td>minio_key 検証</td><td><code>app/services/minio_client.py</code></td><td><code>_MINIO_KEY_RE = ^UUID/UUID$</code> で正規表現検証。JWT 内の minio_key がこの形式でなければ ValueError を送出。</td></tr>
+          <tr><td>EMQX Webhook 認証</td><td><code>app/routers/emqx_events.py</code></td><td>リクエストヘッダの <code>X-Webhook-Secret</code> を settings.emqx_webhook_secret と比較。不一致で 403。</td></tr>
+          <tr><td>タイミング均等化</td><td><code>app/routers/tenant_auth.py</code></td><td>テナント不存在・ユーザー不存在の早期リターン経路でも bcrypt 相当の時間を消費（<code>_equalize_timing()</code>）。列挙攻撃を防ぐ。</td></tr>
+          <tr><td>Grafana SSO 保護</td><td>docker-compose.yml, nginx</td><td>Auth Proxy を grafana-net (172.30.0.0/24) に限定。GF_AUTH_PROXY_WHITELIST で設定。</td></tr>
+          <tr><td>UUID/firmware_id 検証</td><td><code>app/routers/firmware.py</code></td><td><code>_validate_uuid()</code> で <code>[0-9a-f]{8}-…</code> の正規表現検証。SQLi・パストラバーサルを防ぐ。</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 3: 試験実施観点 ==================== -->
+<section class="doc-section" id="tab-3">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Test Perspectives</div>
+    <h1 class="doc-title">試験実施観点</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>対象: 単体・結合・システム・セキュリティ・性能試験</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>試験方針</h2></div>
+    <div class="callout">
+      <strong>基本方針:</strong> 単体試験は pytest + モックで外部依存を排除した高速テストを行う。結合・システム試験は docker-compose up による実環境で E2E 動作を確認する。セキュリティ試験は IPA セキュアプログラミングガイドライン対応項目を網羅的に確認する。
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>試験種別</th><th>実行環境</th><th>対象</th><th>実行タイミング</th></tr></thead>
+        <tbody>
+          <tr><td>単体試験</td><td>ローカル Python (pytest)</td><td>サービス関数・エンドポイント（DB モック）</td><td>PR 毎・コミット毎</td></tr>
+          <tr><td>結合試験</td><td>docker-compose up</td><td>サービス間通信・DB 書き込み・EMQX Webhook</td><td>リリース前</td></tr>
+          <tr><td>システム試験</td><td>ステージング環境</td><td>E2E ユーザーシナリオ</td><td>リリース前</td></tr>
+          <tr><td>セキュリティ試験</td><td>ローカル + ステージング</td><td>認証・認可・インジェクション・レート制限</td><td>リリース前・四半期毎</td></tr>
+          <tr><td>性能試験</td><td>ステージング環境</td><td>テレメトリスループット・API レスポンスタイム</td><td>リリース前</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>単体試験観点</h2></div>
+    <div class="test-group">
+      <h3><span class="badge badge-neutral">AUTH</span> 認証サービス</h3>
+      <div class="test-item">
+        <div class="test-id">UT-AUTH-01</div>
+        <div class="test-desc">JWT アクセストークンの生成・検証が正常に機能すること</div>
+        <div class="test-expected">期待: デコード後に sub・type・exp クレームが含まれる</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-AUTH-02</div>
+        <div class="test-desc">リフレッシュトークンに jti クレームが含まれ、発行毎にユニークであること</div>
+        <div class="test-expected">期待: 同一ペイロードで2回発行した jti が異なる UUID</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-AUTH-03</div>
+        <div class="test-desc">無効・期限切れトークンに対して verify_token が None を返すこと</div>
+        <div class="test-expected">期待: 改ざんトークン・期限切れトークンで None</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-warn">RATE</span> レート制限</h3>
+      <div class="test-item">
+        <div class="test-id">UT-RATE-01</div>
+        <div class="test-desc">MAX_FAILURES 回の失敗後に is_rate_limited が True を返すこと</div>
+        <div class="test-expected">期待: 5 回 record_failure 後に is_rate_limited("key") == True</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-RATE-02</div>
+        <div class="test-desc">WINDOW_SEC 経過後に古いエントリが削除されること</div>
+        <div class="test-expected">期待: past 時刻のエントリは is_rate_limited で無視される</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-RATE-03</div>
+        <div class="test-desc">clear_failures 後にカウンターがリセットされること</div>
+        <div class="test-expected">期待: 5 回失敗後 clear_failures → is_rate_limited == False</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-RATE-04</div>
+        <div class="test-desc">異なる IP のカウンターが独立していること</div>
+        <div class="test-expected">期待: IP-A がブロックされても IP-B は is_rate_limited == False</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-warn">TOKEN</span> トークン失効</h3>
+      <div class="test-item">
+        <div class="test-id">UT-TOKEN-01</div>
+        <div class="test-desc">revoke_jti した JTI が is_revoked で True を返すこと</div>
+        <div class="test-expected">期待: revoke_jti("jti", 3600) → is_revoked("jti") == True</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-TOKEN-02</div>
+        <div class="test-desc">TTL 経過後に revoked エントリが自動削除されること</div>
+        <div class="test-expected">期待: ttl=0.001 で revoke 後 sleep → is_revoked == False</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-neutral">MINIO</span> minio_key バリデーション</h3>
+      <div class="test-item">
+        <div class="test-id">UT-MINIO-01</div>
+        <div class="test-desc">正規の UUID/UUID 形式の minio_key でトークンが正常デコードできること</div>
+        <div class="test-expected">期待: payload["minio_key"] == 発行時の値</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">UT-MINIO-02</div>
+        <div class="test-desc">../../etc/passwd 形式の minio_key を含むトークンが ValueError を送出すること</div>
+        <div class="test-expected">期待: decode_firmware_download_token → ValueError("minio_key")</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>結合試験観点</h2></div>
+    <div class="test-group">
+      <h3><span class="badge badge-ok">E2E</span> デバイスプロビジョニング</h3>
+      <div class="test-item">
+        <div class="test-id">IT-PROV-01</div>
+        <div class="test-desc">有効なブートストラップトークンでプロビジョニングが完了し、証明書が返却されること</div>
+        <div class="test-expected">期待: 201 レスポンス、certificate・private_key・ca_certificate が含まれる</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">IT-PROV-02</div>
+        <div class="test-desc">上限台数を超えた登録がエラーになること</div>
+        <div class="test-expected">期待: 403 "Device limit reached"</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">IT-PROV-03</div>
+        <div class="test-desc">同一デバイス ID の二重登録が 409 になること</div>
+        <div class="test-expected">期待: 409 "Device already registered"</div>
+        <div class="test-priority"><span class="badge badge-warn">推奨</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-ok">E2E</span> テレメトリパイプライン</h3>
+      <div class="test-item">
+        <div class="test-id">IT-TEL-01</div>
+        <div class="test-desc">MQTT デバイスが Publish したメッセージが InfluxDB に格納されること</div>
+        <div class="test-expected">期待: Flux クエリで該当 measurement が返る</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">IT-TEL-02</div>
+        <div class="test-desc">テナント A のデータがテナント B の org に混入しないこと</div>
+        <div class="test-expected">期待: テナント B のトークンで A のデータが取得できない</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-ok">E2E</span> アラート通知</h3>
+      <div class="test-item">
+        <div class="test-id">IT-ALERT-01</div>
+        <div class="test-desc">閾値を超えるテレメトリが格納された場合にメールが配信されること</div>
+        <div class="test-expected">期待: MailHog Web UI (:8025) に受信メールが表示される</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">IT-ALERT-02</div>
+        <div class="test-desc">device_offline アラートが DEVICE_OFFLINE_THRESHOLD_SEC 経過後に発火すること</div>
+        <div class="test-expected">期待: 指定秒数後にアラートメールが届く</div>
+        <div class="test-priority"><span class="badge badge-warn">推奨</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>セキュリティ試験観点</h2></div>
+    <div class="test-group">
+      <h3><span class="badge badge-danger">SEC</span> 認証・レート制限</h3>
+      <div class="test-item">
+        <div class="test-id">SEC-01</div>
+        <div class="test-desc">ログインを 5 回連続で失敗すると次のリクエストが 429 になること</div>
+        <div class="test-expected">期待: 6 回目の POST /auth/login → 429 Too Many Requests</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-02</div>
+        <div class="test-desc">ログイン成功後にカウンターがリセットされ、再度失敗カウントが開始されること</div>
+        <div class="test-expected">期待: 成功後の失敗は 401（429 ではない）</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-03</div>
+        <div class="test-desc">ログアウト後にリフレッシュトークンが無効化されること（JTI 失効）</div>
+        <div class="test-expected">期待: POST /auth/logout 後に同トークンで POST /auth/refresh → 401</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-04</div>
+        <div class="test-desc">トークンローテーション: 一度使用したリフレッシュトークンが再使用不可になること</div>
+        <div class="test-expected">期待: /auth/refresh 成功後、同トークンで再度 /auth/refresh → 401</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-05</div>
+        <div class="test-desc">パスワード変更後に旧リフレッシュトークンが無効になること（token_version）</div>
+        <div class="test-expected">期待: /auth/change-password 後に旧 refresh_token で /auth/refresh → 401</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-danger">SEC</span> インジェクション・パストラバーサル</h3>
+      <div class="test-item">
+        <div class="test-id">SEC-06</div>
+        <div class="test-desc">minio_key に ../../etc/passwd を含む JWT でダウンロードが拒否されること</div>
+        <div class="test-expected">期待: GET /firmware-download?token=… → 403</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-07</div>
+        <div class="test-desc">UUID 形式でない firmware_id でリクエストが 422 になること</div>
+        <div class="test-expected">期待: firmware_id="../../etc" → 422 Unprocessable Entity</td></div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-08</div>
+        <div class="test-desc">EMQX Webhook への不正シークレットリクエストが 403 になること</div>
+        <div class="test-expected">期待: X-Webhook-Secret ヘッダ不一致 → 403</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+    <div class="test-group">
+      <h3><span class="badge badge-danger">SEC</span> テナント分離</h3>
+      <div class="test-item">
+        <div class="test-id">SEC-09</div>
+        <div class="test-desc">テナント A の JWT でテナント B のデバイス情報にアクセスできないこと</div>
+        <div class="test-expected">期待: 403 または 404</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-10</div>
+        <div class="test-desc">Grafana の Auth Proxy が grafana-net 以外のサブネットからの X-WEBAUTH-USER を無視すること</div>
+        <div class="test-expected">期待: 外部からの直接 Grafana アクセスで 401 / ログインページにリダイレクト</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+      <div class="test-item">
+        <div class="test-id">SEC-11</div>
+        <div class="test-desc">viewer ロールのテナントユーザーが OTA 配信を実行できないこと</div>
+        <div class="test-expected">期待: viewer トークンで POST /me/devices/{id}/ota → 403</div>
+        <div class="test-priority"><span class="badge badge-danger">必須</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>性能試験観点</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>試験 ID</th><th>試験内容</th><th>合格基準</th><th>ツール</th></tr></thead>
+        <tbody>
+          <tr><td>PERF-01</td><td>テレメトリ取り込みスループット: 1,000 msg/sec を 5 分間継続</td><td>データ欠損率 &lt; 0.1%、InfluxDB 書き込みエラーなし</td><td>MQTT 負荷ツール (mqttloader など)</td></tr>
+          <tr><td>PERF-02</td><td>ログイン API 同時 100 リクエスト</td><td>P95 レスポンスタイム &lt; 300ms</td><td>k6 / wrk</td></tr>
+          <tr><td>PERF-03</td><td>Grafana ダッシュボード（30日データ）の初期描画</td><td>InfluxDB クエリ完了まで &lt; 5 秒</td><td>ブラウザ DevTools / k6</td></tr>
+          <tr><td>PERF-04</td><td>OTA ファームウェアダウンロード（100MB）の転送速度</td><td>最低 10 MB/sec（内部ネットワーク）</td><td>curl タイム計測</td></tr>
+          <tr><td>PERF-05</td><td>アラートサービスの評価サイクル時間（テナント 50 件、ルール 1,000 件）</td><td>EVAL_INTERVAL_SEC 以内に評価完了</td><td>ログ計測</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>回帰試験（自動化済み単体テスト）</h2></div>
+    <p>以下のテストファイルはコード変更のたびに自動実行し、全件パスを確認する。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>テストファイル</th><th>件数</th><th>カバー領域</th></tr></thead>
+        <tbody>
+          <tr><td><code>tests/test_auth.py</code></td><td>5</td><td>JWT 生成・検証・ログイン成否</td></tr>
+          <tr><td><code>tests/test_auth_service.py</code></td><td>2</td><td>トークン有効期限パラメータ</td></tr>
+          <tr><td><code>tests/test_rate_limiter.py</code></td><td>7</td><td>レート制限（ユニット・エンドポイント）</td></tr>
+          <tr><td><code>tests/test_token_revocation.py</code></td><td>12</td><td>JTI ブロックリスト・/refresh・/logout・token_version</td></tr>
+          <tr><td><code>tests/test_minio_client.py</code></td><td>5</td><td>minio_key バリデーション・トークンラウンドトリップ</td></tr>
+          <tr><td><code>tests/test_firmware.py</code></td><td>4</td><td>ファームウェアアップロード・OTA・ダウンロード</td></tr>
+          <tr><td><code>tests/test_tenant_auth.py</code></td><td>9</td><td>テナントログイン・JWT 検証・Auth Proxy 保護</td></tr>
+          <tr><td><code>tests/test_tenants.py</code></td><td>—</td><td>テナント CRUD</td></tr>
+          <tr><td><code>tests/test_emqx.py</code></td><td>—</td><td>EMQX Webhook 認証</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 4: シーケンス図 ==================== -->
+<section class="doc-section" id="tab-4">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Sequence Diagrams</div>
+    <h1 class="doc-title">リクエストシーケンス図</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>対象: 主要リクエストフロー</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>ログイン / レート制限フロー</h2></div>
+    <p>POST /auth/login — IP ベースのレート制限を経由してプラットフォームユーザーを認証する。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant A as core-api<br>/auth/login
+    participant RL as rate_limiter
+    participant DB as PostgreSQL
+
+    C->>A: POST /auth/login {email, password}
+    A->>RL: is_rate_limited("platform_login:{ip}")
+    alt ブロック中 (>= MAX_FAILURES)
+        RL-->>A: true
+        A-->>C: 429 Too Many Requests
+    else 制限なし
+        RL-->>A: false
+        A->>DB: SELECT WHERE email = ?
+        alt ユーザー不在 or 非アクティブ
+            DB-->>A: null
+            A->>RL: record_failure(key)
+            A-->>C: 401 Unauthorized
+        else パスワード不一致
+            DB-->>A: user
+            A->>RL: record_failure(key)
+            A-->>C: 401 Unauthorized
+        else 認証成功
+            DB-->>A: user
+            A->>RL: clear_failures(key)
+            A-->>C: 200 {access_token, refresh_token(jti, tok_ver)}
+        end
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>トークンリフレッシュ / JTI ローテーションフロー</h2></div>
+    <p>POST /auth/refresh — JTI ブロックリストと token_version の二重検証を行い、使用済み JTI を即座に失効させる。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant A as core-api<br>/auth/refresh
+    participant BL as token_blocklist
+    participant DB as PostgreSQL
+
+    C->>A: POST /auth/refresh {refresh_token}
+    A->>A: verify_token(refresh_token)
+    alt 署名不正 or 期限切れ or type != refresh
+        A-->>C: 401 Invalid refresh token
+    else 有効
+        A->>BL: is_revoked(jti)
+        alt 失効済み
+            BL-->>A: true
+            A-->>C: 401 Token has been revoked
+        else 有効
+            BL-->>A: false
+            A->>DB: SELECT user WHERE id = sub
+            alt ユーザー不在 or 非アクティブ
+                DB-->>A: null / inactive
+                A-->>C: 401 Invalid refresh token
+            else tok_ver 不一致
+                A->>A: payload.tok_ver != user.token_version
+                A-->>C: 401 Token has been revoked
+            else 全検証通過
+                A->>BL: revoke_jti(old_jti, remaining_ttl)
+                A->>A: 新 jti で access_token + refresh_token 生成
+                A-->>C: 200 {access_token, refresh_token}
+            end
+        end
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>ログアウトフロー</h2></div>
+    <p>POST /auth/logout — リフレッシュトークンの JTI を失効させ、Cookie を削除する。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant A as core-api<br>/auth/logout
+    participant BL as token_blocklist
+
+    C->>A: POST /auth/logout {refresh_token?}
+    opt refresh_token が提供された場合
+        A->>A: verify_token(refresh_token)
+        opt 有効なリフレッシュトークン
+            A->>BL: revoke_jti(jti, remaining_ttl)
+            BL-->>A: ok
+        end
+    end
+    A->>A: delete_cookie("iot_token", path="/")
+    A-->>C: 204 No Content
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>パスワード変更フロー</h2></div>
+    <p>POST /auth/change-password — token_version をインクリメントすることで、既存の全リフレッシュトークンを一括失効させる。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant C as Client
+    participant A as core-api<br>/auth/change-password
+    participant DB as PostgreSQL
+
+    C->>A: POST /auth/change-password {old_password, new_password}<br>Authorization: Bearer access_token
+    A->>A: verify_token(access_token)
+    alt トークン不正 or 期限切れ
+        A-->>C: 401 Unauthorized
+    else 有効
+        A->>DB: SELECT user WHERE id = sub
+        A->>A: bcrypt.verify(old_password, password_hash)
+        alt 旧パスワード不一致
+            A-->>C: 400 Incorrect current password
+        else 一致
+            A->>DB: UPDATE SET password_hash=new_hash,<br>token_version = token_version + 1
+            DB-->>A: ok
+            A-->>C: 200 Password changed successfully
+            note over C,DB: 以降 tok_ver=旧値の refresh_token は全て 401 になる
+        end
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>テレメトリ取り込みフロー</h2></div>
+    <p>デバイスが MQTT で送信したメッセージが EMQX Webhook 経由で ingestion-service に届き、テナント専用 InfluxDB org に書き込まれる。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant D as IoT Device
+    participant E as EMQX 5.x
+    participant I as ingestion-service<br>:8001
+    participant DB as PostgreSQL
+    participant IF as InfluxDB<br>(tenant org)
+
+    D->>E: MQTT Publish (mTLS :8883)<br>topic: tenant/{id}/sensor/data
+    E->>I: POST /ingest<br>X-Webhook-Secret: {HMAC}
+    I->>I: verify X-Webhook-Secret
+    alt シークレット不一致
+        I-->>E: 403 Forbidden
+    else 正常
+        I->>DB: SELECT tenant WHERE id = tenant_id
+        DB-->>I: {influxdb_org_id, influxdb_token}
+        I->>IF: Write Point (テナント専用トークン)<br>measurement=sensor, tags={device_id}, fields={...}
+        IF-->>I: 204 No Content
+        I-->>E: 200 OK
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>デバイスプロビジョニングフロー</h2></div>
+    <p>ブートストラップトークンで認証後、Step-CA が mTLS クライアント証明書を発行し、デバイスを PostgreSQL に登録する。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant D as IoT Device
+    participant A as core-api<br>/provision
+    participant DB as PostgreSQL
+    participant CA as Step-CA<br>(PKI)
+
+    D->>A: POST /provision<br>{bootstrap_token, device_id, csr}
+    A->>DB: SELECT provisioning_token WHERE token = ?
+    alt トークン無効 or 期限切れ
+        DB-->>A: null / expired
+        A-->>D: 401 Invalid token
+    else デバイス上限超過
+        DB-->>A: token (max_devices 超)
+        A-->>D: 403 Device limit reached
+    else
+        A->>DB: SELECT device WHERE device_id = ?
+        alt デバイス ID 重複
+            DB-->>A: existing device
+            A-->>D: 409 Device already registered
+        else 新規デバイス
+            A->>CA: POST /1.0/sign {csr, validity}
+            CA-->>A: {cert_pem, ca_cert}
+            A->>DB: INSERT devices (device_id, cert_not_after, ...)<br>UPDATE provisioning_tokens SET registered_count++
+            DB-->>A: ok
+            A-->>D: 201 {cert_pem, key_pem, ca_cert, mqtt_host}
+        end
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">07</span><h2>OTA 配信フロー</h2></div>
+    <p>署名付き JWT トークンで MinIO からのパストラバーサルを防ぎつつ、EMQX 経由でデバイスにダウンロード URL を通知する。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant OP as Operator
+    participant A as core-api
+    participant DB as PostgreSQL
+    participant E as EMQX 5.x
+    participant D as IoT Device
+    participant MN as MinIO
+
+    OP->>A: POST /devices/{did}/ota {firmware_id}
+    A->>DB: SELECT firmware WHERE id = firmware_id
+    DB-->>A: {minio_key, version}
+    A->>A: validate minio_key regex ^UUID/UUID$
+    alt 形式不正 (パストラバーサル防止)
+        A-->>OP: 422 Invalid firmware key
+    else 正常
+        A->>A: create_firmware_download_token(minio_key, exp=24h)
+        A->>E: MQTT Publish<br>topic: ota/{device_id}/command<br>{download_url, version, checksum}
+        E->>D: OTA コマンド配信
+        A-->>OP: 200 OTA command sent
+
+        D->>A: GET /firmware-download?token={jwt}
+        A->>A: verify JWT signature + expiry
+        A->>A: extract minio_key, validate ^UUID/UUID$
+        A->>MN: GET object (bucket=firmware, key=minio_key)
+        MN-->>A: firmware bytes (streaming)
+        A-->>D: 200 application/octet-stream (streaming)
+        D->>D: checksum 検証・適用
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">08</span><h2>アラート評価フロー</h2></div>
+    <p>alert-service のスケジューラが EVAL_INTERVAL_SEC 毎にテナントごとのルールを評価し、閾値超過でメールを送信する。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant S as alert-service<br>scheduler
+    participant DB as PostgreSQL
+    participant IF as InfluxDB<br>(tenant org)
+    participant MH as MailHog/SMTP
+
+    loop EVAL_INTERVAL_SEC 毎 (例: 60秒)
+        S->>DB: SELECT active tenants<br>(influxdb_org_id, influxdb_token)
+        loop 各テナント
+            S->>DB: SELECT alert_rules WHERE enabled = true
+            loop 各ルール
+                S->>IF: Flux query<br>(テナント専用トークン, last N points)
+                IF-->>S: センサー値リスト
+                S->>S: 条件評価<br>above / below / equal / device_offline
+                alt 閾値超過 (consecutive / duration 条件を満たす)
+                    S->>DB: INSERT alert_events<br>{rule_id, triggered_at, value}
+                    S->>MH: SMTP SEND<br>To: notify_emails<br>Subject: [severity] rule_name triggered
+                    MH-->>S: 250 OK
+                else 正常範囲
+                    note over S: スキップ
+                end
+            end
+        end
+    end
+</pre>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">09</span><h2>Grafana SSO フロー（Auth Proxy）</h2></div>
+    <p>nginx の /grafana/ リクエストを core-api の /auth/verify-jwt で検証後、X-WEBAUTH-USER ヘッダを注入して Grafana に転送する。アクセスは grafana-net (172.30.0.0/24) に制限される。</p>
+    <div class="seq-card">
+<pre class="mermaid">
+sequenceDiagram
+    participant B as Browser
+    participant N as nginx
+    participant A as core-api<br>/auth/verify-jwt
+    participant G as Grafana<br>(Auth Proxy)
+
+    B->>N: GET /grafana/... Cookie: iot_token=JWT
+    N->>A: GET /auth/verify-jwt<br>(auth_request サブリクエスト)
+    A->>A: verify_token(iot_token cookie)
+    alt トークン無効 or 期限切れ
+        A-->>N: 401
+        N-->>B: 302 Redirect /login
+    else 有効
+        A-->>N: 200<br>X-Auth-Email: user@example.com<br>X-Auth-Role: admin
+        N->>G: GET /grafana/...<br>X-WEBAUTH-USER: user@example.com<br>(grafana-net 172.30.0.0/24 経由)
+        G->>G: Auth Proxy 認証<br>(GF_AUTH_PROXY_WHITELIST 確認)
+        G-->>N: 200 dashboard HTML
+        N-->>B: 200 dashboard
+    end
+</pre>
+    </div>
+  </div>
+
+</section>
+
+</main>
+
+<script>
+function switchTab(idx) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.querySelectorAll('.doc-section').forEach((s, i) => s.classList.toggle('active', i === idx));
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+</script>
+</body>
+</html>
