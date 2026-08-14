@@ -296,33 +296,6 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process
     <div class="step">
       <div class="step-num step-num-win">5</div>
       <div class="step-body">
-        <div class="step-title">初期テナントを作成する</div>
-        <div class="step-desc">Swagger UI でプラットフォーム管理者としてログインし、最初のテナントを作成します。</div>
-        <div class="code-block">
-          <div class="code-header"><span class="code-lang">powershell — curl でテナント作成例</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre><span class="cmt"># 1. ログインしてトークン取得</span>
-$resp = Invoke-RestMethod -Uri http://localhost:8000/auth/login `
-    -Method Post -ContentType "application/json" `
-    -Body '{"email":"admin@example.com","password":"your_password"}'
-$token = $resp.access_token
-
-<span class="cmt"># 2. テナント作成</span>
-Invoke-RestMethod -Uri http://localhost:8000/tenants `
-    -Method Post -ContentType "application/json" `
-    -Headers @{Authorization="Bearer $token"} `
-    -Body '{"name":"My Tenant","slug":"my-tenant"}'</pre>
-        </div>
-        <div class="callout callout-ok">
-          <span class="callout-icon">✅</span>
-          <span class="callout-body"><strong>セットアップ完了:</strong> テナント作成後、プロビジョニングトークンを発行してデバイスを登録できます。詳細は <a href="http://localhost:8000/docs" style="color:var(--accent)">Swagger UI</a> を参照してください。</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- STEP 6 -->
-    <div class="step">
-      <div class="step-num step-num-win">6</div>
-      <div class="step-body">
         <div class="step-title">よく使うコマンド</div>
         <div class="code-block">
           <div class="code-header"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
@@ -442,31 +415,6 @@ cd iotpf-proto</pre>
 
     <div class="step">
       <div class="step-num step-num-mac">5</div>
-      <div class="step-body">
-        <div class="step-title">初期テナントを作成する</div>
-        <div class="code-block">
-          <div class="code-header"><span class="code-lang">bash — curl でテナント作成例</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre><span class="cmt"># 1. ログインしてトークン取得</span>
-TOKEN=$(curl -s -X POST http://localhost:8000/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"your_password"}' \
-  | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
-
-<span class="cmt"># 2. テナント作成</span>
-curl -X POST http://localhost:8000/tenants \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"name":"My Tenant","slug":"my-tenant"}'</pre>
-        </div>
-        <div class="callout callout-ok">
-          <span class="callout-icon">✅</span>
-          <span class="callout-body"><strong>セットアップ完了。</strong> プロビジョニングトークンを発行してデバイスを登録できます。</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="step">
-      <div class="step-num step-num-mac">6</div>
       <div class="step-body">
         <div class="step-title">よく使うコマンド</div>
         <div class="code-block">
