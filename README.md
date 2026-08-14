@@ -3,7 +3,7 @@
 
       ページ        URL                            
   トップ（ナビ）　　https://taz-szk.github.io/iotpf-proto/                   
-  インストール手順　https://taz-szk.github.io/iotpf-proto/install-guide.html
+  インストール手順　https://taz-szk.github.io/iotpf-proto/install-guide.html　　　　　　　　　
   ドキュメント　　　https://taz-szk.github.io/iotpf-proto/design.html        
  
 ## 免責事項 (Disclaimer)
