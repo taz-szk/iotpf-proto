@@ -107,6 +107,59 @@ step "Pulling Docker images (this may take a few minutes)..."
 docker compose pull
 ok "Images ready."
 
+# ---- bootstrap TLS certificates (Step-CA) ------------------------------------
+# nginx bind-mounts certs/server/server.crt and server.key. If those files don't
+# exist yet when `docker compose up -d` runs, Docker silently creates them as
+# empty directories instead, and nginx fails to start with a PEM parse error.
+# So the CA must come up and issue the server cert *before* the rest of the
+# stack starts.
+
+step "Bootstrapping TLS certificates (Step-CA)..."
+
+# shellcheck disable=SC1091
+source .env
+
+mkdir -p certs/ca certs/server step-ca/data
+
+docker compose up -d step-ca
+
+printf "    Waiting for Step-CA"
+MAX_RETRIES=20
+RETRIES=0
+until docker compose exec -T step-ca \
+  step ca health --ca-url=https://localhost:9000 \
+  --root=/home/step/certs/root_ca.crt &>/dev/null; do
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+        echo
+        fail "Step-CA did not become healthy (check: docker compose logs step-ca)."
+    fi
+    sleep 3
+    printf "."
+done
+echo -e " ${GREEN}healthy${NC}"
+
+docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
+
+docker compose exec -T step-ca \
+  step ca certificate \
+    "${PLATFORM_DOMAIN:-localhost}" \
+    /tmp/server.crt \
+    /tmp/server.key \
+    --ca-url=https://localhost:9000 \
+    --root=/home/step/certs/root_ca.crt \
+    --provisioner=iot-platform \
+    --provisioner-password-file=/home/step/secrets/password \
+    --not-after=24h \
+    --san="${PLATFORM_DOMAIN:-localhost}" \
+    --san=localhost \
+    --force
+
+docker compose cp step-ca:/tmp/server.crt certs/server/server.crt
+docker compose cp step-ca:/tmp/server.key certs/server/server.key
+
+ok "Server certificate issued for ${PLATFORM_DOMAIN:-localhost}."
+
 # ---- start services ---------------------------------------------------------
 
 step "Starting services..."

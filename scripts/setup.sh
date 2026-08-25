@@ -46,7 +46,7 @@ docker compose exec -T step-ca \
     --root=/home/step/certs/root_ca.crt \
     --provisioner=iot-platform \
     --provisioner-password-file=/home/step/secrets/password \
-    --not-after=8760h \
+    --not-after=24h \
     --san="${PLATFORM_DOMAIN}" \
     --san=localhost \
     --force
