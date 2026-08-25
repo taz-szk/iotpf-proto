@@ -206,19 +206,27 @@ echo -e "${CYAN}
   +---------------------------------------------------------+
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
-  Core API      http://localhost:8000/docs
-  Grafana       http://localhost:3000
-  EMQX          http://localhost:18083
-  MinIO         http://localhost:9001
-  MailHog       http://localhost:8025
-  InfluxDB      http://localhost:8086
+  Admin / Login  https://localhost/admin/
+  Grafana        https://localhost/grafana/  (behind admin login)
+  MailHog        http://localhost:8025
+  InfluxDB       http://localhost:8086
+
+  Core API, EMQX dashboard and MinIO console are internal-only
+  (not published to the host) — reach them via
+  'docker compose exec <service> ...' or the /api/ proxy above.
   +---------------------------------------------------------+
   Credentials are stored in .env (keep this file private)
   +---------------------------------------------------------+
 
+  The TLS certificate is issued by this project's own local CA
+  (certs/ca/root_ca.crt), so your browser will flag it as
+  untrusted. Trust it once via Keychain Access, or:
+    sudo security add-trusted-cert -d -r trustRoot \\
+      -k /Library/Keychains/System.keychain certs/ca/root_ca.crt
+
   Next steps:
-    1. Open http://localhost:8000/docs and create a tenant
-    2. Log in at http://localhost:3000 (admin / see .env)
+    1. Open https://localhost/admin/ and create a tenant
+    2. Log in (admin / see .env)
     3. Provision your first device using the bootstrap token
 
   To stop:      docker compose down
