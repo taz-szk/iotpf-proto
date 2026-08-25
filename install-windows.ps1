@@ -76,21 +76,27 @@ if (-not (Test-Path "docker-compose.yml")) {
 
 Write-Step "Checking Docker Desktop..."
 
-try {
-    $null = docker info 2>&1
-    if ($LASTEXITCODE -ne 0) { throw }
-    Write-OK "Docker is running."
-} catch {
+# 2>&1 は PowerShell 5.1 で NativeCommandError を生成し誤って catch に入るため使わない。
+# 起動直後は daemon が応答するまで少し時間がかかるので最大3回リトライする。
+$dockerReady = $false
+for ($i = 1; $i -le 3; $i++) {
+    docker info 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) { $dockerReady = $true; break }
+    if ($i -lt 3) {
+        Write-Warn "Docker daemon not responding yet (attempt $i/3). Retrying in 5 seconds..."
+        Start-Sleep -Seconds 5
+    }
+}
+if (-not $dockerReady) {
     Write-Fail "Docker is not running. Please start Docker Desktop and try again."
 }
+Write-OK "Docker is running."
 
-try {
-    $null = docker compose version 2>&1
-    if ($LASTEXITCODE -ne 0) { throw }
-    Write-OK "docker compose plugin found."
-} catch {
+docker compose version 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
     Write-Fail "docker compose not found. Please update Docker Desktop to 4.x or later."
 }
+Write-OK "docker compose plugin found."
 
 # ---- generate .env ----------------------------------------------------------
 
