@@ -69,6 +69,7 @@ else
     GRAFANA_PASS=$(rand_hex 16)
     JWT_SECRET=$(rand_hex 32)
     WEBHOOK_SECRET=$(rand_hex 32)
+    PLATFORM_ADMIN_PASS=$(rand_hex 16)
 
     sed \
         -e "s|changeme_strong_password|${PG_PASS}|" \
@@ -81,6 +82,7 @@ else
         -e "s|GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}|" \
         -e "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" \
         -e "s|EMQX_WEBHOOK_SECRET=.*|EMQX_WEBHOOK_SECRET=${WEBHOOK_SECRET}|" \
+        -e "s|PLATFORM_ADMIN_PASSWORD=.*|PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASS}|" \
         .env.example > .env
 
     ok ".env generated with random secrets."
@@ -90,16 +92,20 @@ else
     |  SAVE THESE CREDENTIALS                         |
     |  (also stored in .env — keep it out of git)     |
     +-------------------------------------------------+
-    PostgreSQL password : ${PG_PASS}
-    InfluxDB password   : ${INFLUX_PASS}
-    InfluxDB token      : ${INFLUX_TOKEN}
-    EMQX dashboard      : ${EMQX_PASS}
-    MinIO password      : ${MINIO_PASS}
-    Grafana password    : ${GRAFANA_PASS}
-    JWT secret          : ${JWT_SECRET}
+    PostgreSQL password  : ${PG_PASS}
+    InfluxDB password    : ${INFLUX_PASS}
+    InfluxDB token       : ${INFLUX_TOKEN}
+    EMQX dashboard       : ${EMQX_PASS}
+    MinIO password       : ${MINIO_PASS}
+    Grafana password     : ${GRAFANA_PASS}
+    JWT secret           : ${JWT_SECRET}
+    Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
     +-------------------------------------------------+${NC}
 "
 fi
+
+# shellcheck disable=SC1091
+source .env
 
 # ---- pull images ------------------------------------------------------------
 
@@ -115,9 +121,6 @@ ok "Images ready."
 # stack starts.
 
 step "Bootstrapping TLS certificates (Step-CA)..."
-
-# shellcheck disable=SC1091
-source .env
 
 mkdir -p certs/ca certs/server step-ca/data
 
@@ -200,6 +203,36 @@ for svc in postgres influxdb step-ca emqx core-api; do
     wait_healthy "$svc" || true
 done
 
+# ---- bootstrap platform admin account ----------------------------------------
+# platform_users starts empty — nothing else creates the first login. Seed one
+# via core-api's own DB session/hasher so the hash format always matches what
+# /auth/login verifies against. Skips if an account with this email exists
+# already, so re-running the installer never resets a real admin's password.
+
+step "Bootstrapping platform admin account..."
+
+docker compose exec -T \
+  -e PLATFORM_ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-admin@platform.local}" \
+  -e PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD}" \
+  core-api python3 - <<'PYEOF'
+import os
+from app.database import SessionLocal
+from app.models.public import PlatformUser
+from app.services.auth import hash_password
+
+email = os.environ["PLATFORM_ADMIN_EMAIL"]
+password = os.environ["PLATFORM_ADMIN_PASSWORD"]
+with SessionLocal() as db:
+    if db.query(PlatformUser).filter(PlatformUser.email == email).first():
+        print(f"[skip] platform admin {email} already exists")
+    else:
+        db.add(PlatformUser(email=email, password_hash=hash_password(password)))
+        db.commit()
+        print(f"[ok] created platform admin {email}")
+PYEOF
+
+ok "Platform admin ready (${PLATFORM_ADMIN_EMAIL:-admin@platform.local})."
+
 # ---- done -------------------------------------------------------------------
 
 echo -e "${CYAN}
@@ -207,6 +240,7 @@ echo -e "${CYAN}
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
   Admin / Login  https://localhost/admin/
+                 ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} / see PLATFORM_ADMIN_PASSWORD in .env
   Grafana        https://localhost/grafana/  (behind admin login)
   MailHog        http://localhost:8025
   InfluxDB       http://localhost:8086
@@ -225,8 +259,9 @@ echo -e "${CYAN}
       -k /Library/Keychains/System.keychain certs/ca/root_ca.crt
 
   Next steps:
-    1. Open https://localhost/admin/ and create a tenant
-    2. Log in (admin / see .env)
+    1. Open https://localhost/admin/ and log in as
+       ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} (password in .env)
+    2. Create a tenant
     3. Provision your first device using the bootstrap token
 
   To stop:      docker compose down

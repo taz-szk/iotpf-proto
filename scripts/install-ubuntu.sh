@@ -167,6 +167,7 @@ generate_env() {
   local stepca_pass;  stepca_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local grafana_pass; grafana_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local influx_pass;  influx_pass=$(openssl rand -base64 18 | tr -d '+/=')
+  local admin_pass;   admin_pass=$(openssl rand -base64 18 | tr -d '+/=')
 
   cat > "$PROJECT_DIR/.env" <<EOF
 # install-ubuntu.sh が $(date -u +"%Y-%m-%dT%H:%M:%SZ") に自動生成
@@ -204,6 +205,10 @@ GRAFANA_ADMIN_PASSWORD=${grafana_pass}
 
 # Core API
 JWT_SECRET=${jwt_secret}
+
+# Platform Admin (initial login at /admin/)
+PLATFORM_ADMIN_EMAIL=admin@${PLATFORM_DOMAIN}
+PLATFORM_ADMIN_PASSWORD=${admin_pass}
 
 # Alert Service — SMTP（デフォルトは MailHog で受信確認）
 SMTP_HOST=mailhog
@@ -265,6 +270,42 @@ start_services() {
   done
 }
 
+# ─── プラットフォーム管理者アカウント ─────────────────────
+# platform_users テーブルは空のまま作られるだけで、最初のログインアカウントを
+# 作る処理がどこにもない。core-api 自身の DB セッション/ハッシュ関数を使って
+# 1件だけ作成する（/auth/login の検証と同じハッシュ形式になることを保証するため）。
+# 既に同じメールのアカウントがあれば何もしない（再実行時にパスワードを壊さない）。
+bootstrap_platform_admin() {
+  log_step "プラットフォーム管理者アカウントを準備中"
+  cd "$PROJECT_DIR"
+
+  local admin_email admin_pass
+  admin_email=$(grep ^PLATFORM_ADMIN_EMAIL "$PROJECT_DIR/.env" | cut -d= -f2-)
+  admin_pass=$(grep ^PLATFORM_ADMIN_PASSWORD "$PROJECT_DIR/.env" | cut -d= -f2-)
+
+  $DOCKER compose exec -T \
+    -e PLATFORM_ADMIN_EMAIL="${admin_email}" \
+    -e PLATFORM_ADMIN_PASSWORD="${admin_pass}" \
+    core-api python3 - <<'PYEOF'
+import os
+from app.database import SessionLocal
+from app.models.public import PlatformUser
+from app.services.auth import hash_password
+
+email = os.environ["PLATFORM_ADMIN_EMAIL"]
+password = os.environ["PLATFORM_ADMIN_PASSWORD"]
+with SessionLocal() as db:
+    if db.query(PlatformUser).filter(PlatformUser.email == email).first():
+        print(f"[skip] platform admin {email} already exists")
+    else:
+        db.add(PlatformUser(email=email, password_hash=hash_password(password)))
+        db.commit()
+        print(f"[ok] created platform admin {email}")
+PYEOF
+
+  log_ok "プラットフォーム管理者: ${admin_email}"
+}
+
 # ─── EMQX ルール設定 ──────────────────────────────────────
 setup_emqx_rules() {
   log_step "EMQX ルールエンジンを設定中"
@@ -300,20 +341,25 @@ setup_simulator() {
 
 # ─── 完了メッセージ ───────────────────────────────────────
 print_summary() {
-  # EMQX パスワードを .env から再取得（表示用）
-  local emqx_pass
+  # 表示用に .env から再取得
+  local emqx_pass admin_email
   emqx_pass=$(grep ^EMQX_DASHBOARD_PASSWORD "$PROJECT_DIR/.env" | cut -d= -f2)
+  admin_email=$(grep ^PLATFORM_ADMIN_EMAIL "$PROJECT_DIR/.env" | cut -d= -f2-)
 
   echo ""
   echo -e "${BOLD}${GREEN}╔══════════════════════════════════════════════╗${NC}"
   echo -e "${BOLD}${GREEN}║   IoT Platform セットアップ完了               ║${NC}"
   echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${BOLD}Admin UI${NC}          https://${PLATFORM_DOMAIN}/"
-  echo -e "  ${BOLD}Grafana${NC}           https://${PLATFORM_DOMAIN}/grafana/"
-  echo -e "  ${BOLD}EMQX Dashboard${NC}    http://localhost:18083"
+  echo -e "  ${BOLD}Admin UI${NC}          https://${PLATFORM_DOMAIN}/admin/"
+  echo -e "                    ログイン: ${admin_email} (パスワードは .env の PLATFORM_ADMIN_PASSWORD)"
+  echo -e "  ${BOLD}Grafana${NC}           https://${PLATFORM_DOMAIN}/grafana/ (Admin UI ログイン後)"
   echo -e "  ${BOLD}MailHog${NC}           http://localhost:8025"
   echo -e "  ${BOLD}MQTT Broker${NC}       mqtts://localhost:8883"
+  echo ""
+  echo -e "  ${YELLOW}▸ EMQX Dashboard はホストに公開されていません（内部ネットワークのみ）:${NC}"
+  echo -e "    docker compose exec emqx emqx_ctl ... で操作するか、"
+  echo -e "    一時的に 18083 を publish してアクセスしてください。"
   echo ""
   echo -e "  ${YELLOW}▸ EMQX 手動設定が必要です:${NC}"
   echo -e "    ダッシュボード (admin / ${emqx_pass}) → Rules"
@@ -347,6 +393,7 @@ main() {
   setup_hosts
   run_setup_certs
   start_services
+  bootstrap_platform_admin
   setup_emqx_rules
   $WITH_SIMULATOR && setup_simulator || true
   print_summary

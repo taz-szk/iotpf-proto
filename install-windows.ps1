@@ -41,6 +41,18 @@ function New-RandomBase64([int]$byteCount) {
     [System.Convert]::ToBase64String($buf) -replace '[+/=]', '_'
 }
 
+function Import-DotEnv([string]$path) {
+    $vars = @{}
+    Get-Content $path | ForEach-Object {
+        $line = $_.Trim()
+        if ($line -eq '' -or $line.StartsWith('#')) { return }
+        $idx = $line.IndexOf('=')
+        if ($idx -lt 1) { return }
+        $vars[$line.Substring(0, $idx)] = $line.Substring($idx + 1)
+    }
+    return $vars
+}
+
 # ---- banner -----------------------------------------------------------------
 
 Write-Host @"
@@ -102,6 +114,7 @@ if (Test-Path ".env") {
     $grafanaPass  = New-RandomHex 16
     $jwtSecret    = New-RandomHex 32
     $webhookSecret = New-RandomHex 32
+    $platformAdminPass = New-RandomHex 16
 
     $env_content = Get-Content ".env.example" -Raw
     $env_content = $env_content -replace 'changeme_strong_password(?=\r?\nINFLUXDB_ADMIN_PASSWORD)', $pgPass
@@ -115,6 +128,7 @@ if (Test-Path ".env") {
     $env_content = $env_content -replace '(GRAFANA_ADMIN_PASSWORD=)changeme_strong_password', "`${1}$grafanaPass"
     $env_content = $env_content -replace '(JWT_SECRET=)changeme_jwt_secret_min_32_characters_replace_in_prod', "`${1}$jwtSecret"
     $env_content = $env_content -replace '(EMQX_WEBHOOK_SECRET=)changeme_webhook_secret_min_32_characters_replace_in_prod', "`${1}$webhookSecret"
+    $env_content = $env_content -replace '(PLATFORM_ADMIN_PASSWORD=)changeme_platform_admin_password', "`${1}$platformAdminPass"
 
     # SMTP: keep as-is (users configure their own SMTP)
     $env_content | Set-Content ".env" -Encoding UTF8
@@ -126,16 +140,24 @@ if (Test-Path ".env") {
     |  SAVE THESE CREDENTIALS                         |
     |  (also stored in .env — keep it out of git)     |
     +-------------------------------------------------+
-    PostgreSQL password : $pgPass
-    InfluxDB password   : $influxPass
-    InfluxDB token      : $influxToken
-    EMQX dashboard      : $emqxPass
-    MinIO password      : $minioPass
-    Grafana password    : $grafanaPass
-    JWT secret          : $jwtSecret
+    PostgreSQL password  : $pgPass
+    InfluxDB password    : $influxPass
+    InfluxDB token       : $influxToken
+    EMQX dashboard       : $emqxPass
+    MinIO password       : $minioPass
+    Grafana password     : $grafanaPass
+    JWT secret           : $jwtSecret
+    Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
     +-------------------------------------------------+
 "@ -ForegroundColor Yellow
 }
+
+$envVars = Import-DotEnv ".env"
+$platformDomain = $envVars['PLATFORM_DOMAIN']
+if ([string]::IsNullOrWhiteSpace($platformDomain)) { $platformDomain = 'localhost' }
+$adminEmail = $envVars['PLATFORM_ADMIN_EMAIL']
+if ([string]::IsNullOrWhiteSpace($adminEmail)) { $adminEmail = 'admin@platform.local' }
+$adminPassword = $envVars['PLATFORM_ADMIN_PASSWORD']
 
 # ---- pull images ------------------------------------------------------------
 
@@ -143,6 +165,54 @@ Write-Step "Pulling Docker images (this may take a few minutes)..."
 docker compose pull
 if ($LASTEXITCODE -ne 0) { Write-Fail "docker compose pull failed." }
 Write-OK "Images ready."
+
+# ---- bootstrap TLS certificates (Step-CA) ------------------------------------
+# nginx bind-mounts certs/server/server.crt and server.key. If those files don't
+# exist yet when `docker compose up -d` runs, Docker silently creates them as
+# empty directories instead, and nginx fails to start with a PEM parse error.
+# So the CA must come up and issue the server cert *before* the rest of the
+# stack starts.
+
+Write-Step "Bootstrapping TLS certificates (Step-CA)..."
+
+New-Item -ItemType Directory -Force -Path "certs/ca", "certs/server", "step-ca/data" | Out-Null
+
+docker compose up -d step-ca
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to start step-ca." }
+
+Write-Host "    Waiting for Step-CA" -NoNewline
+$maxRetries = 20
+$retries = 0
+while ($true) {
+    docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt *> $null
+    if ($LASTEXITCODE -eq 0) { break }
+    $retries++
+    if ($retries -ge $maxRetries) {
+        Write-Host ""
+        Write-Fail "Step-CA did not become healthy (check: docker compose logs step-ca)."
+    }
+    Start-Sleep -Seconds 3
+    Write-Host "." -NoNewline
+}
+Write-Host " healthy" -ForegroundColor Green
+
+docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
+
+docker compose exec -T step-ca step ca certificate $platformDomain /tmp/server.crt /tmp/server.key `
+    --ca-url=https://localhost:9000 `
+    --root=/home/step/certs/root_ca.crt `
+    --provisioner=iot-platform `
+    --provisioner-password-file=/home/step/secrets/password `
+    --not-after=24h `
+    --san=$platformDomain `
+    --san=localhost `
+    --force
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to issue server certificate." }
+
+docker compose cp step-ca:/tmp/server.crt certs/server/server.crt
+docker compose cp step-ca:/tmp/server.key certs/server/server.key
+
+Write-OK "Server certificate issued for $platformDomain."
 
 # ---- start services ---------------------------------------------------------
 
@@ -178,6 +248,36 @@ foreach ($svc in $services) {
 
 Write-Host ""
 
+# ---- bootstrap platform admin account ----------------------------------------
+# platform_users starts empty — nothing else creates the first login. Seed one
+# via core-api's own DB session/hasher so the hash format always matches what
+# /auth/login verifies against. Skips if an account with this email exists
+# already, so re-running the installer never resets a real admin's password.
+
+Write-Step "Bootstrapping platform admin account..."
+
+$pyScript = @'
+import os
+from app.database import SessionLocal
+from app.models.public import PlatformUser
+from app.services.auth import hash_password
+
+email = os.environ["PLATFORM_ADMIN_EMAIL"]
+password = os.environ["PLATFORM_ADMIN_PASSWORD"]
+with SessionLocal() as db:
+    if db.query(PlatformUser).filter(PlatformUser.email == email).first():
+        print(f"[skip] platform admin {email} already exists")
+    else:
+        db.add(PlatformUser(email=email, password_hash=hash_password(password)))
+        db.commit()
+        print(f"[ok] created platform admin {email}")
+'@
+
+$pyScript | docker compose exec -T -e "PLATFORM_ADMIN_EMAIL=$adminEmail" -e "PLATFORM_ADMIN_PASSWORD=$adminPassword" core-api python3 -
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to bootstrap platform admin account." }
+
+Write-OK "Platform admin ready ($adminEmail)."
+
 # ---- done -------------------------------------------------------------------
 
 Write-Host @"
@@ -185,19 +285,29 @@ Write-Host @"
   +---------------------------------------------------------+
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
-  Core API      http://localhost:8000/docs
-  Grafana       http://localhost:3000
-  EMQX          http://localhost:18083
-  MinIO         http://localhost:9001
-  MailHog       http://localhost:8025
-  InfluxDB      http://localhost:8086
+  Admin / Login  https://localhost/admin/
+                 $adminEmail / see PLATFORM_ADMIN_PASSWORD in .env
+  Grafana        https://localhost/grafana/  (behind admin login)
+  MailHog        http://localhost:8025
+  InfluxDB       http://localhost:8086
+
+  Core API, EMQX dashboard and MinIO console are internal-only
+  (not published to the host) - reach them via
+  'docker compose exec <service> ...' or the /api/ proxy above.
   +---------------------------------------------------------+
   Credentials are stored in .env (keep this file private)
   +---------------------------------------------------------+
 
+  The TLS certificate is issued by this project's own local CA
+  (certs\ca\root_ca.crt), so your browser will flag it as
+  untrusted. Trust it once (run PowerShell as Administrator):
+    certutil -addstore -f "ROOT" certs\ca\root_ca.crt
+  (Chrome/Edge may need a restart to pick up the new trust store)
+
   Next steps:
-    1. Open http://localhost:8000/docs and create a tenant
-    2. Log in at http://localhost:3000 (admin / see .env)
+    1. Open https://localhost/admin/ and log in as
+       $adminEmail (password in .env)
+    2. Create a tenant
     3. Provision your first device using the bootstrap token
 
   To stop:   docker compose down

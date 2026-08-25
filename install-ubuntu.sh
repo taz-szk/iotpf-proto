@@ -77,6 +77,7 @@ else
     GRAFANA_PASS=$(rand_hex 16)
     JWT_SECRET=$(rand_hex 32)
     WEBHOOK_SECRET=$(rand_hex 32)
+    PLATFORM_ADMIN_PASS=$(rand_hex 16)
 
     sed \
         -e "s|changeme_strong_password|${PG_PASS}|" \
@@ -89,6 +90,7 @@ else
         -e "s|GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}|" \
         -e "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" \
         -e "s|EMQX_WEBHOOK_SECRET=.*|EMQX_WEBHOOK_SECRET=${WEBHOOK_SECRET}|" \
+        -e "s|PLATFORM_ADMIN_PASSWORD=.*|PLATFORM_ADMIN_PASSWORD=${PLATFORM_ADMIN_PASS}|" \
         .env.example > .env
 
     # Secure .env (readable by owner only)
@@ -100,22 +102,76 @@ else
     |  SAVE THESE CREDENTIALS                         |
     |  (also stored in .env — keep it out of git)     |
     +-------------------------------------------------+
-    PostgreSQL password : ${PG_PASS}
-    InfluxDB password   : ${INFLUX_PASS}
-    InfluxDB token      : ${INFLUX_TOKEN}
-    EMQX dashboard      : ${EMQX_PASS}
-    MinIO password      : ${MINIO_PASS}
-    Grafana password    : ${GRAFANA_PASS}
-    JWT secret          : ${JWT_SECRET}
+    PostgreSQL password  : ${PG_PASS}
+    InfluxDB password    : ${INFLUX_PASS}
+    InfluxDB token       : ${INFLUX_TOKEN}
+    EMQX dashboard       : ${EMQX_PASS}
+    MinIO password       : ${MINIO_PASS}
+    Grafana password     : ${GRAFANA_PASS}
+    JWT secret           : ${JWT_SECRET}
+    Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
     +-------------------------------------------------+${NC}
 "
 fi
+
+# shellcheck disable=SC1091
+source .env
 
 # ---- pull images ------------------------------------------------------------
 
 step "Pulling Docker images (this may take a few minutes)..."
 docker compose pull
 ok "Images ready."
+
+# ---- bootstrap TLS certificates (Step-CA) ------------------------------------
+# nginx bind-mounts certs/server/server.crt and server.key. If those files don't
+# exist yet when `docker compose up -d` runs, Docker silently creates them as
+# empty directories instead, and nginx fails to start with a PEM parse error.
+# So the CA must come up and issue the server cert *before* the rest of the
+# stack starts.
+
+step "Bootstrapping TLS certificates (Step-CA)..."
+
+mkdir -p certs/ca certs/server step-ca/data
+
+docker compose up -d step-ca
+
+printf "    Waiting for Step-CA"
+MAX_RETRIES=20
+RETRIES=0
+until docker compose exec -T step-ca \
+  step ca health --ca-url=https://localhost:9000 \
+  --root=/home/step/certs/root_ca.crt &>/dev/null; do
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge "$MAX_RETRIES" ]; then
+        echo
+        fail "Step-CA did not become healthy (check: docker compose logs step-ca)."
+    fi
+    sleep 3
+    printf "."
+done
+echo -e " ${GREEN}healthy${NC}"
+
+docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
+
+docker compose exec -T step-ca \
+  step ca certificate \
+    "${PLATFORM_DOMAIN:-localhost}" \
+    /tmp/server.crt \
+    /tmp/server.key \
+    --ca-url=https://localhost:9000 \
+    --root=/home/step/certs/root_ca.crt \
+    --provisioner=iot-platform \
+    --provisioner-password-file=/home/step/secrets/password \
+    --not-after=24h \
+    --san="${PLATFORM_DOMAIN:-localhost}" \
+    --san=localhost \
+    --force
+
+docker compose cp step-ca:/tmp/server.crt certs/server/server.crt
+docker compose cp step-ca:/tmp/server.key certs/server/server.key
+
+ok "Server certificate issued for ${PLATFORM_DOMAIN:-localhost}."
 
 # ---- start services ---------------------------------------------------------
 
@@ -157,25 +213,67 @@ for svc in postgres influxdb step-ca emqx core-api; do
     wait_healthy "$svc" || true
 done
 
+# ---- bootstrap platform admin account ----------------------------------------
+# platform_users starts empty — nothing else creates the first login. Seed one
+# via core-api's own DB session/hasher so the hash format always matches what
+# /auth/login verifies against. Skips if an account with this email exists
+# already, so re-running the installer never resets a real admin's password.
+
+step "Bootstrapping platform admin account..."
+
+docker compose exec -T \
+  -e PLATFORM_ADMIN_EMAIL="${PLATFORM_ADMIN_EMAIL:-admin@platform.local}" \
+  -e PLATFORM_ADMIN_PASSWORD="${PLATFORM_ADMIN_PASSWORD}" \
+  core-api python3 - <<'PYEOF'
+import os
+from app.database import SessionLocal
+from app.models.public import PlatformUser
+from app.services.auth import hash_password
+
+email = os.environ["PLATFORM_ADMIN_EMAIL"]
+password = os.environ["PLATFORM_ADMIN_PASSWORD"]
+with SessionLocal() as db:
+    if db.query(PlatformUser).filter(PlatformUser.email == email).first():
+        print(f"[skip] platform admin {email} already exists")
+    else:
+        db.add(PlatformUser(email=email, password_hash=hash_password(password)))
+        db.commit()
+        print(f"[ok] created platform admin {email}")
+PYEOF
+
+ok "Platform admin ready (${PLATFORM_ADMIN_EMAIL:-admin@platform.local})."
+
 # ---- done -------------------------------------------------------------------
 
 echo -e "${CYAN}
   +---------------------------------------------------------+
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
-  Core API      http://localhost:8000/docs
-  Grafana       http://localhost:3000
-  EMQX          http://localhost:18083
-  MinIO         http://localhost:9001
-  MailHog       http://localhost:8025
-  InfluxDB      http://localhost:8086
+  Admin / Login  https://localhost/admin/
+                 ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} / see PLATFORM_ADMIN_PASSWORD in .env
+  Grafana        https://localhost/grafana/  (behind admin login)
+  MailHog        http://localhost:8025
+  InfluxDB       http://localhost:8086
+
+  Core API, EMQX dashboard and MinIO console are internal-only
+  (not published to the host) — reach them via
+  'docker compose exec <service> ...' or the /api/ proxy above.
   +---------------------------------------------------------+
   Credentials are stored in .env (chmod 600, keep it private)
   +---------------------------------------------------------+
 
+  The TLS certificate is issued by this project's own local CA
+  (certs/ca/root_ca.crt), so your browser will flag it as
+  untrusted. Trust it once system-wide, or:
+    sudo cp certs/ca/root_ca.crt /usr/local/share/ca-certificates/iot-platform-ca.crt
+    sudo update-ca-certificates
+  (Chrome/Firefox may need the cert imported into their own trust
+  store too — see chrome://settings/certificates or about:preferences#privacy)
+
   Next steps:
-    1. Open http://localhost:8000/docs and create a tenant
-    2. Log in at http://localhost:3000 (admin / see .env)
+    1. Open https://localhost/admin/ and log in as
+       ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} (password in .env)
+    2. Create a tenant
     3. Provision your first device using the bootstrap token
 
   To stop:      docker compose down
