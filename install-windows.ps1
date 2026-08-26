@@ -102,10 +102,12 @@ Write-OK "docker compose plugin found."
 
 Write-Step "Setting up environment file..."
 
+$envGenerated = $false
 if (Test-Path ".env") {
     Write-Warn ".env already exists. Skipping generation (using existing file)."
     Write-Warn "Delete .env and re-run to regenerate secrets."
 } else {
+    $envGenerated = $true
     if (-not (Test-Path ".env.example")) {
         Write-Fail ".env.example not found."
     }
@@ -156,6 +158,24 @@ if (Test-Path ".env") {
     Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
     +-------------------------------------------------+
 "@ -ForegroundColor Yellow
+}
+
+# 新しい .env を生成したのに既存の postgres データボリュームが残っていると
+# パスワード不一致で認証エラーになる。早期に検出して案内する。
+if ($envGenerated) {
+    $pgVolumeName = "iot-platform_postgres_data"
+    $existingVol = docker volume ls --format "{{.Name}}" 2>$null | Where-Object { $_ -eq $pgVolumeName }
+    if ($existingVol) {
+        Write-Fail @"
+Postgres データボリューム ($pgVolumeName) が既に存在しています。
+新しい .env を生成したため、ボリューム内のパスワードと一致しません。
+
+古いデータを削除してから再実行してください:
+  docker compose down -v
+  Remove-Item .env
+  .\install-windows.ps1
+"@
+    }
 }
 
 $envVars = Import-DotEnv ".env"
