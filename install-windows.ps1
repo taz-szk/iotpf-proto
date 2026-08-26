@@ -323,13 +323,13 @@ with SessionLocal() as db:
 $tmpScript = Join-Path $env:TEMP "iotplatform_bootstrap.py"
 [System.IO.File]::WriteAllText($tmpScript, $bootstrapScript, [System.Text.Encoding]::UTF8)
 
-docker compose cp $tmpScript "core-api:/tmp/bootstrap_admin.py"
+docker compose cp $tmpScript "core-api:/app/bootstrap_admin.py"
 Remove-Item $tmpScript -ErrorAction SilentlyContinue
 
 docker compose exec -T `
     -e "PLATFORM_ADMIN_EMAIL=$adminEmail" `
     -e "PLATFORM_ADMIN_PASSWORD=$adminPassword" `
-    core-api python3 /tmp/bootstrap_admin.py
+    core-api python3 /app/bootstrap_admin.py
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to bootstrap platform admin account." }
 
 Write-OK "Platform admin ready ($adminEmail)."
