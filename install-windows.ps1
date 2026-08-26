@@ -262,8 +262,29 @@ Write-Host ""
 
 Write-Step "Bootstrapping platform admin account..."
 
-$pyScript = @'
-import os
+# core-api が healthy になるまで待機（最大 120 秒）。
+# 上の health check ループは共有タイムアウトのため core-api が間に合わない場合がある。
+Write-Host "    Waiting for core-api to be ready..." -NoNewline
+$coreApiDeadline = (Get-Date).AddSeconds(120)
+$coreApiReady = $false
+while ((Get-Date) -lt $coreApiDeadline) {
+    $caStatus = docker inspect --format='{{.State.Health.Status}}' core-api 2>$null
+    if ($caStatus -eq 'healthy') { $coreApiReady = $true; break }
+    $caState = docker inspect --format='{{.State.Status}}' core-api 2>$null
+    if ($caState -eq 'exited') { break }
+    Start-Sleep -Seconds 3
+    Write-Host "." -NoNewline
+}
+Write-Host ""
+if (-not $coreApiReady) {
+    Write-Fail "core-api did not become healthy. Check: docker compose logs core-api"
+}
+Write-OK "core-api is healthy."
+
+# PowerShell 5.1 では stdin パイプ経由の docker compose exec が不安定なため、
+# スクリプトをファイルに書き出してコンテナにコピーしてから実行する。
+$bootstrapScript = @'
+import os, sys
 from app.database import SessionLocal
 from app.models.public import PlatformUser
 from app.services.auth import hash_password
@@ -279,7 +300,16 @@ with SessionLocal() as db:
         print(f"[ok] created platform admin {email}")
 '@
 
-$pyScript | docker compose exec -T -e "PLATFORM_ADMIN_EMAIL=$adminEmail" -e "PLATFORM_ADMIN_PASSWORD=$adminPassword" core-api python3 -
+$tmpScript = Join-Path $env:TEMP "iotplatform_bootstrap.py"
+[System.IO.File]::WriteAllText($tmpScript, $bootstrapScript, [System.Text.Encoding]::UTF8)
+
+docker compose cp $tmpScript "core-api:/tmp/bootstrap_admin.py"
+Remove-Item $tmpScript -ErrorAction SilentlyContinue
+
+docker compose exec -T `
+    -e "PLATFORM_ADMIN_EMAIL=$adminEmail" `
+    -e "PLATFORM_ADMIN_PASSWORD=$adminPassword" `
+    core-api python3 /tmp/bootstrap_admin.py
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to bootstrap platform admin account." }
 
 Write-OK "Platform admin ready ($adminEmail)."
