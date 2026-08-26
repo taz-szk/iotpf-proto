@@ -1,0 +1,1018 @@
+<title>IOTAir-X</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --bg:       #060E1C;
+  --bg2:      #0B1628;
+  --surf:     #0F1E3C;
+  --surf2:    #162644;
+  --border:   rgba(46,126,245,0.18);
+  --accent:   #2E7EF5;
+  --accentlo: rgba(46,126,245,0.12);
+  --cyan:     #00C6FF;
+  --green:    #22C55E;
+  --orange:   #FF6B35;
+  --red:      #EF4444;
+  --text:     #E2EEFF;
+  --textm:    #6B92C0;
+  --textd:    #2C4A72;
+  --ui-bg:    #FFFFFF;
+  --ui-b:     #E2E8F0;
+  --ui-t:     #1E293B;
+  --ui-tm:    #64748B;
+  --ui-acc:   #2563EB;
+  --ui-acc2:  #EFF6FF;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'IBM Plex Sans',sans-serif}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+#player{position:fixed;inset:0;display:flex;flex-direction:column}
+#scenes{flex:1;position:relative;overflow:hidden}
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;padding:28px 40px 20px;opacity:0;pointer-events:none;transition:opacity .4s ease}
+.scene.active{opacity:1;pointer-events:auto}
+
+.eyebrow{font-family:'Barlow Condensed',sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.15em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+.scene-title{font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;line-height:1.1;color:var(--text);margin-bottom:20px;text-wrap:balance}
+.scene-body{flex:1;display:flex;gap:20px;align-items:stretch;min-height:0}
+
+/* controls */
+#controls{flex-shrink:0;padding:10px 40px 16px;background:var(--bg2);border-top:1px solid var(--border)}
+#timeline{height:3px;background:var(--surf2);border-radius:2px;margin-bottom:12px;position:relative;overflow:visible;cursor:pointer}
+#progress{height:100%;background:var(--accent);border-radius:2px;transition:width .1s linear;position:relative}
+#progress::after{content:'';position:absolute;right:-4px;top:-3px;width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent)}
+#nav{display:flex;align-items:center;justify-content:space-between}
+#counter{font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:600;letter-spacing:.08em;color:var(--textm);min-width:52px}
+#dots{display:flex;gap:6px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--textd);transition:background .25s,transform .25s;cursor:pointer}
+.dot.active{background:var(--accent);transform:scale(1.4)}
+#btns{display:flex;gap:8px;align-items:center;min-width:52px;justify-content:flex-end}
+#btns button{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--textm);transition:color .2s,background .2s;font-size:.9rem}
+#btns button:hover{color:var(--text);background:var(--surf2)}
+
+/* screen card */
+.screen{background:var(--ui-bg);border-radius:10px;overflow:hidden;flex:1;display:flex;flex-direction:column;min-height:0;box-shadow:0 0 0 1px var(--ui-b),0 20px 60px rgba(0,0,0,.5)}
+.screen-hdr{background:#F8FAFC;border-bottom:1px solid var(--ui-b);padding:12px 20px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.screen-hdr .dots-chrome{display:flex;gap:5px}.dot-ch{width:10px;height:10px;border-radius:50%}
+.dot-ch:nth-child(1){background:#FC5A58}.dot-ch:nth-child(2){background:#FCBA2B}.dot-ch:nth-child(3){background:#35C750}
+.screen-hdr .url{font-size:.72rem;color:var(--ui-tm);font-family:'IBM Plex Sans',sans-serif;margin-left:6px}
+.screen-body{flex:1;overflow:auto;min-height:0;padding:20px}
+
+/* admin-ui components */
+.ui-logo{font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--ui-acc)}
+.ui-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:.7rem;font-weight:500;letter-spacing:.04em}
+.ui-badge.active{background:#DCFCE7;color:#15803D}
+.ui-badge.inactive{background:#FEE2E2;color:#DC2626}
+.ui-badge.warning{background:#FEF9C3;color:#CA8A04}
+.ui-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:6px;font-size:.8rem;font-weight:500;cursor:pointer;transition:opacity .15s}
+.ui-btn.primary{background:var(--ui-acc);color:#fff}
+.ui-btn.secondary{background:var(--ui-b);color:var(--ui-t);border:1px solid var(--ui-b)}
+table.ui-tbl{width:100%;border-collapse:collapse;font-size:.8rem}
+table.ui-tbl th{text-align:left;padding:8px 12px;border-bottom:2px solid var(--ui-b);color:var(--ui-tm);font-weight:600;letter-spacing:.04em;font-size:.7rem;text-transform:uppercase}
+table.ui-tbl td{padding:10px 12px;border-bottom:1px solid var(--ui-b);color:var(--ui-t);vertical-align:middle}
+table.ui-tbl tr:hover td{background:#F8FAFC}
+
+/* terminal */
+.terminal{background:#0D1117;border-radius:10px;flex:1;overflow:hidden;display:flex;flex-direction:column;border:1px solid #21262D;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.term-hdr{background:#161B22;border-bottom:1px solid #21262D;padding:10px 14px;display:flex;align-items:center;gap:8px;flex-shrink:0}
+.term-title{font-family:'JetBrains Mono',monospace;font-size:.72rem;color:#8B949E}
+.term-body{flex:1;overflow:hidden;padding:14px;font-family:'JetBrains Mono',monospace;font-size:.73rem;line-height:1.7;color:#C9D1D9}
+.term-body .t-prompt{color:#58A6FF}
+.term-body .t-cmd{color:#C9D1D9}
+.term-body .t-ok{color:#3FB950}
+.term-body .t-pub{color:#D2A8FF}
+.term-body .t-json{color:#FFA657}
+.term-body .t-ts{color:#8B949E}
+
+/* canvas */
+canvas{display:block}
+
+/* stat card */
+.stat-card{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:18px 22px;display:flex;flex-direction:column;gap:6px}
+.stat-label{font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--textm);font-weight:600}
+.stat-value{font-family:'Barlow Condensed',sans-serif;font-size:2.4rem;font-weight:700;color:var(--text);line-height:1;font-variant-numeric:tabular-nums}
+.stat-unit{font-size:.8rem;color:var(--textm)}
+
+/* tag pill */
+.pill{display:inline-flex;align-items:center;padding:4px 12px;border-radius:99px;font-size:.75rem;font-weight:500;border:1px solid}
+.pill-blue{background:rgba(46,126,245,.12);border-color:rgba(46,126,245,.3);color:#7EB5FF}
+.pill-cyan{background:rgba(0,198,255,.1);border-color:rgba(0,198,255,.3);color:var(--cyan)}
+.pill-green{background:rgba(34,197,94,.1);border-color:rgba(34,197,94,.3);color:var(--green)}
+.pill-orange{background:rgba(255,107,53,.12);border-color:rgba(255,107,53,.3);color:var(--orange)}
+
+/* live dot */
+.live{display:inline-flex;align-items:center;gap:5px;font-size:.7rem;font-weight:600;letter-spacing:.06em;color:var(--green)}
+.live::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.4s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(1.3)}}
+
+/* fade-in stagger helpers */
+.fade-item{opacity:0;transform:translateY(12px);transition:opacity .5s ease,transform .5s ease}
+.fade-item.show{opacity:1;transform:none}
+
+/* scene 0 — title */
+#s0{align-items:center;justify-content:center;text-align:center;background:radial-gradient(ellipse 70% 60% at 50% 50%,rgba(46,126,245,.08) 0%,transparent 70%)}
+#s0 .logo{font-family:'Barlow Condensed',sans-serif;font-size:clamp(4rem,10vw,7rem);font-weight:700;letter-spacing:.02em;line-height:1;color:var(--text)}
+#s0 .logo .x{color:var(--accent)}
+#s0 .tagline{font-size:1.1rem;color:var(--textm);margin:14px 0 28px;font-weight:300;letter-spacing:.04em}
+#s0 .pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:30px}
+#s0 .caption{font-size:.85rem;color:var(--textd)}
+@keyframes logoIn{from{opacity:0;letter-spacing:.25em;transform:scale(.92)}to{opacity:1;letter-spacing:.02em;transform:scale(1)}}
+#s0.active .logo{animation:logoIn .9s cubic-bezier(.16,1,.3,1) both}
+#s0.active .tagline{animation:logoIn .7s .3s cubic-bezier(.16,1,.3,1) both}
+
+/* scene 8 — multi-tenant */
+.mt-panel{flex:1;border-radius:10px;overflow:hidden;border:1px solid var(--border);display:flex;flex-direction:column}
+.mt-panel-hdr{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.mt-panel-hdr .t-name{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700}
+.mt-body{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px}
+.mt-metric{display:flex;justify-content:space-between;align-items:center;font-size:.8rem}
+.mt-metric .label{color:var(--textm)}
+.mt-metric .val{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:600;color:var(--text)}
+
+/* grid layout helpers */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.vcol{display:flex;flex-direction:column;gap:12px}
+.hrow{display:flex;gap:12px;align-items:center}
+.spacer{flex:1}
+
+/* feature grid (summary) */
+.feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.feat-item{background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:14px 16px;display:flex;align-items:flex-start;gap:10px}
+.feat-icon{width:28px;height:28px;border-radius:6px;background:var(--accentlo);display:flex;align-items:center;justify-content:center;font-size:.9rem;flex-shrink:0;border:1px solid rgba(46,126,245,.25)}
+.feat-text .name{font-size:.82rem;font-weight:600;color:var(--text);margin-bottom:2px}
+.feat-text .desc{font-size:.72rem;color:var(--textm);line-height:1.4}
+.stack-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}
+.stack-badge{background:var(--surf2);border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:.72rem;color:var(--textm);font-family:'JetBrains Mono',monospace}
+
+/* alert animation */
+.alert-banner{background:#7C2D12;border:1px solid var(--orange);border-radius:8px;padding:14px 18px;display:flex;align-items:flex-start;gap:12px}
+.alert-banner .icon{font-size:1.4rem;flex-shrink:0}
+.alert-banner .body .title{font-weight:600;color:#FED7AA;margin-bottom:4px;font-size:.9rem}
+.alert-banner .body .detail{font-size:.8rem;color:#FDBA74}
+
+/* OTA progress */
+.device-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.device-row:last-child{border:none}
+.device-name{font-size:.8rem;font-family:'JetBrains Mono',monospace;color:var(--text);min-width:130px}
+.progress-bar{flex:1;height:8px;background:var(--surf2);border-radius:4px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--cyan));border-radius:4px;width:0;transition:width 1.5s ease}
+.device-status{font-size:.75rem;min-width:90px;text-align:right;font-family:'Barlow Condensed',sans-serif;font-weight:600;letter-spacing:.04em}
+
+/* arch canvas scene */
+#arch-canvas{width:100%;height:100%;display:block}
+
+/* prov scene */
+.prov-token{background:#0D1117;border:1px solid #30363D;border-radius:8px;padding:12px 16px;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--cyan);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.prov-token .tok{word-break:break-all;line-height:1.5}
+
+/* chart label */
+.chart-section{display:flex;flex-direction:column;gap:4px}
+.chart-label-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+.chart-lname{font-size:.73rem;font-weight:600;color:var(--textm);letter-spacing:.06em;text-transform:uppercase}
+.chart-val{font-family:'Barlow Condensed',sans-serif;font-size:1.3rem;font-weight:700;color:var(--text)}
+
+@media(prefers-reduced-motion:reduce){
+  .fade-item,.scene,#progress{transition:none}
+  #s0 .logo,#s0 .tagline{animation:none;opacity:1;letter-spacing:.02em}
+}
+</style>
+
+<div id="player">
+  <div id="scenes">
+
+    <!-- Scene 0: Title -->
+    <section class="scene" id="s0">
+      <div class="logo fade-item">IoTAir-<span class="x">X</span></div>
+      <div class="tagline fade-item">マルチテナント型 IoT デバイス管理基盤</div>
+      <div class="pills fade-item">
+        <span class="pill pill-blue">MQTT mTLS接続</span>
+        <span class="pill pill-cyan">リアルタイム可視化</span>
+        <span class="pill pill-green">OTA配信</span>
+        <span class="pill pill-orange">アラート通知</span>
+        <span class="pill pill-blue">マルチテナント</span>
+      </div>
+      <div class="caption fade-item">工場・病院・インフラ — あらゆる現場に対応するオープンなIoTプラットフォーム</div>
+    </section>
+
+    <!-- Scene 1: Architecture -->
+    <section class="scene" id="s1">
+      <div class="eyebrow">システム構成</div>
+      <div class="scene-title">エンドツーエンド アーキテクチャ</div>
+      <div class="scene-body">
+        <canvas id="arch-canvas"></canvas>
+      </div>
+    </section>
+
+    <!-- Scene 2: Tenant management -->
+    <section class="scene" id="s2">
+      <div class="eyebrow">テナント管理</div>
+      <div class="scene-title">マルチテナント管理コンソール</div>
+      <div class="scene-body">
+        <div class="screen">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://localhost/admin/tenants</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px">
+              <div>
+                <div style="font-size:.7rem;color:var(--ui-tm);letter-spacing:.06em;text-transform:uppercase;font-weight:600;margin-bottom:2px">テナント一覧</div>
+                <div style="font-size:1.3rem;font-weight:700;color:var(--ui-t);font-family:'Barlow Condensed',sans-serif">Tenants</div>
+              </div>
+              <button class="ui-btn primary">＋ テナントを作成</button>
+            </div>
+            <table class="ui-tbl">
+              <thead>
+                <tr><th>テナント名</th><th>スラッグ</th><th>ステータス</th><th>デバイス</th><th>作成日</th></tr>
+              </thead>
+              <tbody id="tenant-tbody">
+                <tr>
+                  <td><strong>Factory-A</strong><div style="font-size:.7rem;color:var(--ui-tm)">製造ライン監視</div></td>
+                  <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--ui-tm)">factory-a</td>
+                  <td><span class="ui-badge active">● Active</span></td>
+                  <td style="font-variant-numeric:tabular-nums">12</td>
+                  <td style="font-size:.75rem;color:var(--ui-tm)">2026-07-01</td>
+                </tr>
+                <tr>
+                  <td><strong>Hospital-B</strong><div style="font-size:.7rem;color:var(--ui-tm)">医療機器管理</div></td>
+                  <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--ui-tm)">hospital-b</td>
+                  <td><span class="ui-badge active">● Active</span></td>
+                  <td style="font-variant-numeric:tabular-nums">8</td>
+                  <td style="font-size:.75rem;color:var(--ui-tm)">2026-07-15</td>
+                </tr>
+              </tbody>
+            </table>
+            <div id="tenant-creating" style="display:none;margin-top:12px;padding:12px 14px;border-radius:8px;border:1px dashed var(--ui-acc);background:var(--ui-acc2);font-size:.8rem;color:var(--ui-acc);display:none">
+              <span id="tenant-typing"></span><span class="cursor" style="border-right:2px solid var(--ui-acc);animation:blink .8s step-end infinite">&#8203;</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 3: Provisioning -->
+    <section class="scene" id="s3">
+      <div class="eyebrow">ゼロタッチプロビジョニング</div>
+      <div class="scene-title">デバイス証明書の自動発行</div>
+      <div class="scene-body grid2">
+        <div class="screen">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://localhost/admin/tenants/factory-a</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:flex;gap:0;margin-bottom:18px;border-bottom:1px solid var(--ui-b)">
+              <div style="padding:8px 14px;font-size:.8rem;font-weight:600;color:var(--ui-acc);border-bottom:2px solid var(--ui-acc);margin-bottom:-1px">プロビジョニングトークン</div>
+              <div style="padding:8px 14px;font-size:.8rem;color:var(--ui-tm)">デバイス一覧</div>
+              <div style="padding:8px 14px;font-size:.8rem;color:var(--ui-tm)">アラートルール</div>
+            </div>
+            <div style="font-size:.75rem;color:var(--ui-tm);margin-bottom:10px">このトークンをデバイスのファームウェアに設定してください。初回接続時にStep-CAから証明書が自動発行されます。</div>
+            <div class="prov-token">
+              <div class="tok" id="prov-tok">BootTok-7f3a9c2b1e4d8f6a...</div>
+              <button class="ui-btn secondary" style="font-size:.7rem;padding:4px 10px">コピー</button>
+            </div>
+            <div style="margin-top:14px;font-size:.75rem;color:var(--ui-tm)">有効期限: 2026-09-30 ・ 最大デバイス数: 100</div>
+            <div style="margin-top:18px;display:flex;align-items:center;gap:8px;padding:10px 14px;background:#F0FDF4;border-radius:8px;border:1px solid #BBF7D0">
+              <span style="color:#15803D;font-size:.8rem">✓</span>
+              <span style="font-size:.78rem;color:#15803D">Step-CA 接続中 — 証明書発行可能</span>
+            </div>
+          </div>
+        </div>
+        <div class="vcol">
+          <div class="stat-card fade-item" id="p-stat0">
+            <div class="stat-label">登録済みデバイス</div>
+            <div><span class="stat-value" id="prov-count">0</span> <span class="stat-unit">台</span></div>
+          </div>
+          <div class="terminal fade-item" id="p-stat1">
+            <div class="term-hdr"><div class="dot-ch" style="background:#FC5A58"></div><div class="dot-ch" style="background:#FCBA2B"></div><div class="dot-ch" style="background:#35C750"></div><div class="term-title" style="margin-left:8px">Step-CA — 証明書発行ログ</div></div>
+            <div class="term-body" id="prov-term"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 4: MQTT stream -->
+    <section class="scene" id="s4">
+      <div class="eyebrow">フィールドデータ受信</div>
+      <div class="scene-title">MQTT mTLS — リアルタイムデータインジェスト</div>
+      <div class="scene-body grid2">
+        <div class="terminal">
+          <div class="term-hdr"><div class="dot-ch" style="background:#FC5A58"></div><div class="dot-ch" style="background:#FCBA2B"></div><div class="dot-ch" style="background:#35C750"></div><div class="term-title" style="margin-left:8px">mosquitto_pub — mTLS接続</div><div style="flex:1"></div><span class="live">LIVE</span></div>
+          <div class="term-body" id="mqtt-term"></div>
+        </div>
+        <div class="vcol">
+          <div class="stat-card"><div class="stat-label">受信メッセージ</div><div><span class="stat-value" id="mqtt-msgs">0</span></div></div>
+          <div class="stat-card"><div class="stat-label">InfluxDB 書込済</div><div><span class="stat-value" id="mqtt-pts">0</span> <span class="stat-unit">pts</span></div></div>
+          <div class="stat-card"><div class="stat-label">平均レイテンシ</div><div><span class="stat-value">3</span> <span class="stat-unit">ms</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 5: Grafana -->
+    <section class="scene" id="s5">
+      <div class="eyebrow">データ可視化</div>
+      <div class="scene-title">Grafana リアルタイムダッシュボード</div>
+      <div class="scene-body">
+        <div class="screen">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://localhost/admin/tenant-portal/factory-a</div>
+            <div class="spacer"></div>
+            <span class="live">LIVE</span>
+          </div>
+          <div class="screen-body" style="background:#F8FAFC">
+            <div style="display:flex;gap:10px;margin-bottom:14px">
+              <div style="padding:5px 12px;background:var(--ui-acc);color:#fff;border-radius:6px;font-size:.75rem;font-weight:600">概要</div>
+              <div style="padding:5px 12px;color:var(--ui-tm);font-size:.75rem">デバイス</div>
+              <div style="padding:5px 12px;color:var(--ui-tm);font-size:.75rem">OTA</div>
+              <div style="padding:5px 12px;color:var(--ui-tm);font-size:.75rem">アラート</div>
+            </div>
+            <div class="grid3">
+              <div style="background:#fff;border-radius:8px;border:1px solid var(--ui-b);padding:12px">
+                <div class="chart-label-row"><span class="chart-lname">温度</span><span class="live">LIVE</span></div>
+                <div class="chart-label-row"><span class="chart-val" id="temp-val">24.3</span><span style="font-size:.75rem;color:var(--ui-tm)">°C</span></div>
+                <canvas id="chart-temp" height="60"></canvas>
+              </div>
+              <div style="background:#fff;border-radius:8px;border:1px solid var(--ui-b);padding:12px">
+                <div class="chart-label-row"><span class="chart-lname">湿度</span><span class="live">LIVE</span></div>
+                <div class="chart-label-row"><span class="chart-val" id="hum-val">65.2</span><span style="font-size:.75rem;color:var(--ui-tm)">%</span></div>
+                <canvas id="chart-hum" height="60"></canvas>
+              </div>
+              <div style="background:#fff;border-radius:8px;border:1px solid var(--ui-b);padding:12px">
+                <div class="chart-label-row"><span class="chart-lname">CO₂</span><span class="live">LIVE</span></div>
+                <div class="chart-label-row"><span class="chart-val" id="co2-val">412</span><span style="font-size:.75rem;color:var(--ui-tm)">ppm</span></div>
+                <canvas id="chart-co2" height="60"></canvas>
+              </div>
+            </div>
+            <div style="margin-top:12px;background:#fff;border-radius:8px;border:1px solid var(--ui-b);padding:12px">
+              <div class="chart-label-row" style="margin-bottom:6px"><span class="chart-lname">センサーsensor-001 — 1時間トレンド</span><span style="font-size:.72rem;color:var(--ui-tm)">最終更新: <span id="last-update">--:--:--</span></span></div>
+              <canvas id="chart-main" height="80"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 6: Alert -->
+    <section class="scene" id="s6">
+      <div class="eyebrow">アラート・通知</div>
+      <div class="scene-title">閾値超過を即時検知・通知</div>
+      <div class="scene-body grid2">
+        <div class="vcol">
+          <div class="screen" style="flex:0 0 auto">
+            <div class="screen-hdr">
+              <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+              <div class="url">Factory-A — アラートルール</div>
+            </div>
+            <div class="screen-body">
+              <table class="ui-tbl">
+                <thead><tr><th>ルール名</th><th>条件</th><th>通知先</th><th>状態</th></tr></thead>
+                <tbody>
+                  <tr id="alert-row">
+                    <td><strong>高温アラート</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem">temp &gt; 28.0°C</td>
+                    <td style="font-size:.75rem">admin@factory-a.com</td>
+                    <td><span class="ui-badge active" id="alert-state-badge">● 監視中</span></td>
+                  </tr>
+                  <tr>
+                    <td><strong>デバイスオフライン</strong></td>
+                    <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem">offline &gt; 180s</td>
+                    <td style="font-size:.75rem">admin@factory-a.com</td>
+                    <td><span class="ui-badge active">● 監視中</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div id="alert-banner-wrap" style="opacity:0;transition:opacity .5s">
+            <div class="alert-banner">
+              <div class="icon">⚠️</div>
+              <div class="body">
+                <div class="title">高温アラート発火 — Factory-A</div>
+                <div class="detail">sensor-001: <strong>29.1°C</strong> (閾値 28.0°C を超過)<br>2026-08-26 14:31:07</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="screen" id="email-card">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">MailHog — localhost:8025</div>
+          </div>
+          <div class="screen-body" style="opacity:0;transition:opacity .5s" id="email-body">
+            <div style="border-bottom:1px solid var(--ui-b);padding-bottom:14px;margin-bottom:14px">
+              <div style="font-size:.72rem;color:var(--ui-tm);margin-bottom:2px">差出人</div>
+              <div style="font-size:.82rem;color:var(--ui-t)">alerts@iot-platform.local</div>
+            </div>
+            <div style="border-bottom:1px solid var(--ui-b);padding-bottom:14px;margin-bottom:14px">
+              <div style="font-size:.72rem;color:var(--ui-tm);margin-bottom:2px">件名</div>
+              <div style="font-size:.85rem;font-weight:600;color:var(--ui-t)">[IoTAir-X] アラート: 高温検知 — Factory-A</div>
+            </div>
+            <div style="font-size:.82rem;color:var(--ui-t);line-height:1.7">
+              <p>Factory-A テナントにてアラートが発生しました。</p>
+              <br>
+              <p>センサー <strong>sensor-001</strong> が閾値を超過しました。<br>
+              現在値: <strong style="color:#DC2626">29.1°C</strong> / 閾値: 28.0°C</p>
+              <br>
+              <p style="color:var(--ui-tm);font-size:.75rem">IoTAir-X Alert Service — 2026-08-26 14:31:07</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 7: OTA -->
+    <section class="scene" id="s7">
+      <div class="eyebrow">OTA ファームアップデート</div>
+      <div class="scene-title">安全なリモートファームウェア配信</div>
+      <div class="scene-body grid2">
+        <div class="vcol">
+          <div class="screen" style="flex:0 0 auto">
+            <div class="screen-hdr">
+              <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+              <div class="url">Factory-A — ファームウェア管理</div>
+            </div>
+            <div class="screen-body">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:#F0FDF4;border-radius:8px;border:1px solid #BBF7D0;margin-bottom:14px">
+                <span style="color:#15803D;font-size:1rem">✓</span>
+                <div>
+                  <div style="font-size:.82rem;font-weight:600;color:var(--ui-t)">firmware-v1.3.0.bin</div>
+                  <div style="font-size:.72rem;color:var(--ui-tm)">2.4 MB · SHA256検証済 · MinIO保存完了</div>
+                </div>
+              </div>
+              <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--ui-b)">
+                <div style="font-size:.8rem;color:var(--ui-t)">配信バージョン: <strong>v1.2.3 → v1.3.0</strong></div>
+                <button class="ui-btn primary" style="font-size:.75rem">OTA配信を開始</button>
+              </div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">配信対象デバイス</div>
+            <div><span class="stat-value">3</span> <span class="stat-unit">台</span></div>
+          </div>
+        </div>
+        <div class="surf" style="background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:4px">
+          <div style="font-family:'Barlow Condensed',sans-serif;font-size:1rem;font-weight:700;margin-bottom:14px;letter-spacing:.04em;color:var(--textm);text-transform:uppercase">配信進捗</div>
+          <div class="device-row">
+            <div class="device-name">sensor-001</div>
+            <div class="progress-bar"><div class="progress-fill" id="ota0"></div></div>
+            <div class="device-status" id="ota0-s" style="color:var(--textm)">待機中</div>
+          </div>
+          <div class="device-row">
+            <div class="device-name">sensor-002</div>
+            <div class="progress-bar"><div class="progress-fill" id="ota1"></div></div>
+            <div class="device-status" id="ota1-s" style="color:var(--textm)">待機中</div>
+          </div>
+          <div class="device-row">
+            <div class="device-name">sensor-003</div>
+            <div class="progress-bar"><div class="progress-fill" id="ota2"></div></div>
+            <div class="device-status" id="ota2-s" style="color:var(--textm)">待機中</div>
+          </div>
+          <div id="ota-done" style="margin-top:16px;opacity:0;transition:opacity .5s;padding:12px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;font-size:.82rem;color:var(--green);text-align:center;font-weight:600">
+            ✓ 全3台が v1.3.0 に更新完了
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 8: Multi-tenant -->
+    <section class="scene" id="s8">
+      <div class="eyebrow">マルチテナント分離</div>
+      <div class="scene-title">テナントごとに完全なデータ分離</div>
+      <div class="scene-body" style="gap:16px">
+        <div class="mt-panel" style="background:var(--surf)">
+          <div class="mt-panel-hdr" style="background:rgba(46,126,245,.08);border-color:var(--border)">
+            <div class="t-name" style="color:var(--accent)">Factory-A</div>
+            <span class="pill pill-blue" style="font-size:.65rem">製造ライン監視</span>
+          </div>
+          <div class="mt-body">
+            <div class="mt-metric"><span class="label">InfluxDB Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">factory-a-org</span></div>
+            <div class="mt-metric"><span class="label">Grafana Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">Org #3</span></div>
+            <div class="mt-metric"><span class="label">接続デバイス</span><span class="val">12台</span></div>
+            <div class="mt-metric"><span class="label">本日のメッセージ</span><span class="val">47,382</span></div>
+            <canvas id="mt-chart-a" height="70" style="margin-top:8px"></canvas>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex-shrink:0">
+          <div style="width:1px;height:60px;background:linear-gradient(to bottom,transparent,var(--border))"></div>
+          <div style="background:var(--surf2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:.7rem;text-align:center;color:var(--textm);line-height:1.6">
+            完全分離<br>データアクセス不可<br>EMQX ACL制御
+          </div>
+          <div style="width:1px;height:60px;background:linear-gradient(to top,transparent,var(--border))"></div>
+        </div>
+        <div class="mt-panel" style="background:var(--surf)">
+          <div class="mt-panel-hdr" style="background:rgba(0,198,255,.06);border-color:rgba(0,198,255,.2)">
+            <div class="t-name" style="color:var(--cyan)">Hospital-B</div>
+            <span class="pill pill-cyan" style="font-size:.65rem">医療機器管理</span>
+          </div>
+          <div class="mt-body">
+            <div class="mt-metric"><span class="label">InfluxDB Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">hospital-b-org</span></div>
+            <div class="mt-metric"><span class="label">Grafana Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">Org #4</span></div>
+            <div class="mt-metric"><span class="label">接続デバイス</span><span class="val">8台</span></div>
+            <div class="mt-metric"><span class="label">本日のメッセージ</span><span class="val">31,207</span></div>
+            <canvas id="mt-chart-b" height="70" style="margin-top:8px"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Scene 9: Summary -->
+    <section class="scene" id="s9">
+      <div class="eyebrow">まとめ</div>
+      <div class="scene-title">IoTAir-X — 全機能一覧</div>
+      <div class="scene-body">
+        <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+          <div class="feat-grid">
+            <div class="feat-item"><div class="feat-icon">📡</div><div class="feat-text"><div class="name">MQTT mTLS接続</div><div class="desc">相互TLS認証でデバイスを安全接続 (EMQX 5.x)</div></div></div>
+            <div class="feat-item"><div class="feat-icon">📊</div><div class="feat-text"><div class="name">リアルタイム可視化</div><div class="desc">Grafana + InfluxDB によるライブダッシュボード</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🔔</div><div class="feat-text"><div class="name">アラート・通知</div><div class="desc">閾値監視・メール/Webhook通知 (1分評価)</div></div></div>
+            <div class="feat-item"><div class="feat-icon">⬆️</div><div class="feat-text"><div class="name">OTAファームアップデート</div><div class="desc">MinIO経由の安全なリモート配信・進捗追跡</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🏢</div><div class="feat-text"><div class="name">マルチテナント管理</div><div class="desc">InfluxDB Org / Grafana Org を分離、完全隔離</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🔐</div><div class="feat-text"><div class="name">ゼロタッチプロビジョニング</div><div class="desc">Step-CA による証明書自動発行・デバイス登録</div></div></div>
+            <div class="feat-item"><div class="feat-icon">📋</div><div class="feat-text"><div class="name">監査ログ</div><div class="desc">全操作をPostgreSQLに記録、テナント別参照</div></div></div>
+            <div class="feat-item"><div class="feat-icon">💻</div><div class="feat-text"><div class="name">クロスOS対応インストーラ</div><div class="desc">Windows / macOS / Ubuntu — ワンコマンド起動</div></div></div>
+          </div>
+          <div>
+            <div style="font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--textm);font-weight:600;margin-bottom:8px">Tech Stack</div>
+            <div class="stack-row">
+              <span class="stack-badge">FastAPI</span><span class="stack-badge">PostgreSQL 16</span><span class="stack-badge">InfluxDB 2</span><span class="stack-badge">EMQX 5</span><span class="stack-badge">Grafana</span><span class="stack-badge">MinIO</span><span class="stack-badge">Step-CA</span><span class="stack-badge">nginx</span><span class="stack-badge">Docker Compose</span>
+            </div>
+          </div>
+          <div style="text-align:center;font-size:.78rem;color:var(--textd);font-family:'JetBrains Mono',monospace">
+            github.com/taz-szk/iotpf-proto
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div><!-- /scenes -->
+
+  <div id="controls">
+    <div id="timeline"><div id="progress"></div></div>
+    <div id="nav">
+      <div id="counter">1 / 10</div>
+      <div id="dots"></div>
+      <div id="btns">
+        <button id="prev-btn" title="前のシーン">&#8592;</button>
+        <button id="play-btn" title="再生/一時停止">&#9646;&#9646;</button>
+        <button id="next-btn" title="次のシーン">&#8594;</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DURATIONS = [7000,9000,7000,8000,9000,9000,8000,9000,7000,9000];
+const N = DURATIONS.length;
+const scenes = Array.from(document.querySelectorAll('.scene'));
+const progress = document.getElementById('progress');
+const counter = document.getElementById('counter');
+const dotsEl = document.getElementById('dots');
+const playBtn = document.getElementById('play-btn');
+
+let cur = 0, playing = true, startTime = null, elapsed = 0;
+let rafId = null, animCleanup = null;
+
+// Build dots
+scenes.forEach((_,i)=>{
+  const d = document.createElement('button');
+  d.className='dot'+(i===0?' active':'');
+  d.setAttribute('aria-label','シーン '+(i+1));
+  d.addEventListener('click',()=>goTo(i));
+  dotsEl.appendChild(d);
+});
+
+document.getElementById('prev-btn').addEventListener('click',()=>goTo((cur-1+N)%N));
+document.getElementById('next-btn').addEventListener('click',()=>goTo((cur+1)%N));
+playBtn.addEventListener('click',togglePlay);
+
+function togglePlay(){
+  playing=!playing;
+  playBtn.textContent=playing?'❚❚':'▶';
+  if(playing){startTime=performance.now()-elapsed;tick();}else{cancelAnimationFrame(rafId);}
+}
+
+function goTo(idx){
+  if(animCleanup){animCleanup();animCleanup=null;}
+  scenes[cur].classList.remove('active');
+  dotsEl.children[cur].classList.remove('active');
+  cur=idx;
+  elapsed=0;
+  scenes[cur].classList.add('active');
+  dotsEl.children[cur].classList.add('active');
+  counter.textContent=(cur+1)+' / '+N;
+  progress.style.width='0%';
+  startTime=performance.now();
+  animCleanup=ANIMS[cur]?.();
+  if(playing){cancelAnimationFrame(rafId);tick();}
+}
+
+function tick(){
+  rafId=requestAnimationFrame(ts=>{
+    if(!startTime)startTime=ts;
+    elapsed=ts-startTime;
+    const pct=Math.min(elapsed/DURATIONS[cur]*100,100);
+    progress.style.width=pct+'%';
+    if(pct>=100&&playing){goTo((cur+1)%N);return;}
+    tick();
+  });
+}
+
+// ── Scene animations ──────────────────────────────────────────
+
+const ANIMS = {};
+
+// Scene 0: title stagger
+ANIMS[0]=()=>{
+  const items=document.querySelectorAll('#s0 .fade-item');
+  items.forEach(el=>{el.classList.remove('show');});
+  const t0=setTimeout(()=>items.forEach((el,i)=>setTimeout(()=>el.classList.add('show'),i*200)),50);
+  return()=>{clearTimeout(t0);};
+};
+
+// Scene 1: architecture canvas
+ANIMS[1]=()=>{
+  const canvas=document.getElementById('arch-canvas');
+  const c=canvas.getContext('2d');
+  let alive=true;
+  function resize(){
+    const r=canvas.parentElement.getBoundingClientRect();
+    canvas.width=r.width*devicePixelRatio;canvas.height=r.height*devicePixelRatio;
+    canvas.style.width=r.width+'px';canvas.style.height=r.height+'px';
+    c.scale(devicePixelRatio,devicePixelRatio);
+  }
+  resize();
+
+  // node definitions (relative coords 0-1)
+  const W=canvas.clientWidth,H=canvas.clientHeight;
+  const nodes=[
+    {id:'dev', x:.08,y:.5, w:90,h:64, label:'デバイス群', sub:'sensor × 12',col:'#1E3A6E',bc:'#2E7EF5'},
+    {id:'emqx',x:.32,y:.5, w:90,h:56, label:'EMQX Broker',sub:'mTLS :8883',col:'#1E3A6E',bc:'#00C6FF'},
+    {id:'ing', x:.56,y:.28,w:90,h:52, label:'Ingestion',sub:'データ書込',col:'#1E2E40',bc:'#6366F1'},
+    {id:'idb', x:.78,y:.18,w:90,h:52, label:'InfluxDB',sub:'時系列DB',col:'#1E2E40',bc:'#06B6D4'},
+    {id:'grf', x:.78,y:.42,w:90,h:52, label:'Grafana',sub:'可視化',col:'#1E2E40',bc:'#F59E0B'},
+    {id:'api', x:.56,y:.72,w:90,h:52, label:'Core API',sub:'FastAPI',col:'#1E2E40',bc:'#2E7EF5'},
+    {id:'pg',  x:.78,y:.62,w:90,h:52, label:'PostgreSQL',sub:'メタデータ',col:'#1E2E40',bc:'#3B82F6'},
+    {id:'alt', x:.78,y:.82,w:90,h:52, label:'Alert Svc',sub:'メール通知',col:'#1E2E40',bc:'#FF6B35'},
+    {id:'adm', x:.32,y:.82,w:90,h:52, label:'Admin UI',sub:'nginx',col:'#1E2E40',bc:'#22C55E'},
+  ];
+  const edges=[
+    {from:'dev',to:'emqx',label:'mTLS',col:'#00C6FF'},
+    {from:'emqx',to:'ing',label:'webhook',col:'#6366F1'},
+    {from:'ing',to:'idb',label:'write',col:'#06B6D4'},
+    {from:'idb',to:'grf',label:'',col:'#F59E0B'},
+    {from:'emqx',to:'api',label:'auth',col:'#2E7EF5'},
+    {from:'adm',to:'api',label:'REST',col:'#22C55E'},
+    {from:'api',to:'pg',label:'SQL',col:'#3B82F6'},
+    {from:'api',to:'alt',label:'trigger',col:'#FF6B35'},
+  ];
+
+  function nPos(n){return{x:n.x*W,y:n.y*H};}
+  function drawRoundRect(x,y,w,h,r){
+    c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.arcTo(x+w,y,x+w,y+r,r);
+    c.lineTo(x+w,y+h-r);c.arcTo(x+w,y+h,x+w-r,y+h,r);
+    c.lineTo(x+r,y+h);c.arcTo(x,y+h,x,y+h-r,r);
+    c.lineTo(x,y+r);c.arcTo(x,y,x+r,y,r);c.closePath();
+  }
+
+  let t0=performance.now();
+  const packets=[];
+
+  function drawAll(ts){
+    const elapsed2=(ts-t0)/1000;
+    c.clearRect(0,0,W,H);
+
+    // edges
+    edges.forEach((e,ei)=>{
+      const from=nodes.find(n=>n.id===e.from);
+      const to=nodes.find(n=>n.id===e.to);
+      const fx=from.x*W+from.w/2, fy=from.y*H;
+      const tx=to.x*W, ty=to.y*H+to.h/2;
+      const progress2=Math.min(1,(elapsed2-ei*0.3)/1);
+      if(progress2<=0)return;
+      c.save();
+      c.strokeStyle=e.col+'88';c.lineWidth=1.5;c.setLineDash([4,4]);
+      c.beginPath();c.moveTo(fx,fy);
+      const mx=(fx+tx)/2;
+      c.bezierCurveTo(mx,fy,mx,ty,tx,ty);
+      c.stroke();c.restore();
+
+      // label
+      if(e.label&&progress2>0.5){
+        c.save();c.font="500 10px 'IBM Plex Sans',sans-serif";c.fillStyle=e.col+'BB';
+        c.fillText(e.label,(fx+tx)/2,(fy+ty)/2-6);c.restore();
+      }
+
+      // packet animation
+      if(progress2>=1&&Math.random()<0.015){
+        packets.push({e,p:0});
+      }
+    });
+
+    // packets
+    for(let i=packets.length-1;i>=0;i--){
+      const pk=packets[i];
+      pk.p+=0.018;
+      if(pk.p>1){packets.splice(i,1);continue;}
+      const e=pk.e;
+      const from=nodes.find(n=>n.id===e.from);
+      const to=nodes.find(n=>n.id===e.to);
+      const fx=from.x*W+from.w/2, fy=from.y*H;
+      const tx=to.x*W, ty=to.y*H+to.h/2;
+      const mx=(fx+tx)/2;
+      const t2=pk.p;
+      const ox=Math.pow(1-t2,3)*fx+3*Math.pow(1-t2,2)*t2*mx+3*(1-t2)*t2*t2*mx+t2*t2*t2*tx;
+      const oy=Math.pow(1-t2,3)*fy+3*Math.pow(1-t2,2)*t2*fy+3*(1-t2)*t2*t2*ty+t2*t2*t2*ty;
+      c.beginPath();c.arc(ox,oy,4,0,Math.PI*2);
+      c.fillStyle=e.col;c.fill();
+      c.beginPath();c.arc(ox,oy,7,0,Math.PI*2);
+      c.fillStyle=e.col+'33';c.fill();
+    }
+
+    // nodes
+    nodes.forEach((n,ni)=>{
+      const fadeIn=Math.min(1,(elapsed2-ni*0.2)/0.6);
+      if(fadeIn<=0)return;
+      c.save();c.globalAlpha=fadeIn;
+      const nx=n.x*W,ny=n.y*H-n.h/2;
+      drawRoundRect(nx,ny,n.w,n.h,8);
+      c.fillStyle=n.col;c.fill();
+      c.strokeStyle=n.bc+'99';c.lineWidth=1.5;c.stroke();
+      // accent bar
+      c.fillStyle=n.bc;
+      c.beginPath();c.moveTo(nx+8,ny+n.h-4);c.lineTo(nx+n.w-8,ny+n.h-4);
+      c.lineWidth=2;c.strokeStyle=n.bc;c.stroke();
+      // label
+      c.font="600 11px 'IBM Plex Sans',sans-serif";c.fillStyle='#E2EEFF';c.textAlign='center';
+      c.fillText(n.label,nx+n.w/2,ny+n.h/2-2);
+      c.font="400 9px 'IBM Plex Sans',sans-serif";c.fillStyle='#6B92C0';
+      c.fillText(n.sub,nx+n.w/2,ny+n.h/2+11);
+      c.restore();
+    });
+
+    if(alive)requestAnimationFrame(drawAll);
+  }
+  requestAnimationFrame(drawAll);
+  return()=>{alive=false;};
+};
+
+// Scene 2: tenant creation typing
+ANIMS[2]=()=>{
+  const tbody=document.getElementById('tenant-tbody');
+  const creating=document.getElementById('tenant-creating');
+  const typing=document.getElementById('tenant-typing');
+  const text='新規テナント「Logistics-C」を作成中...';
+  let i=0,done=false;
+  creating.style.display='block';
+  const iv=setInterval(()=>{
+    if(i<text.length){typing.textContent=text.slice(0,++i);}
+    else if(!done){
+      done=true;
+      clearInterval(iv);
+      setTimeout(()=>{
+        creating.style.display='none';
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td><strong>Logistics-C</strong><div style="font-size:.7rem;color:var(--ui-tm)">物流管理</div></td>
+          <td style="font-family:'JetBrains Mono',monospace;font-size:.75rem;color:var(--ui-tm)">logistics-c</td>
+          <td><span class="ui-badge active">● Active</span></td>
+          <td style="font-variant-numeric:tabular-nums">0</td>
+          <td style="font-size:.75rem;color:var(--ui-tm)">2026-08-26</td>`;
+        tr.style.cssText='opacity:0;transition:opacity .4s';
+        tbody.appendChild(tr);
+        requestAnimationFrame(()=>requestAnimationFrame(()=>tr.style.opacity='1'));
+      },400);
+    }
+  },60);
+  return()=>{clearInterval(iv);creating.style.display='none';typing.textContent='';
+    const rows=tbody.querySelectorAll('tr');if(rows.length>2)rows[2].remove();};
+};
+
+// Scene 3: provisioning
+ANIMS[3]=()=>{
+  const term=document.getElementById('prov-term');
+  const countEl=document.getElementById('prov-count');
+  term.innerHTML='';
+  let count=0,alive=true;
+  const lines=[
+    {cls:'t-ts',t:'[Step-CA] 証明書発行サービス起動中...'},
+    {cls:'t-ok',t:'[Ready] https://step-ca:9000'},
+    {cls:'t-ts',t:'[2026-08-26 14:20:01] 接続要求: factory-a'},
+    {cls:'t-pub',t:'  Token検証: BootTok-7f3a9c2b ✓'},
+    {cls:'t-ok',t:'  証明書発行: device-cert-001.crt'},
+    {cls:'t-ts',t:'[2026-08-26 14:20:04] 接続要求: factory-a'},
+    {cls:'t-pub',t:'  Token検証: BootTok-7f3a9c2b ✓'},
+    {cls:'t-ok',t:'  証明書発行: device-cert-002.crt'},
+    {cls:'t-ts',t:'[2026-08-26 14:20:07] 接続要求: factory-a'},
+    {cls:'t-pub',t:'  Token検証: BootTok-7f3a9c2b ✓'},
+    {cls:'t-ok',t:'  証明書発行: device-cert-003.crt'},
+  ];
+  let li=0;
+  const iv=setInterval(()=>{
+    if(!alive)return;
+    if(li<lines.length){
+      const d=document.createElement('div');
+      d.className=lines[li].cls;d.textContent=lines[li].t;
+      term.appendChild(d);term.scrollTop=term.scrollHeight;
+      if(lines[li].cls==='t-ok'&&lines[li].t.includes('device-cert')){
+        count++;countEl.textContent=count;
+      }
+      li++;
+    }else clearInterval(iv);
+  },700);
+  document.querySelectorAll('#s3 .fade-item').forEach((el,i)=>setTimeout(()=>el.classList.add('show'),i*200+100));
+  return()=>{alive=false;clearInterval(iv);};
+};
+
+// Scene 4: MQTT stream
+ANIMS[4]=()=>{
+  const term=document.getElementById('mqtt-term');
+  const msgsEl=document.getElementById('mqtt-msgs');
+  const ptsEl=document.getElementById('mqtt-pts');
+  term.innerHTML='';
+  let msgs=0,alive=true;
+  const sensors=['sensor-001','sensor-002','sensor-003'];
+  let baseTemp=24.0,baseHum=65.0,baseCo2=410;
+
+  function line(cls,text){
+    const d=document.createElement('div');d.className=cls;d.textContent=text;
+    term.appendChild(d);
+    if(term.children.length>60)term.removeChild(term.firstChild);
+    term.scrollTop=term.scrollHeight;
+  }
+
+  // initial
+  line('t-ok','[Connected] broker: emqx:8883 (mTLS)');
+  line('t-ok','[Auth] 証明書検証成功');
+  line('');
+
+  const iv=setInterval(()=>{
+    if(!alive)return;
+    const s=sensors[msgs%sensors.length];
+    const t=(performance.now()/1000);
+    const temp=(baseTemp+Math.sin(t*0.3)*1.5+Math.random()*0.4-0.2).toFixed(1);
+    const hum=(baseHum+Math.sin(t*0.2)*2+Math.random()*0.5-0.25).toFixed(1);
+    const co2=Math.round(baseCo2+Math.sin(t*0.1)*8+Math.random()*3);
+    const now=new Date();
+    const ts=now.toTimeString().slice(0,8);
+    line('t-ts',`[2026-08-26 ${ts}] PUBLISH`);
+    line('t-pub',`  tenants/factory-a/${s}/telemetry`);
+    line('t-json',`  {"temp":${temp},"humidity":${hum},"co2":${co2}}`);
+    msgs++;
+    msgsEl.textContent=msgs;
+    ptsEl.textContent=msgs*2;
+  },900);
+  return()=>{alive=false;clearInterval(iv);};
+};
+
+// Scene 5: Grafana charts
+ANIMS[5]=()=>{
+  let alive=true;
+  const charts=[
+    {id:'chart-temp',color:'#EF4444',valId:'temp-val',base:24.3,amp:1.8,unit:'°C',fmt:v=>v.toFixed(1)},
+    {id:'chart-hum', color:'#3B82F6',valId:'hum-val', base:65.2,amp:2.5,unit:'%',fmt:v=>v.toFixed(1)},
+    {id:'chart-co2', color:'#8B5CF6',valId:'co2-val', base:412, amp:12, unit:'ppm',fmt:v=>Math.round(v).toString()},
+  ];
+  const mainCanvas=document.getElementById('chart-main');
+  const lastUpdateEl=document.getElementById('last-update');
+  const mainData=Array(60).fill(24.3);
+
+  charts.forEach(ch=>{
+    const canvas=document.getElementById(ch.id);
+    canvas.width=200*devicePixelRatio;canvas.height=60*devicePixelRatio;
+    canvas.style.width='100%';canvas.style.height='60px';
+  });
+  mainCanvas.width=600*devicePixelRatio;mainCanvas.height=80*devicePixelRatio;
+  mainCanvas.style.width='100%';mainCanvas.style.height='80px';
+
+  function drawLine(canvas,data,color,fill){
+    const c=canvas.getContext('2d');
+    const W=canvas.width/devicePixelRatio,H=canvas.height/devicePixelRatio;
+    c.clearRect(0,0,canvas.width,canvas.height);
+    c.scale(devicePixelRatio,devicePixelRatio);
+    const mn=Math.min(...data)-1,mx=Math.max(...data)+1;
+    const px=(v,i)=>(i/(data.length-1))*W;
+    const py=v=>H-(v-mn)/(mx-mn)*H*0.85-H*.08;
+    c.beginPath();c.moveTo(px(data[0],0),py(data[0]));
+    data.forEach((v,i)=>{if(i>0)c.lineTo(px(v,i),py(v));});
+    if(fill){
+      const path=new Path2D(c.currentPath);
+      c.lineTo(W,H);c.lineTo(0,H);c.closePath();
+      const g=c.createLinearGradient(0,0,0,H);g.addColorStop(0,color+'44');g.addColorStop(1,color+'00');
+      c.fillStyle=g;c.fill();
+    }
+    c.beginPath();c.moveTo(px(data[0],0),py(data[0]));
+    data.forEach((v,i)=>{if(i>0)c.lineTo(px(v,i),py(v));});
+    c.strokeStyle=color;c.lineWidth=2;c.lineJoin='round';c.stroke();
+    // last dot
+    const lx=px(data[data.length-1],data.length-1),ly=py(data[data.length-1]);
+    c.beginPath();c.arc(lx,ly,3,0,Math.PI*2);c.fillStyle=color;c.fill();
+    c.setTransform(1,0,0,1,0,0);
+  }
+
+  const sdata=charts.map(ch=>Array(20).fill(ch.base));
+  let tick2=0;
+
+  function frame(){
+    if(!alive)return;
+    const t=performance.now()/1000;
+    charts.forEach((ch,ci)=>{
+      const v=ch.base+Math.sin(t*0.4+ci)*ch.amp*0.7+Math.random()*ch.amp*0.3;
+      sdata[ci].push(v);if(sdata[ci].length>20)sdata[ci].shift();
+      const canvas=document.getElementById(ch.id);
+      drawLine(canvas,sdata[ci],ch.color,true);
+      document.getElementById(ch.valId).textContent=ch.fmt(v);
+    });
+    mainData.push(24.3+Math.sin(t*0.4)*1.8+Math.random()*0.4-0.2);
+    if(mainData.length>60)mainData.shift();
+    drawLine(mainCanvas,mainData,'#2E7EF5',true);
+    if(tick2++%10===0){
+      const now=new Date();lastUpdateEl.textContent=now.toTimeString().slice(0,8);
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return()=>{alive=false;};
+};
+
+// Scene 6: alert sequence
+ANIMS[6]=()=>{
+  const banner=document.getElementById('alert-banner-wrap');
+  const email=document.getElementById('email-body');
+  const badge=document.getElementById('alert-state-badge');
+  banner.style.opacity='0';email.style.opacity='0';
+  badge.className='ui-badge active';badge.textContent='● 監視中';
+  const t1=setTimeout(()=>{badge.className='ui-badge warning';badge.textContent='⚠ アラート発火';banner.style.opacity='1';},2000);
+  const t2=setTimeout(()=>{email.style.opacity='1';},3800);
+  return()=>{clearTimeout(t1);clearTimeout(t2);};
+};
+
+// Scene 7: OTA
+ANIMS[7]=()=>{
+  const fills=[document.getElementById('ota0'),document.getElementById('ota1'),document.getElementById('ota2')];
+  const statuses=[document.getElementById('ota0-s'),document.getElementById('ota1-s'),document.getElementById('ota2-s')];
+  const done=document.getElementById('ota-done');
+  fills.forEach(f=>f.style.width='0');
+  statuses.forEach(s=>{s.textContent='待機中';s.style.color='var(--textm)';});
+  done.style.opacity='0';
+  const DELAYS=[800,1800,2600];
+  const DURS=[2000,2500,3000];
+  const timers=[];
+  DELAYS.forEach((delay,i)=>{
+    const t=setTimeout(()=>{
+      statuses[i].textContent='配信中';statuses[i].style.color='var(--cyan)';
+      fills[i].style.transition=`width ${DURS[i]}ms ease`;
+      fills[i].style.width='100%';
+      setTimeout(()=>{statuses[i].textContent='✓ v1.3.0';statuses[i].style.color='var(--green)';
+        if(i===fills.length-1)setTimeout(()=>done.style.opacity='1',300);
+      },DURS[i]);
+    },delay);
+    timers.push(t);
+  });
+  return()=>{timers.forEach(t=>clearTimeout(t));fills.forEach(f=>{f.style.transition='none';f.style.width='0';});done.style.opacity='0';};
+};
+
+// Scene 8: multi-tenant mini charts
+ANIMS[8]=()=>{
+  let alive=true;
+  const dataA=Array(30).fill(24.3),dataB=Array(30).fill(98.2);
+  const canA=document.getElementById('mt-chart-a'),canB=document.getElementById('mt-chart-b');
+  [canA,canB].forEach(cv=>{cv.width=300*devicePixelRatio;cv.height=70*devicePixelRatio;cv.style.width='100%';cv.style.height='70px';});
+  function drawMT(canvas,data,color){
+    const c=canvas.getContext('2d');
+    const W=canvas.width/devicePixelRatio,H=canvas.height/devicePixelRatio;
+    c.clearRect(0,0,canvas.width,canvas.height);c.scale(devicePixelRatio,devicePixelRatio);
+    const mn=Math.min(...data)-2,mx=Math.max(...data)+2;
+    c.beginPath();c.moveTo(0,H-(data[0]-mn)/(mx-mn)*H*.8-H*.1);
+    data.forEach((v,i)=>c.lineTo(i/(data.length-1)*W,H-(v-mn)/(mx-mn)*H*.8-H*.1));
+    c.strokeStyle=color;c.lineWidth=2;c.lineJoin='round';c.stroke();
+    c.setTransform(1,0,0,1,0,0);
+  }
+  function frame(){
+    if(!alive)return;
+    const t=performance.now()/1000;
+    dataA.push(24.3+Math.sin(t*0.4)*1.8+Math.random()*.4-.2);if(dataA.length>30)dataA.shift();
+    dataB.push(98.2+Math.sin(t*0.5)*1.2+Math.random()*.3-.15);if(dataB.length>30)dataB.shift();
+    drawMT(canA,dataA,'#2E7EF5');drawMT(canB,dataB,'#00C6FF');
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return()=>{alive=false;};
+};
+
+// Scene 9: summary stagger
+ANIMS[9]=()=>{
+  const items=document.querySelectorAll('#s9 .feat-item');
+  items.forEach(el=>{el.style.opacity='0';el.style.transform='translateY(10px)';el.style.transition='opacity .4s ease,transform .4s ease';});
+  const ts=[];
+  items.forEach((el,i)=>{
+    const t=setTimeout(()=>{el.style.opacity='1';el.style.transform='none';},i*80+100);
+    ts.push(t);
+  });
+  return()=>{ts.forEach(t=>clearTimeout(t));items.forEach(el=>{el.style.opacity='';el.style.transform='';el.style.transition='';});};
+};
+
+// Start
+goTo(0);
+</script>
