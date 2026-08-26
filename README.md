@@ -9,7 +9,7 @@ claudeさんと一緒に作ったものなので、このリポジトリにあ�
 
       ページ        URL                            
   トップ（ナビ）　　https://taz-szk.github.io/iotpf-proto/                   
-  紹介動画　　　　　https://taz-szk.github.io/iotpf-proto/promo.html
+  紹介動画　　　　　https://taz-szk.github.io/iotpf-proto/promo.html                   
   インストール手順　https://taz-szk.github.io/iotpf-proto/install-guide.html                  
   ドキュメント　　　https://taz-szk.github.io/iotpf-proto/design.html        
  
