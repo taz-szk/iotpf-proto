@@ -405,12 +405,15 @@ td code { font-size: 12px; }
   .header-inner { gap: 12px; }
   .doc-title { font-size: 22px; }
 }
+.home-link{color:var(--text-3);font-size:12px;font-family:'Cascadia Code','Consolas',monospace;text-decoration:none;white-space:nowrap;padding:4px 8px;border-radius:5px;border:1px solid transparent;transition:color .15s,border-color .15s;flex-shrink:0}
+.home-link:hover{color:var(--accent);border-color:var(--border)}
 </style>
 </head>
 <body>
 
 <header class="site-header">
   <div class="header-inner">
+    <a href="index.html" class="home-link">← Top</a>
     <div class="site-title">iot<span>://</span>platform</div>
     <nav class="tab-bar" role="tablist">
       <button class="tab-btn active" role="tab" onclick="switchTab(0)">
