@@ -177,6 +177,8 @@ canvas{display:block}
   .fade-item,.scene,#progress{transition:none}
   #s0 .logo,#s0 .tagline{animation:none;opacity:1;letter-spacing:.02em}
 }
+.home-link{color:var(--textm);font-size:12px;font-family:'JetBrains Mono',monospace;text-decoration:none;white-space:nowrap;padding:4px 8px;border-radius:5px;border:1px solid transparent;transition:color .15s,border-color .15s;min-width:52px}
+.home-link:hover{color:var(--accent);border-color:var(--border)}
 </style>
 
 <div id="player">
@@ -552,6 +554,7 @@ canvas{display:block}
   <div id="controls">
     <div id="timeline"><div id="progress"></div></div>
     <div id="nav">
+      <a href="index.html" class="home-link">← Top</a>
       <div id="counter">1 / 10</div>
       <div id="dots"></div>
       <div id="btns">
