@@ -194,7 +194,7 @@ td:first-child{color:var(--text-1);font-weight:500;font-family:var(--mono);font-
   <div class="hero">
     <div class="eyebrow">Device Simulator</div>
     <h1>IoT デバイスシミュレータ<br>利用ガイド</h1>
-    <p class="hero-sub">Windows GUI アプリ（Tkinter）で仮想デバイスを動かし、テレメトリ送信・OTA 更新・異常値注入をテストできます。</p>
+    <p class="hero-sub">クロスプラットフォーム GUI アプリ（Tkinter・Windows / macOS 対応）で仮想デバイスを動かし、テレメトリ送信・OTA 更新・異常値注入をテストできます。</p>
   </div>
 
   <!-- 01 起動 -->
@@ -206,13 +206,13 @@ td:first-child{color:var(--text-1);font-weight:500;font-family:var(--mono);font-
         <div class="step-body">
           <div class="step-title">依存ライブラリをインストールする</div>
           <div class="code-block">
-            <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+            <div class="code-hdr"><span class="code-lang">shell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
             <pre>cd simulator
 pip install -r requirements.txt</pre>
           </div>
           <div class="callout callout-info">
             <span class="callout-icon">ℹ️</span>
-            <span class="callout-body">Tkinter は Python 標準ライブラリに含まれています。Python 3.10 以上を推奨します。</span>
+            <span class="callout-body">Tkinter は Python 標準ライブラリに含まれています。Python 3.10 以上を推奨します。<br><strong>macOS で Homebrew Python を使う場合:</strong> Tkinter が別パッケージになっているため <code>brew install python-tk@3.x</code>（例: <code>python-tk@3.12</code>）を追加でインストールしてください。python.org からインストールした Python はそのまま使えます。</span>
           </div>
         </div>
       </div>
@@ -221,7 +221,7 @@ pip install -r requirements.txt</pre>
         <div class="step-body">
           <div class="step-title">シミュレータを起動する</div>
           <div class="code-block">
-            <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+            <div class="code-hdr"><span class="code-lang">shell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
             <pre>python simulator.py</pre>
           </div>
           <p>前回の設定（テナント・デバイス・テレメトリ設定）は <code>config.json</code> から自動で復元されます。</p>
