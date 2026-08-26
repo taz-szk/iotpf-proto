@@ -61,10 +61,12 @@ ok "openssl found."
 
 step "Setting up environment file..."
 
+ENV_GENERATED=false
 if [[ -f ".env" ]]; then
     warn ".env already exists. Skipping generation (using existing file)."
     warn "Delete .env and re-run to regenerate secrets."
 else
+    ENV_GENERATED=true
     [[ -f ".env.example" ]] || fail ".env.example not found."
 
     PG_PASS=$(rand_hex 24)
@@ -112,6 +114,20 @@ else
     Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
     +-------------------------------------------------+${NC}
 "
+fi
+
+# 新しい .env を生成したのに既存の postgres データボリュームが残っていると
+# パスワード不一致で認証エラーになる。早期に検出して案内する。
+if [[ "$ENV_GENERATED" == "true" ]]; then
+    if docker volume ls --format "{{.Name}}" 2>/dev/null | grep -q "^iot-platform_postgres_data$"; then
+        fail "Postgres データボリューム (iot-platform_postgres_data) が既に存在しています。
+新しい .env を生成したため、ボリューム内のパスワードと一致しません。
+
+古いデータを削除してから再実行してください:
+  docker compose down -v
+  rm .env
+  ./install-ubuntu.sh"
+    fi
 fi
 
 # shellcheck disable=SC1091
@@ -209,9 +225,14 @@ wait_healthy() {
     done
 }
 
-for svc in postgres influxdb step-ca emqx core-api; do
+for svc in postgres influxdb step-ca emqx; do
     wait_healthy "$svc" || true
 done
+
+# core-api は bootstrap の直前に確実に healthy になっているか確認する
+if ! wait_healthy "core-api"; then
+    fail "core-api did not become healthy. Check: docker compose logs core-api"
+fi
 
 # ---- bootstrap platform admin account ----------------------------------------
 # platform_users starts empty — nothing else creates the first login. Seed one
