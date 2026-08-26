@@ -158,6 +158,21 @@ until docker compose exec -T step-ca \
 done
 echo -e " ${GREEN}healthy${NC}"
 
+# デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
+docker compose exec -T step-ca sh -c \
+  "sed -i 's/\"maxTLSCertDuration\": \"24h0m0s\"/\"maxTLSCertDuration\": \"8760h0m0s\"/g' /home/step/config/ca.json"
+docker compose restart step-ca
+printf "    Applying certificate policy"
+RETRIES=0
+until docker compose exec -T step-ca \
+  step ca health --ca-url=https://localhost:9000 \
+  --root=/home/step/certs/root_ca.crt &>/dev/null; do
+    RETRIES=$((RETRIES + 1))
+    if [ "$RETRIES" -ge 10 ]; then echo; fail "Step-CA failed to restart after policy update."; fi
+    sleep 3; printf "."
+done
+echo -e " ${GREEN}done${NC}"
+
 docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
 
 docker compose exec -T step-ca \
