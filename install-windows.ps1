@@ -226,6 +226,23 @@ while ($true) {
 }
 Write-Host " healthy" -ForegroundColor Green
 
+# デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
+docker compose exec -T step-ca sh -c 'sed -i ''s|"maxTLSCertDuration": "24h0m0s"|"maxTLSCertDuration": "8760h0m0s"|g'' /home/step/config/ca.json'
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to patch step-ca policy." }
+docker compose restart step-ca
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to restart step-ca." }
+Write-Host "    Applying certificate policy" -NoNewline
+$retries = 0
+while ($true) {
+    docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt *> $null
+    if ($LASTEXITCODE -eq 0) { break }
+    $retries++
+    if ($retries -ge 10) { Write-Host ""; Write-Fail "Step-CA failed to restart after policy update." }
+    Start-Sleep -Seconds 3
+    Write-Host "." -NoNewline
+}
+Write-Host " done" -ForegroundColor Green
+
 docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
 
 docker compose exec -T step-ca step ca certificate $platformDomain /tmp/server.crt /tmp/server.key `
