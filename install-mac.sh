@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# IoT Platform — macOS installer (Docker Desktop required)
+# IoT Platform — macOS installer (Docker Desktop required)　
 # Run from the iot-platform project root directory.
 set -euo pipefail
 
