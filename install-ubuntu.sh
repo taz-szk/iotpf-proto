@@ -169,8 +169,21 @@ done
 echo -e " ${GREEN}healthy${NC}"
 
 # デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
-docker compose exec -T step-ca sh -c \
-  "sed -i 's/\"maxTLSCertDuration\": \"24h0m0s\"/\"maxTLSCertDuration\": \"8760h0m0s\"/g' /home/step/config/ca.json"
+# ca.json に claims ブロックを追加（フィールドが存在しないためsedではなくPythonで編集）
+docker compose cp step-ca:/home/step/config/ca.json /tmp/iotpf_ca.json
+python3 - <<'PYEOF'
+import json
+with open('/tmp/iotpf_ca.json') as f:
+    ca = json.load(f)
+for p in ca['authority']['provisioners']:
+    if p['name'] == 'iot-platform':
+        p.setdefault('claims', {})['maxTLSCertDuration'] = '8760h0m0s'
+        p.setdefault('claims', {})['defaultTLSCertDuration'] = '24h0m0s'
+with open('/tmp/iotpf_ca.json', 'w') as f:
+    json.dump(ca, f, indent=4)
+PYEOF
+docker compose cp /tmp/iotpf_ca.json step-ca:/home/step/config/ca.json
+rm /tmp/iotpf_ca.json
 docker compose restart step-ca
 printf "    Applying certificate policy"
 RETRIES=0

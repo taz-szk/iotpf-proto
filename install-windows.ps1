@@ -227,8 +227,17 @@ while ($true) {
 Write-Host " healthy" -ForegroundColor Green
 
 # デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
-docker compose exec -T step-ca sh -c 'sed -i ''s|"maxTLSCertDuration": "24h0m0s"|"maxTLSCertDuration": "8760h0m0s"|g'' /home/step/config/ca.json'
-if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to patch step-ca policy." }
+# ca.json に claims ブロックを追加（フィールドが存在しないためJSONとして編集）
+docker compose cp step-ca:/home/step/config/ca.json .\ca_edit_tmp.json
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy ca.json from step-ca." }
+$ca = Get-Content .\ca_edit_tmp.json -Raw | ConvertFrom-Json
+$p = $ca.authority.provisioners | Where-Object { $_.name -eq "iot-platform" }
+$claims = [PSCustomObject]@{ maxTLSCertDuration = "8760h0m0s"; defaultTLSCertDuration = "24h0m0s" }
+$p | Add-Member -MemberType NoteProperty -Name claims -Value $claims -Force
+$ca | ConvertTo-Json -Depth 20 | Out-File .\ca_edit_tmp.json -Encoding utf8
+docker compose cp .\ca_edit_tmp.json step-ca:/home/step/config/ca.json
+if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy patched ca.json to step-ca." }
+Remove-Item .\ca_edit_tmp.json
 docker compose restart step-ca
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to restart step-ca." }
 Write-Host "    Applying certificate policy" -NoNewline
