@@ -65,7 +65,10 @@ def test_dispatch_ota_command_returns_200(client):
 
 def test_firmware_download_with_valid_token(client):
     from app.services.minio_client import create_firmware_download_token
-    token = create_firmware_download_token("fw-001", "tenant-abc", "tenant-abc/fw-001")
+    tenant_id = str(uuid.uuid4())
+    firmware_id = str(uuid.uuid4())
+    minio_key = f"{tenant_id}/{firmware_id}"
+    token = create_firmware_download_token(firmware_id, tenant_id, minio_key)
 
     with patch("app.routers.firmware.stream_firmware", return_value=iter([b"chunk1", b"chunk2"])):
         resp = client.get(f"/firmware-download?token={token}")

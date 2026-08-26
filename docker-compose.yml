@@ -200,10 +200,11 @@ services:
       EMQX_API_URL: "http://emqx:18083"
       EMQX_API_USER: "admin"
       EMQX_API_PASSWORD: "${EMQX_DASHBOARD_PASSWORD}"
+      EMQX_WEBHOOK_SECRET: "${EMQX_WEBHOOK_SECRET}"
       PLATFORM_DOMAIN: "${PLATFORM_DOMAIN:-localhost}"
       GRAFANA_URL: "http://grafana:3000"
       GRAFANA_ADMIN_USER: "${GRAFANA_ADMIN_USER:-admin}"
-      GRAFANA_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-changeme}"
+      GRAFANA_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
     expose:
       - "8000"
     healthcheck:
@@ -230,6 +231,7 @@ services:
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       INFLUXDB_URL: "http://influxdb:8086"
       INFLUXDB_ADMIN_TOKEN: "${INFLUXDB_ADMIN_TOKEN}"
+      EMQX_WEBHOOK_SECRET: "${EMQX_WEBHOOK_SECRET}"
     expose:
       - "8001"
     healthcheck:

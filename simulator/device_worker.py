@@ -77,6 +77,7 @@ class DeviceWorker(threading.Thread):
 
             self._put_event("status", {"state": "connecting"})
             self._client.connect()
+            self._client.set_disconnect_callback(self._on_unexpected_disconnect)
             self._connected_flag.set()
             self._put_event("status", {"state": "connected"})
             self._client.publish_status("online", fw_version=self.fw_version)
@@ -117,6 +118,38 @@ class DeviceWorker(threading.Thread):
             except Exception:
                 pass
 
+    def force_disconnect(self) -> None:
+        """接続中なら offline を送信して MQTT 切断。ワーカーは継続する。"""
+        if not self._client or not self._connected_flag.is_set():
+            return
+        self._connected_flag.clear()
+        self._client.force_disconnect()
+        self._put_event("status", {"state": "disconnected"})
+        self._put_event("log", {"message": f"{self.device_id}: 強制切断", "level": "info"})
+
+    def force_connect(self) -> None:
+        """バックグラウンドで MQTT 再接続を試みる。"""
+        if not self._client or self._connected_flag.is_set():
+            return
+        self._put_event("status", {"state": "connecting"})
+
+        def _do() -> None:
+            ok = self._client.force_connect()
+            if ok:
+                self._client.set_disconnect_callback(self._on_unexpected_disconnect)
+                self._connected_flag.set()
+                try:
+                    self._client.publish_status("online", fw_version=self.fw_version)
+                except Exception:
+                    pass
+                self._put_event("status", {"state": "connected"})
+                self._put_event("log", {"message": f"{self.device_id}: 再接続成功", "level": "info"})
+            else:
+                self._put_event("status", {"state": "error"})
+                self._put_event("log", {"message": f"{self.device_id}: 再接続失敗", "level": "error"})
+
+        threading.Thread(target=_do, daemon=True, name=f"reconnect-{self.device_id}").start()
+
     def _send_loop(self, interval: float, payload_fn: Callable[[], dict]) -> None:
         while not self._stop_send.is_set():
             if self._client and self._connected_flag.is_set():
@@ -130,6 +163,13 @@ class DeviceWorker(threading.Thread):
                         "log", {"message": f"{self.device_id}: 送信エラー — {exc}", "level": "error"}
                     )
             self._stop_send.wait(interval)
+
+    def _on_unexpected_disconnect(self) -> None:
+        """paho が予期しない切断（rc!=0）を検知したときに呼ばれる。"""
+        if self._connected_flag.is_set():
+            self._connected_flag.clear()
+            self._put_event("status", {"state": "disconnected"})
+            self._put_event("log", {"message": f"{self.device_id}: 予期しない切断を検知", "level": "warn"})
 
     def _put_event(self, event_type: str, data: dict) -> None:
         self._queue.put((self.wid, event_type, data))

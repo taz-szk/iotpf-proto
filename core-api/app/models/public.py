@@ -22,6 +22,7 @@ class PlatformUser(Base):
     email = Column(String(255), nullable=False, unique=True)
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    token_version = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ProvisioningToken(Base):

@@ -16,16 +16,17 @@ def _ensure_bucket(client: InfluxDBClient, org_id: str) -> None:
 
 def write_device_status(
     org_id: str,
+    token: str,
     tenant_id: str,
     device_id: str,
     device_name: str,
     status: str,
 ) -> None:
     online_value = 1 if status == "online" else 0
-    admin_client = InfluxDBClient(url=settings.influxdb_url, token=settings.influxdb_admin_token, org=org_id)
+    client = InfluxDBClient(url=settings.influxdb_url, token=token, org=org_id)
     try:
-        _ensure_bucket(admin_client, org_id)
-        write_api = admin_client.write_api(write_options=SYNCHRONOUS)
+        _ensure_bucket(client, org_id)
+        write_api = client.write_api(write_options=SYNCHRONOUS)
         point = Point("device_status") \
             .tag("tenant_id", tenant_id) \
             .tag("device_id", device_id) \
@@ -34,11 +35,12 @@ def write_device_status(
             .time(datetime.now(timezone.utc))
         write_api.write(bucket=BUCKET_NAME, record=point)
     finally:
-        admin_client.close()
+        client.close()
 
 
 def write_telemetry(
     org_id: str,
+    token: str,
     tenant_id: str,
     device_id: str,
     device_name: str,
@@ -46,10 +48,10 @@ def write_telemetry(
     timestamp: datetime | None = None,
 ) -> None:
     ts = timestamp or datetime.now(timezone.utc)
-    admin_client = InfluxDBClient(url=settings.influxdb_url, token=settings.influxdb_admin_token, org=org_id)
+    client = InfluxDBClient(url=settings.influxdb_url, token=token, org=org_id)
     try:
-        _ensure_bucket(admin_client, org_id)
-        write_api = admin_client.write_api(write_options=SYNCHRONOUS)
+        _ensure_bucket(client, org_id)
+        write_api = client.write_api(write_options=SYNCHRONOUS)
         point = Point("telemetry") \
             .tag("tenant_id", tenant_id) \
             .tag("device_id", device_id) \
@@ -60,4 +62,4 @@ def write_telemetry(
                 point = point.field(key, float(value))
         write_api.write(bucket=BUCKET_NAME, record=point)
     finally:
-        admin_client.close()
+        client.close()

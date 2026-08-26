@@ -21,6 +21,7 @@ def test_login_success(client):
     mock_user.id = "11111111-1111-1111-1111-111111111111"
     mock_user.email = "admin@example.com"
     mock_user.is_active = True
+    mock_user.token_version = 1
 
     with patch("app.routers.auth.SessionLocal") as mock_session, \
          patch("app.routers.auth.verify_password", return_value=True):

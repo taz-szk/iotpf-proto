@@ -396,14 +396,15 @@ def list_sensor_keys_portal(payload: dict = Depends(_require_tenant)):
     )
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-        if not tenant or not tenant.influxdb_org_id:
+        if not tenant or not tenant.influxdb_org_id or not tenant.influxdb_token:
             return []
         org_id = tenant.influxdb_org_id
+        token = tenant.influxdb_token
     try:
         resp = httpx.post(
             f"{settings.influxdb_url}/api/v2/query?orgID={org_id}",
             headers={
-                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Authorization": f"Token {token}",
                 "Content-Type": "application/json",
             },
             json={"query": query, "type": "flux"},
@@ -573,7 +574,7 @@ def get_stats(payload: dict = Depends(_require_tenant)):
 
     # InfluxDB データポイント数
     data_points_30d = 0
-    if tenant.influxdb_org_id:
+    if tenant.influxdb_org_id and tenant.influxdb_token:
         query = (
             'from(bucket: "telemetry")\n'
             '  |> range(start: -30d)\n'
@@ -586,7 +587,7 @@ def get_stats(payload: dict = Depends(_require_tenant)):
             resp = httpx.post(
                 f"{settings.influxdb_url}/api/v2/query?orgID={tenant.influxdb_org_id}",
                 headers={
-                    "Authorization": f"Token {settings.influxdb_admin_token}",
+                    "Authorization": f"Token {tenant.influxdb_token}",
                     "Content-Type": "application/json",
                 },
                 json={"query": query, "type": "flux"},
@@ -688,11 +689,17 @@ def deactivate_firmware(firmware_id: str, payload: dict = Depends(_require_admin
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firmware not found")
 
 
+class _OtaDispatchBody(BaseModel):
+    firmware_id: str
+
+
 @router.post("/me/devices/{device_id}/ota")
-def dispatch_ota(device_id: str, body: dict, payload: dict = Depends(_require_admin_or_operator)):
+def dispatch_ota(device_id: str, body: _OtaDispatchBody, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
-    firmware_id = body.get("firmware_id", "")
+    firmware_id = body.firmware_id
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', firmware_id.lower()):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid firmware_id")
     with SessionLocal() as db:
         row = db.execute(text(f'''
             SELECT minio_key, version, checksum, file_size

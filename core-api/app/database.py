@@ -165,6 +165,16 @@ def migrate_add_public_token() -> None:
         conn.commit()
 
 
+def migrate_add_token_version() -> None:
+    """platform_users テーブルに token_version カラムを追加する。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE platform_users
+            ADD COLUMN IF NOT EXISTS token_version INTEGER NOT NULL DEFAULT 1
+        """))
+        conn.commit()
+
+
 def migrate_add_device_name() -> None:
     """全テナントの devices テーブルに device_name カラムを追加する。"""
     from app.models.public import Tenant

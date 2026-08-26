@@ -6,6 +6,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.database import SessionLocal, add_firmware_tables_to_tenant_schema
@@ -23,6 +24,10 @@ from app.config import settings
 
 router = APIRouter()
 _bearer = HTTPBearer()
+
+
+class OtaDispatchBody(BaseModel):
+    firmware_id: str
 
 
 def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
@@ -147,12 +152,12 @@ def deactivate_firmware(tenant_id: str, firmware_id: str, _: dict = Depends(_req
 def dispatch_ota_command(
     tenant_id: str,
     device_id: str,
-    body: dict,
+    body: OtaDispatchBody,
     _: dict = Depends(_require_platform),
 ):
     _validate_uuid(tenant_id, "tenant_id")
     device_id = _validate_device_id(device_id)
-    firmware_id = _validate_uuid(body.get("firmware_id", ""), "firmware_id")
+    firmware_id = _validate_uuid(body.firmware_id, "firmware_id")
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     schema = f"tenant_{schema_suffix}"
 

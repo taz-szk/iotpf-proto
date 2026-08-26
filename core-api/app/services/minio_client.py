@@ -1,11 +1,17 @@
 import io
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Iterator
 
 from minio import Minio
-from jose import jwt as jose_jwt
+import jwt
 
 from app.config import settings
+
+_MINIO_KEY_RE = re.compile(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+    r'/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+)
 
 
 def _get_client() -> Minio:
@@ -67,14 +73,17 @@ def create_firmware_download_token(firmware_id: str, tenant_id: str, minio_key: 
         "purpose": "firmware_download",
         "exp": datetime.now(tz=timezone.utc) + timedelta(hours=24),
     }
-    return jose_jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
 def decode_firmware_download_token(token: str) -> dict:
     try:
-        payload = jose_jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
-    except Exception as e:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except jwt.PyJWTError as e:
         raise ValueError(f"Invalid token: {e}") from e
     if payload.get("purpose") != "firmware_download":
         raise ValueError("Token purpose mismatch")
+    minio_key = payload.get("minio_key", "")
+    if not _MINIO_KEY_RE.match(minio_key):
+        raise ValueError("Invalid minio_key in token")
     return payload

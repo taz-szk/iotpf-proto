@@ -38,7 +38,7 @@ def _parse_influx_csv_scalar(csv_text: str) -> int:
     return 0
 
 
-def _count_influxdb_points(influxdb_org_id: str) -> int:
+def _count_influxdb_points(influxdb_org_id: str, token: str) -> int:
     query = (
         'from(bucket: "telemetry")\n'
         '  |> range(start: -30d)\n'
@@ -51,7 +51,7 @@ def _count_influxdb_points(influxdb_org_id: str) -> int:
         resp = httpx.post(
             f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
             headers={
-                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Authorization": f"Token {token}",
                 "Content-Type": "application/json",
             },
             json={"query": query, "type": "flux"},
@@ -93,7 +93,7 @@ def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
         except Exception:
             firmware_releases = 0
 
-    data_points_30d = _count_influxdb_points(tenant.influxdb_org_id)
+    data_points_30d = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
 
     return {
         "tenant_id": tenant_id,

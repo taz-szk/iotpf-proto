@@ -1,4 +1,5 @@
 .env
+**/.env
 certs/
 step-ca/data/
 postgres/data/

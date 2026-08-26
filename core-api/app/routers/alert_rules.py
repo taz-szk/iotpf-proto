@@ -23,7 +23,7 @@ def _schema(tenant_id: str) -> str:
         raise HTTPException(status_code=400, detail="Invalid tenant_id")
     return f"tenant_{tenant_id.replace('-', '_')}"
 
-def _fetch_sensor_keys(influxdb_org_id: str) -> list[str]:
+def _fetch_sensor_keys(influxdb_org_id: str, token: str) -> list[str]:
     query = (
         'import "influxdata/influxdb/schema"\n'
         'schema.fieldKeys(\n'
@@ -36,7 +36,7 @@ def _fetch_sensor_keys(influxdb_org_id: str) -> list[str]:
         resp = httpx.post(
             f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
             headers={
-                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Authorization": f"Token {token}",
                 "Content-Type": "application/json",
             },
             json={"query": query, "type": "flux"},
@@ -67,9 +67,9 @@ def list_sensor_keys(tenant_id: str, _: dict = Depends(_require_platform)):
     _schema(tenant_id)
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-        if not tenant or not tenant.influxdb_org_id:
+        if not tenant or not tenant.influxdb_org_id or not tenant.influxdb_token:
             return []
-    return _fetch_sensor_keys(tenant.influxdb_org_id)
+    return _fetch_sensor_keys(tenant.influxdb_org_id, tenant.influxdb_token)
 
 
 class AlertRuleCreate(BaseModel):

@@ -329,6 +329,7 @@ class SimulatorApp(tk.Tk):
         self._random_fields_inner: Optional[tk.Frame] = None
         self._ota_dialogs: dict[int, OtaProgressDialog] = {}
         self._fw_version_labels: dict[int, tk.Label] = {}
+        self._toggle_buttons: dict[int, ttk.Button] = {}
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -603,6 +604,10 @@ class SimulatorApp(tk.Tk):
         tk.Button(row, text="✕", font=("", 8), fg="gray", relief=tk.FLAT, bd=0,
                   cursor="hand2", command=lambda w=wid: self._remove_device(w)
                   ).pack(side=tk.RIGHT, padx=2)
+        toggle_btn = ttk.Button(row, text="切断", width=5, state=tk.DISABLED,
+                                command=lambda w=wid: self._toggle_connection(w))
+        toggle_btn.pack(side=tk.RIGHT, padx=(0, 2))
+        self._toggle_buttons[wid] = toggle_btn
         self._state_labels[wid] = state_lbl
         self._fw_version_labels[wid] = fw_lbl
         self._device_rows[wid] = row
@@ -688,6 +693,7 @@ class SimulatorApp(tk.Tk):
         self._workers.pop(wid, None)
         self._state_labels.pop(wid, None)
         self._fw_version_labels.pop(wid, None)
+        self._toggle_buttons.pop(wid, None)
         self._device_tenants.pop(wid, None)
         row = self._device_rows.pop(wid, None)
         if row:
@@ -835,11 +841,32 @@ class SimulatorApp(tk.Tk):
         except tk.TclError:
             pass
 
+    def _toggle_connection(self, wid: int) -> None:
+        worker = self._workers.get(wid)
+        if not worker:
+            return
+        btn = self._toggle_buttons.get(wid)
+        if btn:
+            btn.config(state=tk.DISABLED)
+        if worker._connected_flag.is_set():
+            threading.Thread(target=worker.force_disconnect, daemon=True,
+                             name=f"force-disc-{wid}").start()
+        else:
+            worker.force_connect()
+
     def _update_state(self, wid: int, state: str) -> None:
         lbl = self._state_labels.get(wid)
         if lbl:
             lbl.config(text=f"{STATE_ICONS.get(state,'?')} {state}",
                        fg=STATE_COLORS.get(state, "black"))
+        btn = self._toggle_buttons.get(wid)
+        if btn:
+            if state == "connected":
+                btn.config(text="切断", state=tk.NORMAL)
+            elif state == "disconnected":
+                btn.config(text="接続", state=tk.NORMAL)
+            else:
+                btn.config(state=tk.DISABLED)
 
     def _append_log(self, message: str, level: str = "info") -> None:
         ts = datetime.now().strftime("%H:%M:%S")

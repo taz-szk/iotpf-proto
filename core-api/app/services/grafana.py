@@ -12,8 +12,13 @@ _FLUX_TELEMETRY = (
 )
 
 _FLUX_DEVICE_VAR = (
-    'import "influxdata/influxdb/schema"\n'
-    'schema.tagValues(bucket: "telemetry", tag: "device_name", start: -30d)'
+    'from(bucket: "telemetry")\n'
+    '  |> range(start: -30d)\n'
+    '  |> filter(fn: (r) => r._measurement == "device_status")\n'
+    '  |> filter(fn: (r) => r._field == "online")\n'
+    '  |> group(columns: ["device_name"])\n'
+    '  |> last()\n'
+    '  |> map(fn: (r) => ({_value: r.device_name}))'
 )
 
 _FLUX_DELETED = (

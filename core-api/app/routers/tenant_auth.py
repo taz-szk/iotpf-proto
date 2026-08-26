@@ -1,10 +1,11 @@
 from datetime import timedelta
-from fastapi import APIRouter, Cookie, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from app.schemas.tenant_auth import TenantLoginRequest, TenantLoginResponse
 import secrets as _secrets
 from app.services.auth import verify_password, create_access_token, hash_password, verify_token
+from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
@@ -30,7 +31,12 @@ def _equalize_timing(password: str) -> None:
 
 
 @router.post("/login", response_model=TenantLoginResponse)
-def tenant_login(req: TenantLoginRequest, response: Response):
+def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
+    ip = request.client.host if request.client else "unknown"
+    rate_key = f"tenant_login:{ip}"
+    if is_rate_limited(rate_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
+
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(
             Tenant.slug == req.tenant_slug,
@@ -38,6 +44,7 @@ def tenant_login(req: TenantLoginRequest, response: Response):
         ).first()
     if not tenant:
         _equalize_timing(req.password)  # timing equalization
+        record_failure(rate_key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if tenant.grafana_org_id is None:
@@ -53,11 +60,14 @@ def tenant_login(req: TenantLoginRequest, response: Response):
 
     if not row:
         _equalize_timing(req.password)  # timing equalization
+        record_failure(rate_key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not verify_password(req.password, row.password_hash):
+        record_failure(rate_key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
+    clear_failures(rate_key)
     # Grafana org にユーザーを同期し、デフォルト org を設定する
     # 初回ログイン時に org メンバーシップが作られていない場合の保険
     if tenant.grafana_org_id:

@@ -16,15 +16,16 @@ def evaluate_all_tenants() -> None:
     for tenant in tenants:
         tenant_id = tenant["id"]
         org_id = tenant["influxdb_org_id"]
-        if not org_id:
+        token = tenant.get("influxdb_token") or ""
+        if not org_id or not token:
             continue
         try:
-            _evaluate_tenant(tenant_id, org_id)
+            _evaluate_tenant(tenant_id, org_id, token)
             _check_dead_devices(tenant_id)
         except Exception as e:
             print(f"Error processing tenant {tenant_id}: {e}")
 
-def _evaluate_tenant(tenant_id: str, org_id: str) -> None:
+def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
     rules = get_active_alert_rules(tenant_id)
     for rule in rules:
         rule_id = rule["id"]
@@ -32,7 +33,7 @@ def _evaluate_tenant(tenant_id: str, org_id: str) -> None:
         if rule["condition"] == "device_offline":
             continue
         try:
-            should_alert, last_value = evaluate_rule(rule, org_id)
+            should_alert, last_value = evaluate_rule(rule, org_id, token)
         except Exception as e:
             print(f"Eval error rule {rule_id}: {e}")
             continue

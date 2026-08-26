@@ -1,4 +1,5 @@
-from fastapi import APIRouter
+import hmac
+from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from app.database import SessionLocal
@@ -10,6 +11,14 @@ import re
 import httpx
 
 router = APIRouter(prefix="/emqx")
+
+
+def _verify_emqx_secret(x_api_key: Optional[str] = Header(default=None)) -> None:
+    if x_api_key is None or not hmac.compare_digest(
+        x_api_key.encode(), settings.emqx_webhook_secret.encode()
+    ):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
 
 class DeviceEvent(BaseModel):
     clientid: str = ""
@@ -24,14 +33,14 @@ def _parse_clientid(clientid: str):
         return None, None
     return m.group(1), m.group(2)
 
-def _write_status_to_influxdb(org_id: str, tenant_id: str, device_id: str, device_name: str, online: int) -> None:
+def _write_status_to_influxdb(org_id: str, token: str, tenant_id: str, device_id: str, device_name: str, online: int) -> None:
     esc = device_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
     line = f'device_status,tenant_id={tenant_id},device_id={device_id},device_name={esc} online={online}i'
     try:
         httpx.post(
             f"{settings.influxdb_url}/api/v2/write?orgID={org_id}&bucket=telemetry&precision=ns",
             headers={
-                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Authorization": f"Token {token}",
                 "Content-Type": "text/plain; charset=utf-8",
             },
             content=line.encode(),
@@ -41,7 +50,7 @@ def _write_status_to_influxdb(org_id: str, tenant_id: str, device_id: str, devic
         pass
 
 
-@router.post("/events")
+@router.post("/events", dependencies=[Depends(_verify_emqx_secret)])
 def handle_device_event(req: DeviceEvent):
     tenant_id, device_id = _parse_clientid(req.clientid)
     if not tenant_id:
@@ -56,6 +65,7 @@ def handle_device_event(req: DeviceEvent):
 
     device_name = device_id
     influxdb_org_id = None
+    influxdb_token = None
     try:
         with SessionLocal() as db:
             row = db.execute(text(f'''
@@ -66,6 +76,7 @@ def handle_device_event(req: DeviceEvent):
             tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
             if tenant:
                 influxdb_org_id = tenant.influxdb_org_id
+                influxdb_token = tenant.influxdb_token
             db.execute(text(f'''
                 UPDATE "{schema}".devices
                 SET connection_status = :status, last_seen_at = :now
@@ -75,7 +86,7 @@ def handle_device_event(req: DeviceEvent):
     except Exception:
         pass
 
-    if influxdb_org_id:
-        _write_status_to_influxdb(influxdb_org_id, tenant_id, device_id, device_name, online_val)
+    if influxdb_org_id and influxdb_token:
+        _write_status_to_influxdb(influxdb_org_id, influxdb_token, tenant_id, device_id, device_name, online_val)
 
     return {"result": "ok"}

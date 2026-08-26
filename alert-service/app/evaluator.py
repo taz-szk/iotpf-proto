@@ -11,6 +11,7 @@ def _safe_id(value: str) -> bool:
 
 def _flux_values_by_device(
     org_id: str,
+    token: str,
     device_id: str | None,
     sensor_key: str,
     window_sec: int,
@@ -27,7 +28,7 @@ def _flux_values_by_device(
 
     client = InfluxDBClient(
         url=settings.influxdb_url,
-        token=settings.influxdb_admin_token,
+        token=token,
         org=org_id,
     )
     try:
@@ -105,7 +106,7 @@ def _check_trigger(
     return False, None
 
 
-def evaluate_rule(rule: dict, org_id: str) -> tuple[bool, float | None]:
+def evaluate_rule(rule: dict, org_id: str, token: str) -> tuple[bool, float | None]:
     if rule["condition"] == "device_offline":
         return False, None
 
@@ -117,7 +118,7 @@ def evaluate_rule(rule: dict, org_id: str) -> tuple[bool, float | None]:
     duration_sec = rule["duration_sec"]
 
     window_sec = max(duration_sec + 60, consecutive_count * 60 + 60)
-    by_device = _flux_values_by_device(org_id, device_id, sensor_key, window_sec)
+    by_device = _flux_values_by_device(org_id, token, device_id, sensor_key, window_sec)
 
     if not by_device:
         return False, None
