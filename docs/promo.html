@@ -129,6 +129,15 @@ canvas{display:block}
 .mt-metric{display:flex;justify-content:space-between;align-items:center;font-size:.8rem}
 .mt-metric .label{color:var(--textm)}
 .mt-metric .val{font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:600;color:var(--text)}
+.mt-devlist{margin-top:4px;border-radius:6px;overflow:hidden;border:1px solid var(--border)}
+.mt-devrow{display:grid;grid-template-columns:8px 1fr auto auto;gap:8px;align-items:center;padding:5px 10px;border-bottom:1px solid var(--border);font-family:'JetBrains Mono',monospace}
+.mt-devrow:last-child{border-bottom:none}
+.mt-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.mt-dot.on{background:var(--green);box-shadow:0 0 4px var(--green)}
+.mt-dot.off{background:var(--textd)}
+.mt-devid{font-size:.68rem;color:var(--text)}
+.mt-devval{font-size:.68rem;color:var(--accent);text-align:right}
+.mt-devtime{font-size:.62rem;color:var(--textd);white-space:nowrap}
 
 /* grid layout helpers */
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -494,7 +503,11 @@ canvas{display:block}
             <div class="mt-metric"><span class="label">Grafana Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">Org #3</span></div>
             <div class="mt-metric"><span class="label">接続デバイス</span><span class="val">12台</span></div>
             <div class="mt-metric"><span class="label">本日のメッセージ</span><span class="val">47,382</span></div>
-            <canvas id="mt-chart-a" height="70" style="margin-top:8px"></canvas>
+            <div class="mt-devlist">
+              <div class="mt-devrow"><span class="mt-dot on"></span><span class="mt-devid">sensor-f01</span><span class="mt-devval">24.3°C</span><span class="mt-devtime" data-sec="3">3秒前</span></div>
+              <div class="mt-devrow"><span class="mt-dot on"></span><span class="mt-devid">sensor-f02</span><span class="mt-devval">25.1°C</span><span class="mt-devtime" data-sec="7">7秒前</span></div>
+              <div class="mt-devrow"><span class="mt-dot off"></span><span class="mt-devid">sensor-f03</span><span class="mt-devval">—</span><span class="mt-devtime" data-sec="247">4分前</span></div>
+            </div>
           </div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;flex-shrink:0">
@@ -514,7 +527,11 @@ canvas{display:block}
             <div class="mt-metric"><span class="label">Grafana Org</span><span class="val" style="font-family:'JetBrains Mono',monospace;font-size:.8rem;color:var(--cyan)">Org #4</span></div>
             <div class="mt-metric"><span class="label">接続デバイス</span><span class="val">8台</span></div>
             <div class="mt-metric"><span class="label">本日のメッセージ</span><span class="val">31,207</span></div>
-            <canvas id="mt-chart-b" height="70" style="margin-top:8px"></canvas>
+            <div class="mt-devlist">
+              <div class="mt-devrow"><span class="mt-dot on"></span><span class="mt-devid">sensor-h01</span><span class="mt-devval">SpO2 98%</span><span class="mt-devtime" data-sec="2">2秒前</span></div>
+              <div class="mt-devrow"><span class="mt-dot on"></span><span class="mt-devid">sensor-h02</span><span class="mt-devval">SpO2 99%</span><span class="mt-devtime" data-sec="5">5秒前</span></div>
+              <div class="mt-devrow"><span class="mt-dot on"></span><span class="mt-devid">sensor-h03</span><span class="mt-devval">SpO2 97%</span><span class="mt-devtime" data-sec="11">11秒前</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -982,32 +999,21 @@ ANIMS[7]=()=>{
   return()=>{timers.forEach(t=>clearTimeout(t));fills.forEach(f=>{f.style.transition='none';f.style.width='0';});done.style.opacity='0';};
 };
 
-// Scene 8: multi-tenant mini charts
+// Scene 8: multi-tenant device list timestamps
 ANIMS[8]=()=>{
-  let alive=true;
-  const dataA=Array(30).fill(24.3),dataB=Array(30).fill(98.2);
-  const canA=document.getElementById('mt-chart-a'),canB=document.getElementById('mt-chart-b');
-  [canA,canB].forEach(cv=>{cv.width=300*devicePixelRatio;cv.height=70*devicePixelRatio;cv.style.width='100%';cv.style.height='70px';});
-  function drawMT(canvas,data,color){
-    const c=canvas.getContext('2d');
-    const W=canvas.width/devicePixelRatio,H=canvas.height/devicePixelRatio;
-    c.clearRect(0,0,canvas.width,canvas.height);c.scale(devicePixelRatio,devicePixelRatio);
-    const mn=Math.min(...data)-2,mx=Math.max(...data)+2;
-    c.beginPath();c.moveTo(0,H-(data[0]-mn)/(mx-mn)*H*.8-H*.1);
-    data.forEach((v,i)=>c.lineTo(i/(data.length-1)*W,H-(v-mn)/(mx-mn)*H*.8-H*.1));
-    c.strokeStyle=color;c.lineWidth=2;c.lineJoin='round';c.stroke();
-    c.setTransform(1,0,0,1,0,0);
+  const rows=document.querySelectorAll('#s8 [data-sec]');
+  const base={};rows.forEach(el=>{base[el.dataset.sec+Math.random()]=el;});
+  const init={};rows.forEach(el=>{init[el]=parseInt(el.dataset.sec);});
+  const start=performance.now();
+  function fmt(s){return s<60?s+'秒前':Math.floor(s/60)+'分前';}
+  let tid;
+  function tick(){
+    const elapsed=Math.round((performance.now()-start)/1000);
+    rows.forEach(el=>{el.textContent=fmt(init[el]+elapsed);});
+    tid=setTimeout(tick,1000);
   }
-  function frame(){
-    if(!alive)return;
-    const t=performance.now()/1000;
-    dataA.push(24.3+Math.sin(t*0.4)*1.8+Math.random()*.4-.2);if(dataA.length>30)dataA.shift();
-    dataB.push(98.2+Math.sin(t*0.5)*1.2+Math.random()*.3-.15);if(dataB.length>30)dataB.shift();
-    drawMT(canA,dataA,'#2E7EF5');drawMT(canB,dataB,'#00C6FF');
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
-  return()=>{alive=false;};
+  tick();
+  return()=>{clearTimeout(tid);};
 };
 
 // Scene 9: summary stagger
