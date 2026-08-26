@@ -227,14 +227,27 @@ while ($true) {
 Write-Host " healthy" -ForegroundColor Green
 
 # デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
-# ca.json に claims ブロックを追加（フィールドが存在しないためJSONとして編集）
+# ca.json に claims ブロックを追加（Python3 で BOM なし UTF-8 として編集）
 docker compose cp step-ca:/home/step/config/ca.json .\ca_edit_tmp.json
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy ca.json from step-ca." }
-$ca = Get-Content .\ca_edit_tmp.json -Raw | ConvertFrom-Json
-$p = $ca.authority.provisioners | Where-Object { $_.name -eq "iot-platform" }
-$claims = [PSCustomObject]@{ maxTLSCertDuration = "8760h0m0s"; defaultTLSCertDuration = "24h0m0s" }
-$p | Add-Member -MemberType NoteProperty -Name claims -Value $claims -Force
-$ca | ConvertTo-Json -Depth 20 | Out-File .\ca_edit_tmp.json -Encoding utf8
+$patchPy = @'
+import json, sys
+with open('ca_edit_tmp.json', encoding='utf-8-sig') as f:
+    ca = json.load(f)
+for p in ca['authority']['provisioners']:
+    if p['name'] == 'iot-platform':
+        p.setdefault('claims', {})['maxTLSCertDuration'] = '8760h0m0s'
+        p.setdefault('claims', {})['defaultTLSCertDuration'] = '24h0m0s'
+with open('ca_edit_tmp.json', 'w', encoding='utf-8') as f:
+    json.dump(ca, f, indent=4)
+'@
+$patched = $false
+foreach ($py in @('python3', 'python')) {
+    if (Get-Command $py -ErrorAction SilentlyContinue) {
+        $patchPy | & $py; if ($LASTEXITCODE -eq 0) { $patched = $true; break }
+    }
+}
+if (-not $patched) { Remove-Item .\ca_edit_tmp.json -ErrorAction SilentlyContinue; Write-Fail "Python 3 が見つかりません。Python 3 をインストールしてから再実行してください。" }
 docker compose cp .\ca_edit_tmp.json step-ca:/home/step/config/ca.json
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy patched ca.json to step-ca." }
 Remove-Item .\ca_edit_tmp.json
