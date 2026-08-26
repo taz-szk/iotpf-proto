@@ -915,24 +915,30 @@ ANIMS[5]=()=>{
   }
 
   const sdata=charts.map(ch=>Array(20).fill(ch.base));
-  let tick2=0;
+  let tick2=0,lastData=0;
 
   function frame(){
     if(!alive)return;
-    const t=performance.now()/1000;
+    const now=performance.now();
+    const t=now/1000;
+    if(now-lastData>=500){
+      lastData=now;
+      charts.forEach((ch,ci)=>{
+        const v=ch.base+Math.sin(t*0.4+ci)*ch.amp*0.7+Math.random()*ch.amp*0.3;
+        sdata[ci].push(v);if(sdata[ci].length>20)sdata[ci].shift();
+        document.getElementById(ch.valId).textContent=ch.fmt(v);
+      });
+      mainData.push(24.3+Math.sin(t*0.4)*1.8+Math.random()*0.4-0.2);
+      if(mainData.length>60)mainData.shift();
+      if(tick2++%2===0){
+        const d=new Date();lastUpdateEl.textContent=d.toTimeString().slice(0,8);
+      }
+    }
     charts.forEach((ch,ci)=>{
-      const v=ch.base+Math.sin(t*0.4+ci)*ch.amp*0.7+Math.random()*ch.amp*0.3;
-      sdata[ci].push(v);if(sdata[ci].length>20)sdata[ci].shift();
       const canvas=document.getElementById(ch.id);
       drawLine(canvas,sdata[ci],ch.color,true);
-      document.getElementById(ch.valId).textContent=ch.fmt(v);
     });
-    mainData.push(24.3+Math.sin(t*0.4)*1.8+Math.random()*0.4-0.2);
-    if(mainData.length>60)mainData.shift();
     drawLine(mainCanvas,mainData,'#2E7EF5',true);
-    if(tick2++%10===0){
-      const now=new Date();lastUpdateEl.textContent=now.toTimeString().slice(0,8);
-    }
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
