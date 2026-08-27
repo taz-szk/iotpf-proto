@@ -34,7 +34,18 @@ echo -e "${CYAN}
 
 step "Checking Docker Desktop..."
 
-if ! docker info &>/dev/null; then
+docker_ready=false
+for i in 1 2 3; do
+    if docker info &>/dev/null; then
+        docker_ready=true
+        break
+    fi
+    if [ "$i" -lt 3 ]; then
+        warn "Docker daemon not responding yet (attempt $i/3). Retrying in 5 seconds..."
+        sleep 5
+    fi
+done
+if [ "$docker_ready" = "false" ]; then
     echo ""
     echo "  Docker is not running. On Ubuntu you can start Docker Desktop with:"
     echo "    systemctl --user start docker-desktop"
@@ -328,3 +339,7 @@ echo -e "${CYAN}
   To stop:      docker compose down
   To view logs: docker compose logs -f
 ${NC}"
+
+# ブラウザで管理者ログイン画面を開く
+echo "  Opening admin login in your browser..."
+xdg-open "https://localhost/admin/" 2>/dev/null || true
