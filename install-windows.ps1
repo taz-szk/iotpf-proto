@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     IoT Platform — Windows installer (Docker Desktop required)
@@ -6,9 +6,9 @@
     Generates secrets, writes .env, and starts all services via docker compose.
     Run from the iot-platform project root directory.
 .NOTES
-    Requires: PowerShell 7.0 or later (pwsh.exe)
+    Requires: PowerShell 5.1 or later (Windows PowerShell or pwsh.exe)
               Docker Desktop 4.x or later
-    Install PowerShell 7: winget install Microsoft.PowerShell
+              Python 3.x (python3 or python command)
 #>
 
 Set-StrictMode -Version Latest
