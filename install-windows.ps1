@@ -88,7 +88,7 @@ Write-Step "Checking Docker Desktop..."
 # 起動直後は daemon が応答するまで少し時間がかかるので最大3回リトライする。
 $dockerReady = $false
 for ($i = 1; $i -le 3; $i++) {
-    docker info 2>$null | Out-Null
+    try { $null = docker info 2>&1 } catch { }
     if ($LASTEXITCODE -eq 0) { $dockerReady = $true; break }
     if ($i -lt 3) {
         Write-Warn "Docker daemon not responding yet (attempt $i/3). Retrying in 5 seconds..."
