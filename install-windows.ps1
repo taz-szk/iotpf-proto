@@ -227,17 +227,19 @@ while ($true) {
 Write-Host " healthy" -ForegroundColor Green
 
 # デバイス証明書の最大有効期間を 24h → 8760h（1年）に拡張
-# ca.json に claims ブロックを追加（Python3 で BOM なし UTF-8 として編集）
+# ca.json の provisioner に claims ブロックを追加
 docker compose cp step-ca:/home/step/config/ca.json .\ca_edit_tmp.json
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy ca.json from step-ca." }
-$pyCode = "import json; ca=json.load(open('ca_edit_tmp.json',encoding='utf-8-sig')); [p.setdefault('claims',{}).update({'maxTLSCertDuration':'8760h0m0s','defaultTLSCertDuration':'24h0m0s'}) for p in ca['authority']['provisioners'] if p['name']=='iot-platform']; json.dump(ca,open('ca_edit_tmp.json','w',encoding='utf-8'),indent=4)"
-$patched = $false
-foreach ($py in @('python3', 'python')) {
-    if (Get-Command $py -ErrorAction SilentlyContinue) {
-        & $py -c $pyCode; if ($LASTEXITCODE -eq 0) { $patched = $true; break }
-    }
+$ca = Get-Content .\ca_edit_tmp.json -Raw | ConvertFrom-Json
+$prov = $ca.authority.provisioners | Where-Object { $_.name -eq 'iot-platform' }
+if ($prov) {
+    $claims = New-Object PSObject
+    $claims | Add-Member NoteProperty maxTLSCertDuration '8760h0m0s'
+    $claims | Add-Member NoteProperty defaultTLSCertDuration '24h0m0s'
+    $prov | Add-Member NoteProperty claims $claims -Force
 }
-if (-not $patched) { Remove-Item .\ca_edit_tmp.json -ErrorAction SilentlyContinue; Write-Fail "Python 3 が見つかりません。Python 3 をインストールしてから再実行してください。" }
+$enc = New-Object System.Text.UTF8Encoding $false
+[System.IO.File]::WriteAllText((Join-Path $PWD.Path 'ca_edit_tmp.json'), ($ca | ConvertTo-Json -Depth 20), $enc)
 docker compose cp .\ca_edit_tmp.json step-ca:/home/step/config/ca.json
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy patched ca.json to step-ca." }
 Remove-Item .\ca_edit_tmp.json
