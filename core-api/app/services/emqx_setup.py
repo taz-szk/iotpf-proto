@@ -121,7 +121,7 @@ def _create_action(base_url: str, token: str, name: str, connector: str, path: s
         "name": name,
         "type": "http",
         "enable": True,
-        "connector": connector,
+        "connector": f"http:{connector}",
         "parameters": {
             "method": "post",
             "path": path,
@@ -254,35 +254,26 @@ def ensure_emqx_rules(base_url: str, user: str, password: str, webhook_secret: s
     _ensure_connector(base_url, token, _INGEST_CONNECTOR, "http://ingestion-service:8001")
     _ensure_connector(base_url, token, _EVENT_CONNECTOR, "http://core-api:8000")
 
-    # アクション（毎回再作成して認証ヘッダーを最新に保つ）
+    # ルールを先に削除してからアクションを削除・再作成する（依存関係の逆順）
+    _delete_rule(base_url, token, _INGEST_RULE)
+    _delete_rule(base_url, token, _EVENT_RULE)
     _recreate_action(base_url, token, _INGEST_ACTION, _INGEST_CONNECTOR, "/ingest", _INGEST_BODY, auth_header)
     _recreate_action(base_url, token, _EVENT_ACTION, _EVENT_CONNECTOR, "/emqx/events", _EVENT_BODY, auth_header)
 
-    # telemetry_and_status_ingest ルールは SQL 修正のため強制再作成
-    _recreate_rule(
+    # ルールを再作成
+    _create_rule(
         base_url, token,
         _INGEST_RULE, _INGEST_SQL,
         [f"http:{_INGEST_ACTION}"],
     )
-
-    # device_connection_events ルールは存在しない場合のみ作成
-    try:
-        rules_resp = httpx.get(
-            f"{base_url}/api/v5/rules",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=10.0,
-        )
-        existing_names = {r["name"] for r in rules_resp.json().get("data", [])}
-    except Exception:
-        existing_names = set()
-
-    _ensure_rule(
-        base_url, token, existing_names,
+    _create_rule(
+        base_url, token,
         _EVENT_RULE,
         'SELECT clientid, event, username, peerhost, timestamp '
         'FROM "$events/client_connected", "$events/client_disconnected"',
         [f"http:{_EVENT_ACTION}"],
     )
+    logger.info("EMQX rule setup complete")
 
     # 現在接続中のクライアントを PostgreSQL/InfluxDB に同期
     _sync_connected_clients(base_url, token)
