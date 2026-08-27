@@ -230,21 +230,11 @@ Write-Host " healthy" -ForegroundColor Green
 # ca.json に claims ブロックを追加（Python3 で BOM なし UTF-8 として編集）
 docker compose cp step-ca:/home/step/config/ca.json .\ca_edit_tmp.json
 if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to copy ca.json from step-ca." }
-$patchPy = @'
-import json, sys
-with open('ca_edit_tmp.json', encoding='utf-8-sig') as f:
-    ca = json.load(f)
-for p in ca['authority']['provisioners']:
-    if p['name'] == 'iot-platform':
-        p.setdefault('claims', {})['maxTLSCertDuration'] = '8760h0m0s'
-        p.setdefault('claims', {})['defaultTLSCertDuration'] = '24h0m0s'
-with open('ca_edit_tmp.json', 'w', encoding='utf-8') as f:
-    json.dump(ca, f, indent=4)
-'@
+$pyCode = "import json; ca=json.load(open('ca_edit_tmp.json',encoding='utf-8-sig')); [p.setdefault('claims',{}).update({'maxTLSCertDuration':'8760h0m0s','defaultTLSCertDuration':'24h0m0s'}) for p in ca['authority']['provisioners'] if p['name']=='iot-platform']; json.dump(ca,open('ca_edit_tmp.json','w',encoding='utf-8'),indent=4)"
 $patched = $false
 foreach ($py in @('python3', 'python')) {
     if (Get-Command $py -ErrorAction SilentlyContinue) {
-        $patchPy | & $py; if ($LASTEXITCODE -eq 0) { $patched = $true; break }
+        & $py -c $pyCode; if ($LASTEXITCODE -eq 0) { $patched = $true; break }
     }
 }
 if (-not $patched) { Remove-Item .\ca_edit_tmp.json -ErrorAction SilentlyContinue; Write-Fail "Python 3 が見つかりません。Python 3 をインストールしてから再実行してください。" }
