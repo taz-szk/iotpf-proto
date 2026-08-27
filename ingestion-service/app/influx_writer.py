@@ -8,11 +8,14 @@ BUCKET_NAME = "telemetry"
 def _ensure_bucket(client: InfluxDBClient, org_id: str) -> None:
     buckets_api = client.buckets_api()
     try:
-        existing = buckets_api.find_buckets(name=BUCKET_NAME, org_id=org_id).buckets
+        existing = buckets_api.find_buckets(name=BUCKET_NAME, org_id=org_id).buckets or []
     except Exception:
         existing = []
     if not existing:
-        buckets_api.create_bucket(bucket_name=BUCKET_NAME, org_id=org_id)
+        try:
+            buckets_api.create_bucket(bucket_name=BUCKET_NAME, org_id=org_id)
+        except Exception:
+            pass  # 既に存在する場合（race condition等）は無視
 
 def write_device_status(
     org_id: str,
