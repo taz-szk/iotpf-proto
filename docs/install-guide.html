@@ -321,6 +321,80 @@ docker compose down -v
       </div>
     </div>
 
+    <!-- STEP 6: 実行ログ例 -->
+    <div class="step">
+      <div class="step-num step-num-win">6</div>
+      <div class="step-body">
+        <div class="step-title">実行ログ例（正常完了時）</div>
+        <div class="step-desc">以下は <code>install-windows.ps1</code> が正常に完了したときのログ例です。ハッシュ値は実際には固有の値が表示されます。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">powershell output</span></div>
+          <pre>  Windows Installer  (PowerShell 5.1+ / Docker Desktop required)
+
+==&gt; Checking Docker Desktop...
+    [OK] Docker is running.
+    [OK] docker compose plugin found.
+
+==&gt; Setting up environment file...
+    [OK] .env generated with random secrets.
+
+    +-------------------------------------------------+
+    |  SAVE THESE CREDENTIALS                         |
+    |  (also stored in .env — keep it out of git)     |
+    +-------------------------------------------------+
+    PostgreSQL password  : ****************************
+    InfluxDB password    : ****************************
+    InfluxDB token       : ****************************
+    EMQX dashboard       : ****************************
+    MinIO password       : ****************************
+    Grafana password     : ****************************
+    JWT secret           : ****************************
+    Platform admin login : see PLATFORM_ADMIN_EMAIL / PLATFORM_ADMIN_PASSWORD below
+    +-------------------------------------------------+
+
+==&gt; Pulling Docker images (this may take a few minutes)...
+    [OK] Images ready.
+
+==&gt; Bootstrapping TLS certificates (Step-CA)...
+    Waiting for Step-CA healthy
+    Applying certificate policy done
+    [OK] Server certificate issued for platform.local.
+
+==&gt; Starting services...
+    [OK] Containers started.
+
+==&gt; Waiting for services to become healthy (up to 120 seconds)...
+    Waiting for postgres... healthy
+    Waiting for influxdb... healthy
+    Waiting for step-ca... healthy
+    Waiting for emqx... healthy
+    Waiting for core-api........ healthy
+
+==&gt; Bootstrapping platform admin account...
+    [OK] Platform admin ready (admin@platform.local).
+
+  +---------------------------------------------------------+
+  |  IoT Platform is running!                               |
+  +---------------------------------------------------------+
+  Admin / Login  https://localhost/admin/
+                 admin@platform.local / see PLATFORM_ADMIN_PASSWORD in .env
+  Grafana        https://localhost/grafana/  (behind admin login)
+  MailHog        http://localhost:8025
+  InfluxDB       http://localhost:8086
+  +---------------------------------------------------------+
+
+  Next steps:
+    1. Open https://localhost/admin/ and log in as
+       admin@platform.local (password in .env)
+    2. Create a tenant
+    3. Provision your first device using the bootstrap token
+
+  To stop:      docker compose down
+  To view logs: docker compose logs -f</pre>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /steps -->
 </div><!-- /win -->
 
