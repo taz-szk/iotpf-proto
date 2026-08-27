@@ -218,7 +218,7 @@ Write-Host "    Waiting for Step-CA" -NoNewline
 $maxRetries = 20
 $retries = 0
 while ($true) {
-    docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt *> $null
+    try { docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt 2>$null | Out-Null } catch { }
     if ($LASTEXITCODE -eq 0) { break }
     $retries++
     if ($retries -ge $maxRetries) {
@@ -252,7 +252,7 @@ if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to restart step-ca." }
 Write-Host "    Applying certificate policy" -NoNewline
 $retries = 0
 while ($true) {
-    docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt *> $null
+    try { docker compose exec -T step-ca step ca health --ca-url=https://localhost:9000 --root=/home/step/certs/root_ca.crt 2>$null | Out-Null } catch { }
     if ($LASTEXITCODE -eq 0) { break }
     $retries++
     if ($retries -ge 10) { Write-Host ""; Write-Fail "Step-CA failed to restart after policy update." }
