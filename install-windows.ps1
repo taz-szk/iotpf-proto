@@ -410,3 +410,7 @@ Write-Host "" -ForegroundColor Cyan
 Write-Host "  To stop:      docker compose down" -ForegroundColor Cyan
 Write-Host "  To view logs: docker compose logs -f" -ForegroundColor Cyan
 Write-Host ""
+
+# ブラウザで管理者ログイン画面を開く
+Write-Host "  Opening admin login in your browser..." -ForegroundColor Cyan
+Start-Process "https://localhost/admin/"
