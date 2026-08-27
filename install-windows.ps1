@@ -35,13 +35,17 @@ function Write-Fail([string]$msg) {
 
 function New-RandomHex([int]$byteCount) {
     $buf = [byte[]]::new($byteCount)
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($buf)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rng.GetBytes($buf)
+    $rng.Dispose()
     ($buf | ForEach-Object { $_.ToString('x2') }) -join ''
 }
 
 function New-RandomBase64([int]$byteCount) {
     $buf = [byte[]]::new($byteCount)
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($buf)
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    $rng.GetBytes($buf)
+    $rng.Dispose()
     [System.Convert]::ToBase64String($buf) -replace '[+/=]', '_'
 }
 
