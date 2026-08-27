@@ -460,6 +460,53 @@ pip install -r requirements.txt</pre>
 
     <h3>設定の保存</h3>
     <p>ウィンドウを閉じると設定（テナント・デバイス・テレメトリ設定）が <code>simulator/config.json</code> に自動保存されます。次回起動時に自動復元されます。</p>
+
+    <h3>スタンドアロン EXE のビルド <span class="badge badge-gray">Windows 版のみ</span></h3>
+    <p>Python 環境なしで動作する単体 EXE（約 38 MB）を PyInstaller でビルドできます。</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <div class="step-title">simulator/ ディレクトリへ移動する</div>
+          <div class="code-block">
+            <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+            <pre>cd simulator</pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <div class="step-title">スクリプト実行ポリシーを設定する（初回のみ）</div>
+          <div class="code-block">
+            <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+            <pre>Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process</pre>
+          </div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <div class="step-title">ビルドスクリプトを実行する</div>
+          <div class="code-block">
+            <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+            <pre>./build</pre>
+          </div>
+          <div class="step-desc">依存パッケージのインストール（pip）と PyInstaller によるバンドルが自動で実行されます。初回は数分かかります。</div>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <div class="step-title">生成された EXE を配布する</div>
+          <div class="step-desc">ビルド完了後、<code>simulator/dist/IoT_Simulator.exe</code> が生成されます。この 1 ファイルをそのまま配布できます。</div>
+          <div class="callout callout-info">
+            <span class="callout-icon">ℹ️</span>
+            <span class="callout-body"><code>certs/</code> ディレクトリと <code>config.json</code> は EXE と同じ場所に初回起動時に自動生成されます。Python のインストールは不要です。</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- 07 トラブルシューティング -->
