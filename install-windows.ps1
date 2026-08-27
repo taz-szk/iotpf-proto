@@ -66,7 +66,7 @@ Write-Host @"
   | | (_) || |   |  _/ / _' |  _|  _| (_/ _' | '_| '  \
  |___\___/ |_|   |_| |_\__,_|\__|_|  \__\__,_|_| |_|_|_|
 
-  Windows Installer  (PowerShell 7+ / Docker Desktop required)
+  Windows Installer  (PowerShell 5.1+ / Docker Desktop required)
   ------------------------------------------------------------
 "@ -ForegroundColor Cyan
 
@@ -379,37 +379,35 @@ Write-OK "Platform admin ready ($adminEmail)."
 
 # ---- done -------------------------------------------------------------------
 
-Write-Host @"
-
-  +---------------------------------------------------------+
-  |  IoT Platform is running!                               |
-  +---------------------------------------------------------+
-  Admin / Login  https://localhost/admin/
-                 $adminEmail / see PLATFORM_ADMIN_PASSWORD in .env
-  Grafana        https://localhost/grafana/  (behind admin login)
-  MailHog        http://localhost:8025
-  InfluxDB       http://localhost:8086
-
-  Core API, EMQX dashboard and MinIO console are internal-only
-  (not published to the host) - reach them via
-  'docker compose exec <service> ...' or the /api/ proxy above.
-  +---------------------------------------------------------+
-  Credentials are stored in .env (keep this file private)
-  +---------------------------------------------------------+
-
-  The TLS certificate is issued by this project's own local CA
-  (certs\ca\root_ca.crt), so your browser will flag it as
-  untrusted. Trust it once (run PowerShell as Administrator):
-    certutil -addstore -f "ROOT" certs\ca\root_ca.crt
-  (Chrome/Edge may need a restart to pick up the new trust store)
-
-  Next steps:
-    1. Open https://localhost/admin/ and log in as
-       $adminEmail (password in .env)
-    2. Create a tenant
-    3. Provision your first device using the bootstrap token
-
-  To stop:   docker compose down
-  To view logs: docker compose logs -f
-
-"@ -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
+Write-Host "  |  IoT Platform is running!                               |" -ForegroundColor Cyan
+Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
+Write-Host "  Admin / Login  https://localhost/admin/" -ForegroundColor Cyan
+Write-Host "                 $adminEmail / see PLATFORM_ADMIN_PASSWORD in .env" -ForegroundColor Cyan
+Write-Host "  Grafana        https://localhost/grafana/  (behind admin login)" -ForegroundColor Cyan
+Write-Host "  MailHog        http://localhost:8025" -ForegroundColor Cyan
+Write-Host "  InfluxDB       http://localhost:8086" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
+Write-Host "  Core API, EMQX dashboard and MinIO console are internal-only" -ForegroundColor Cyan
+Write-Host "  (not published to the host) - reach them via" -ForegroundColor Cyan
+Write-Host "  'docker compose exec <service> ...' or the /api/ proxy above." -ForegroundColor Cyan
+Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
+Write-Host "  Credentials are stored in .env (keep this file private)" -ForegroundColor Cyan
+Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
+Write-Host "  The TLS certificate is issued by this project's own local CA" -ForegroundColor Cyan
+Write-Host "  (certs\ca\root_ca.crt), so your browser will flag it as" -ForegroundColor Cyan
+Write-Host "  untrusted. Trust it once (run PowerShell as Administrator):" -ForegroundColor Cyan
+Write-Host '    certutil -addstore -f "ROOT" certs\ca\root_ca.crt' -ForegroundColor Cyan
+Write-Host "  (Chrome/Edge may need a restart to pick up the new trust store)" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
+Write-Host "  Next steps:" -ForegroundColor Cyan
+Write-Host "    1. Open https://localhost/admin/ and log in as" -ForegroundColor Cyan
+Write-Host "       $adminEmail (password in .env)" -ForegroundColor Cyan
+Write-Host "    2. Create a tenant" -ForegroundColor Cyan
+Write-Host "    3. Provision your first device using the bootstrap token" -ForegroundColor Cyan
+Write-Host "" -ForegroundColor Cyan
+Write-Host "  To stop:      docker compose down" -ForegroundColor Cyan
+Write-Host "  To view logs: docker compose logs -f" -ForegroundColor Cyan
+Write-Host ""
