@@ -345,7 +345,7 @@ class SimulatorApp(tk.Tk):
 
         # === 左ペイン ===
         left = tk.Frame(pane)
-        pane.add(left, minsize=230)
+        pane.add(left, minsize=350, width=560)
 
         # テナント一覧
         tf = ttk.LabelFrame(left, text="テナント", padding=4)
