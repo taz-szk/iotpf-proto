@@ -237,7 +237,7 @@ def _sync_connected_clients(base_url: str, token: str) -> None:
         logger.warning("sync_connected_clients failed: %s", e)
 
 
-def ensure_emqx_rules(base_url: str, user: str, password: str, webhook_secret: str, retries: int = 5) -> None:
+def ensure_emqx_rules(base_url: str, user: str, password: str, webhook_secret: str, retries: int = 20) -> None:
     for attempt in range(retries):
         token = _login(base_url, user, password)
         if token:

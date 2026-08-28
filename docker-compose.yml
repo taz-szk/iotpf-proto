@@ -219,6 +219,8 @@ services:
         condition: service_healthy
       step-ca:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
 
   ingestion-service:
     build:

@@ -309,7 +309,8 @@ class SimulatorApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("IoT Platform デバイスシミュレーター")
-        self.minsize(880, 620)
+        self.minsize(1100, 750)
+        self.geometry("1200x820")
 
         self._event_queue: queue.Queue = queue.Queue()
         self._next_wid: int = 0

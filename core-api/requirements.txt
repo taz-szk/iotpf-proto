@@ -12,3 +12,4 @@ pytest==8.3.3
 pytest-mock==3.14.0
 minio==7.2.12
 python-multipart==0.0.12
+cryptography>=42.0.0
