@@ -81,7 +81,7 @@ body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMac
 /* layout */
 .page{max-width:860px;margin:0 auto;padding:40px 24px 80px;display:grid;grid-template-columns:220px 1fr;gap:0 40px}
 .content{min-width:0}
-.toc{position:sticky;top:68px;height:fit-content;padding-right:20px;border-right:2px solid var(--border)}
+.toc{position:sticky;top:20px;height:fit-content;padding-right:20px;border-right:2px solid var(--border)}
 
 /* hero */
 .hero{margin-bottom:36px}
@@ -180,17 +180,13 @@ td:first-child{color:var(--text-1);font-weight:500;font-family:var(--mono);font-
 </head>
 <body>
 
-<nav class="nav">
-  <div class="nav-inner">
-    <a class="nav-back" href="index.html">← Top</a>
-    <span style="color:var(--text-3)">／</span>
-    <span class="nav-title">シミュレータ利用ガイド</span>
-  </div>
-</nav>
-
 <div class="page">
 <!-- TOC -->
 <aside class="toc">
+  <div style="padding-bottom:12px;margin-bottom:14px;border-bottom:1px solid var(--border)">
+    <a href="index.html" style="font-size:12px;color:var(--accent);text-decoration:none;font-family:var(--mono)">← Top</a>
+    <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-top:6px">シミュレータ利用ガイド</div>
+  </div>
   <div class="toc-title">目次</div>
   <a href="#start">01 起動方法</a>
   <a href="#ui">02 画面構成</a>
