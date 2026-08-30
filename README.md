@@ -1,3 +1,4 @@
+<img width="2816" height="1536" alt="IoTAirx_logo (1)" src="https://github.com/user-attachments/assets/b4c44f28-f51e-4233-8659-5e8c78afe2b2" />
 # IoTAir-X — マルチテナント型 IoT デバイス管理基盤
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
