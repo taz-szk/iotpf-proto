@@ -1,5 +1,6 @@
 .env
 **/.env
+docker-compose.override.yml
 certs/
 step-ca/data/
 postgres/data/
