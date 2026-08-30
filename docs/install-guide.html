@@ -129,7 +129,8 @@ body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMac
 
 /* prereq badges */
 .prereqs{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:32px}
-.prereq{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px}
+.prereq{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-size:13px;text-decoration:none;transition:border-color .15s}
+a.prereq:hover{border-color:var(--accent)}
 .prereq-icon{font-size:18px}
 .prereq-name{font-weight:600;color:var(--text-1)}
 .prereq-detail{color:var(--text-2);font-size:12px}
@@ -215,10 +216,10 @@ pre .flag{color:#D2A8FF}
   </div>
 
   <div class="prereqs">
-    <div class="prereq">
+    <a class="prereq" href="https://docs.docker.com/desktop/install/windows-install/" target="_blank" rel="noopener">
       <span class="prereq-icon">🐳</span>
-      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">WSL2 backend 推奨</div></div>
-    </div>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">WSL2 backend 推奨 — ダウンロード ↗</div></div>
+    </a>
     <div class="prereq">
       <span class="prereq-icon">💻</span>
       <div><div class="prereq-name">PowerShell 5.1+</div><div class="prereq-detail">Windows 10/11 標準搭載</div></div>
@@ -431,10 +432,10 @@ docker compose down -v
   </div>
 
   <div class="prereqs">
-    <div class="prereq">
+    <a class="prereq" href="https://docs.docker.com/desktop/install/mac-install/" target="_blank" rel="noopener">
       <span class="prereq-icon">🐳</span>
-      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">Apple Silicon (M1/M2/M3) 対応版</div></div>
-    </div>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">Apple Silicon (M1/M2/M3) 対応版 — ダウンロード ↗</div></div>
+    </a>
     <div class="prereq">
       <span class="prereq-icon">🔐</span>
       <div><div class="prereq-name">openssl</div><div class="prereq-detail">macOS 標準搭載 / brew install openssl</div></div>
@@ -548,10 +549,10 @@ docker compose down -v
   </div>
 
   <div class="prereqs">
-    <div class="prereq">
+    <a class="prereq" href="https://docs.docker.com/desktop/install/linux-install/" target="_blank" rel="noopener">
       <span class="prereq-icon">🐳</span>
-      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">deb パッケージでインストール</div></div>
-    </div>
+      <div><div class="prereq-name">Docker Desktop 4.x+</div><div class="prereq-detail">deb パッケージでインストール — ダウンロード ↗</div></div>
+    </a>
     <div class="prereq">
       <span class="prereq-icon">🔐</span>
       <div><div class="prereq-name">openssl</div><div class="prereq-detail">apt でインストール可（スクリプトが自動対応）</div></div>
