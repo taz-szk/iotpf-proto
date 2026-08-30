@@ -12,6 +12,9 @@ grafana/data/
 *.crt
 *.p12
 
+.venv/
+**/.venv/
+
 # IDE
 .vscode/
 .idea/
