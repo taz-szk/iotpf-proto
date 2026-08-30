@@ -77,7 +77,29 @@
   --tag-ubuntu: #FFDDD4;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-serif;font-size:14.5px;line-height:1.7;min-height:100vh}
+body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',sans-serif;font-size:14.5px;line-height:1.7;min-height:100vh;display:flex}
+
+/* sidebar */
+.sidebar{width:220px;min-width:220px;background:var(--surface);border-right:1px solid var(--border);position:fixed;top:0;left:0;bottom:0;overflow-y:auto;padding:20px 0 40px;z-index:200;display:flex;flex-direction:column}
+.sidebar-logo{padding:0 16px 16px;border-bottom:1px solid var(--border);margin-bottom:12px}
+.sidebar-back{font-size:12px;color:var(--accent);text-decoration:none;font-family:'Cascadia Code','Consolas',monospace;display:block;margin-bottom:10px}
+.sidebar-back:hover{text-decoration:underline}
+.sidebar-title{font-size:13px;font-weight:700;color:var(--text-1);font-family:'Cascadia Code','Consolas',monospace}
+.sidebar-section{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);padding:8px 16px 4px;font-family:'Cascadia Code','Consolas',monospace;margin-top:8px}
+.sidebar-os{display:flex;flex-direction:column;gap:2px;padding:0 8px;margin-bottom:8px}
+.sidebar-os-btn{display:flex;align-items:center;gap:8px;padding:7px 8px;border:none;background:none;color:var(--text-2);font-size:13px;font-weight:500;cursor:pointer;border-radius:5px;text-align:left;width:100%;transition:background .12s,color .12s}
+.sidebar-os-btn:hover{background:var(--surface-2);color:var(--text-1)}
+.sidebar-os-btn.active{background:var(--accent-dim);color:var(--accent);font-weight:600}
+.sidebar-os-btn .os-emoji{font-size:15px}
+.sidebar-divider{height:1px;background:var(--border);margin:8px 0}
+
+/* layout: push main content right of sidebar */
+.hdr{left:220px}
+.hdr-inner{max-width:none}
+.wrap{flex:1;margin-left:220px;display:flex;flex-direction:column;min-width:0}
+.main{max-width:860px;width:100%;padding:36px 24px 80px}
+
+@media(max-width:700px){.sidebar{display:none}.wrap{margin-left:0}.hdr{left:0}}
 
 /* header */
 .hdr{background:var(--surface);border-bottom:1px solid var(--border);padding:0 24px;position:sticky;top:0;z-index:100}
@@ -92,8 +114,7 @@ body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMac
 .os-btn.active.ubuntu{color:var(--ubuntu);border-bottom-color:var(--ubuntu)}
 .os-icon{font-size:16px}
 
-/* main */
-.main{max-width:860px;margin:0 auto;padding:36px 24px 80px}
+/* main content */
 .os-section{display:none}
 .os-section.active{display:block}
 
@@ -162,9 +183,31 @@ pre .flag{color:#D2A8FF}
 </head>
 <body>
 
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <a href="index.html" class="sidebar-back">← Top</a>
+    <div class="sidebar-title">iot://install</div>
+  </div>
+  <div class="sidebar-section">OS を選択</div>
+  <div class="sidebar-os">
+    <button class="sidebar-os-btn active" id="sb-win" onclick="switchOS('win')">
+      <span class="os-emoji">🪟</span> Windows
+    </button>
+    <button class="sidebar-os-btn" id="sb-mac" onclick="switchOS('mac')">
+      <span class="os-emoji">🍎</span> macOS
+    </button>
+    <button class="sidebar-os-btn" id="sb-ubuntu" onclick="switchOS('ubuntu')">
+      <span class="os-emoji">🐧</span> Ubuntu
+    </button>
+  </div>
+  <div class="sidebar-divider"></div>
+  <div class="sidebar-section">インストール手順</div>
+  <div id="sidebar-steps" style="padding:0 8px;display:flex;flex-direction:column;gap:2px"></div>
+</aside>
+
+<div class="wrap">
 <header class="hdr">
   <div class="hdr-inner">
-    <a href="index.html" class="home-link">← Top</a>
     <div class="logo">iot://install</div>
     <nav class="os-tabs" role="tablist">
       <button class="os-btn win active" onclick="switchOS('win')" role="tab">
@@ -668,13 +711,38 @@ docker compose down -v
 </div><!-- /ubuntu -->
 
 </main>
+</div><!-- /wrap -->
 
 <script>
+const stepTitles = {
+  win: ['Docker Desktop を起動する','リポジトリを配置する','インストーラーを実行する','動作確認する','よく使うコマンド','実行ログ例'],
+  mac: ['Docker Desktop を起動する','リポジトリを配置する','インストーラーを実行する','動作確認する','よく使うコマンド'],
+  ubuntu: ['Docker Desktop をインストール・起動する','リポジトリを配置する','インストーラーを実行する','ファイアウォールの設定','動作確認する','よく使うコマンド']
+};
+
+function updateSidebarSteps(os) {
+  const container = document.getElementById('sidebar-steps');
+  container.innerHTML = '';
+  (stepTitles[os] || []).forEach((title, i) => {
+    const btn = document.createElement('button');
+    btn.style.cssText = 'display:flex;align-items:center;gap:8px;padding:6px 8px;border:none;background:none;color:var(--text-2);font-size:12px;cursor:pointer;border-radius:5px;text-align:left;width:100%;font-family:inherit;transition:background .12s,color .12s';
+    btn.innerHTML = `<span style="font-family:'Cascadia Code',monospace;font-size:10px;color:var(--text-3);min-width:16px">${String(i+1).padStart(2,'0')}</span><span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${title}</span>`;
+    btn.addEventListener('mouseover', () => { btn.style.background='var(--surface-2)'; btn.style.color='var(--text-1)'; });
+    btn.addEventListener('mouseout', () => { btn.style.background=''; btn.style.color='var(--text-2)'; });
+    const steps = document.getElementById(`os-${os}`).querySelectorAll('.step');
+    btn.onclick = () => { if (steps[i]) steps[i].scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+    container.appendChild(btn);
+  });
+}
+
 function switchOS(os) {
   document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.os-section').forEach(s => s.classList.remove('active'));
   document.querySelector(`.os-btn.${os}`).classList.add('active');
   document.getElementById(`os-${os}`).classList.add('active');
+  document.querySelectorAll('.sidebar-os-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`sb-${os}`).classList.add('active');
+  updateSidebarSteps(os);
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
 
@@ -687,6 +755,8 @@ function copyCode(btn) {
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
   });
 }
+
+updateSidebarSteps('win');
 </script>
 </body>
 </html>

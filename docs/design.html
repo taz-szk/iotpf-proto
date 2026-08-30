@@ -77,7 +77,42 @@ body {
   font-size: 15px;
   line-height: 1.7;
   min-height: 100vh;
+  display: flex;
 }
+
+/* ---- Sidebar ---- */
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: fixed; top: 0; left: 0; bottom: 0;
+  overflow-y: auto;
+  padding: 20px 0 40px;
+  z-index: 200;
+}
+.sidebar-logo { padding: 0 16px 16px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.sidebar-back { font-size: 12px; color: var(--accent); text-decoration: none; font-family: 'Cascadia Code',Consolas,monospace; display: block; margin-bottom: 10px; }
+.sidebar-back:hover { text-decoration: underline; }
+.sidebar-title { font-size: 11px; font-weight: 700; color: var(--text-3); font-family: 'Cascadia Code',Consolas,monospace; letter-spacing: .05em; text-transform: uppercase; }
+.sidebar-section-label { font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); padding: 8px 16px 4px; font-family: 'Cascadia Code',Consolas,monospace; margin-top: 8px; }
+.sidebar-nav { padding: 0 8px; display: flex; flex-direction: column; gap: 2px; }
+.sidebar-tab-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border: none; background: none;
+  color: var(--text-2); font-size: 13px; font-weight: 500;
+  cursor: pointer; border-radius: 5px; text-align: left; width: 100%;
+  transition: background .12s, color .12s; font-family: inherit;
+}
+.sidebar-tab-btn:hover { background: var(--accent-light); color: var(--text-1); }
+.sidebar-tab-btn.active { background: var(--accent-light); color: var(--accent); font-weight: 600; }
+.sidebar-tab-btn .sb-label {
+  font-family: 'Cascadia Code', Consolas, monospace;
+  font-size: 9px; letter-spacing: .05em; text-transform: uppercase;
+  background: var(--tag-bg); color: var(--tag-text);
+  padding: 2px 4px; border-radius: 3px; flex-shrink: 0;
+}
+.wrap { flex: 1; margin-left: 220px; min-width: 0; }
+@media (max-width: 700px) { .sidebar { display: none; } .wrap { margin-left: 0; } }
 
 /* ---- Header ---- */
 .site-header {
@@ -411,6 +446,32 @@ td code { font-size: 12px; }
 </head>
 <body>
 
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <a href="index.html" class="sidebar-back">← Top</a>
+    <div class="sidebar-title">iot://platform</div>
+  </div>
+  <div class="sidebar-section-label">設計書</div>
+  <nav class="sidebar-nav">
+    <button class="sidebar-tab-btn active" onclick="switchTab(0)">
+      <span class="sb-label">REQ</span>要件定義書
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(1)">
+      <span class="sb-label">ARCH</span>基本設計
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(2)">
+      <span class="sb-label">DETAIL</span>詳細設計
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(3)">
+      <span class="sb-label">TEST</span>試験実施観点
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(4)">
+      <span class="sb-label">SEQ</span>シーケンス図
+    </button>
+  </nav>
+</aside>
+
+<div class="wrap">
 <header class="site-header">
   <div class="header-inner">
     <a href="index.html" class="home-link">← Top</a>
@@ -1634,10 +1695,12 @@ sequenceDiagram
 </section>
 
 </main>
+</div><!-- /wrap -->
 
 <script>
 function switchTab(idx) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+  document.querySelectorAll('.sidebar-tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
   document.querySelectorAll('.doc-section').forEach((s, i) => s.classList.toggle('active', i === idx));
   window.scrollTo({ top: 0, behavior: 'instant' });
 }
