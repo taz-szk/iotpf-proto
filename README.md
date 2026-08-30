@@ -1,10 +1,9 @@
 <img width="2816" height="1536" alt="IoTAirx_logo (1)" src="https://github.com/user-attachments/assets/b4c44f28-f51e-4233-8659-5e8c78afe2b2" />
-# IoTAir-X — マルチテナント型 IoT デバイス管理基盤
+# IoTAir-X — マルチテナント型 IoT可視・管理アプリケーション
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-MQTT mTLS 接続・リアルタイム可視化・OTA 配信・アラート通知・ゼロタッチプロビジョニングを一体化した、マルチテナント対応の IoT プラットフォームです。
-工場・病院・インフラなど複数拠点の IoT デバイスを、テナントごとに完全分離した環境で管理できます。
+MQTT mTLS 接続・リアルタイム可視化・OTA 配信・アラート通知・ゼロタッチプロビジョニングを一体化した、マルチテナント対応のデータ可視化アプリケーションです。複数拠点の IoT デバイスを、テナントごとに完全分離した環境で管理できます。
 
 ## 主な機能
 
