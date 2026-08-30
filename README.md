@@ -1,29 +1,46 @@
-﻿# MQTTによるIoTデータ収集・簡易可視化アプリケーション
-本アプリケーションは、IoTデバイスから送信されるデータをローカル環境またはクラウド環境で簡易的に保存・可視化するためのアプリケーションです。
+# IoTAir-X — マルチテナント型 IoT デバイス管理基盤
 
-主な機能として、データ収集・可視化に加えて、ブートストラップトークンを用いたゼロタッチプロビジョニングやOTA（Over-The-Air）アップデートなどのデバイス管理機能も備えています。マルチテナント環境での利用を想定しており、ローカルでのMQTTデータ通信や、Grafanaを活用したダッシュボード構築に関心のある方におすすめです。
-また、認証不要でアクセス可能な公開用ページ（パブリックビュー）の設定も行えるため、デジタルサイネージ等への応用も可能です。
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-# ドキュメント
-インストール手順や詳細な仕様については、以下の各ページをご参照ください。
+MQTT mTLS 接続・リアルタイム可視化・OTA 配信・アラート通知・ゼロタッチプロビジョニングを一体化した、マルチテナント対応の IoT プラットフォームです。
+工場・病院・インフラなど複数拠点の IoT デバイスを、テナントごとに完全分離した環境で管理できます。
 
-トップ（ナビ）  : https://taz-szk.github.io/iotpf-proto/
+## 主な機能
 
-紹介動画        : https://taz-szk.github.io/iotpf-proto/promo.html
+- **MQTT mTLS 接続** — EMQX 5.x による相互 TLS 認証でデバイスを安全接続
+- **リアルタイム可視化** — Grafana + InfluxDB 2 によるライブダッシュボード
+- **アラート・通知** — 閾値監視・メール/Webhook 通知（1 分評価）
+- **OTA ファームウェア配信** — MinIO 経由の安全なリモート配信・進捗追跡
+- **マルチテナント管理** — InfluxDB Org / Grafana Org を完全分離
+- **ゼロタッチプロビジョニング** — Step-CA による証明書自動発行・デバイス登録
+- **公開ダッシュボード** — 認証なしで閲覧できるパブリックビュー（デジタルサイネージ等）
 
-インストール手順  : https://taz-szk.github.io/iotpf-proto/install-guide.html
+## ドキュメント
 
-# ライセンス・利用条件
-本リポジトリのコードおよびデータは、オープンソースとして公開していますが、著作権は作者に帰属します。
-ライセンス（例：MIT License）の範囲内において、個人の責任で自由にご利用・改変いただけますが、一定のセキュリティ実装チェックを行っているものの、作者は一切の責任を負いません。より良い形への改修やフォークは歓迎いたします。
+| | |
+|---|---|
+| トップ（ナビ） | https://taz-szk.github.io/iotpf-proto/ |
+| 紹介スライド | https://taz-szk.github.io/iotpf-proto/promo.html |
+| インストール手順 | https://taz-szk.github.io/iotpf-proto/install-guide.html |
+| システム設計 | https://taz-szk.github.io/iotpf-proto/design.html |
 
-#免責事項 (Disclaimer)
-このソフトウェアや提供物は「現状有姿 (AS-IS)」で提供され、明示・黙示を問わず、いかなる保証もありません。
+## Tech Stack
 
-本リポジトリの利用によって生じた、いかなる損害（データの消失、システムの破損、利益の損失、その他の金銭的・精神的被害を含む）についても、作者は一切の責任を負いません。
+| レイヤー | 技術 |
+|---------|------|
+| API | FastAPI + PostgreSQL 16 |
+| 時系列DB | InfluxDB 2 |
+| MQTT | EMQX 5（mTLS） |
+| 可視化 | Grafana OSS |
+| ストレージ | MinIO |
+| 内部 CA | Step-CA |
+| プロキシ | nginx 1.25 |
+| インフラ | Docker Compose |
 
-すべて自己責任 (Use at your own risk) でご利用ください。
+## ライセンス
 
-The software and materials in this repository are provided "AS IS", without warranty of any kind, express or implied.
-In no event shall the author be liable for any claim, damages, or other liability arising from, out of, or in connection with the software or the use or other dealings in the software.
-Use at your own risk.
+[MIT License](LICENSE) — Copyright (c) 2026 taz-szk
+
+> **依存サービスについて:** MinIO および Grafana OSS は AGPL-3.0 です。
+> 変更なしで使用する範囲では本プロジェクトへの影響はありませんが、
+> これらをベースに商用 SaaS を構築する場合は各ベンダーの商用ライセンスを検討してください。
