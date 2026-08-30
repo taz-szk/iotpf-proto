@@ -719,9 +719,7 @@ function updateSidebarSteps(os) {
 }
 
 function switchOS(os) {
-  document.querySelectorAll('.os-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.os-section').forEach(s => s.classList.remove('active'));
-  document.querySelector(`.os-btn.${os}`).classList.add('active');
   document.getElementById(`os-${os}`).classList.add('active');
   document.querySelectorAll('.sidebar-os-btn').forEach(b => b.classList.remove('active'));
   document.getElementById(`sb-${os}`).classList.add('active');
