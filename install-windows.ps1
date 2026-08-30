@@ -376,6 +376,51 @@ if ($LASTEXITCODE -ne 0) { Write-Fail "Failed to bootstrap platform admin accoun
 
 Write-OK "Platform admin ready ($adminEmail)."
 
+# ---- build simulator --------------------------------------------------------
+
+Write-Step "Building IoT Device Simulator..."
+
+$pythonCmd = $null
+if (Get-Command python -ErrorAction SilentlyContinue) { $pythonCmd = "python" }
+elseif (Get-Command python3 -ErrorAction SilentlyContinue) { $pythonCmd = "python3" }
+
+$simulatorExe = Join-Path $PSScriptRoot "simulator\dist\IoT_Simulator.exe"
+
+if ($null -eq $pythonCmd) {
+    Write-Warn "Python not found — skipping simulator build. Install Python 3.x and run: cd simulator; .\build.ps1"
+} else {
+    $prevLocation = Get-Location
+    try {
+        & ".\simulator\build.ps1"
+        if ($LASTEXITCODE -eq 0) {
+            Write-OK "Simulator built: simulator\dist\IoT_Simulator.exe"
+
+            # デスクトップにショートカットを作成
+            if (Test-Path $simulatorExe) {
+                try {
+                    $desktop = [Environment]::GetFolderPath("Desktop")
+                    $shortcutPath = Join-Path $desktop "IoT Simulator.lnk"
+                    $wsh = New-Object -ComObject WScript.Shell
+                    $sc = $wsh.CreateShortcut($shortcutPath)
+                    $sc.TargetPath = $simulatorExe
+                    $sc.WorkingDirectory = Split-Path $simulatorExe -Parent
+                    $sc.Description = "IoT Device Simulator"
+                    $sc.Save()
+                    Write-OK "Desktop shortcut created: IoT Simulator.lnk"
+                } catch {
+                    Write-Warn "Could not create desktop shortcut: $_"
+                }
+            }
+        } else {
+            Write-Warn "Simulator build failed. Run manually: cd simulator; .\build.ps1"
+        }
+    } catch {
+        Write-Warn "Simulator build error: $_"
+    } finally {
+        Set-Location $prevLocation
+    }
+}
+
 # ---- done -------------------------------------------------------------------
 
 Write-Host ""
@@ -406,36 +451,13 @@ Write-Host "    1. Open https://localhost/admin/ and log in as" -ForegroundColor
 Write-Host "       $adminEmail (password in .env)" -ForegroundColor Cyan
 Write-Host "    2. Create a tenant" -ForegroundColor Cyan
 Write-Host "    3. Provision your first device using the bootstrap token" -ForegroundColor Cyan
+if (Test-Path $simulatorExe) {
+    Write-Host "    4. Launch the IoT Simulator from your desktop shortcut" -ForegroundColor Cyan
+}
 Write-Host "" -ForegroundColor Cyan
 Write-Host "  To stop:      docker compose down" -ForegroundColor Cyan
 Write-Host "  To view logs: docker compose logs -f" -ForegroundColor Cyan
 Write-Host ""
-
-# ---- build simulator --------------------------------------------------------
-
-Write-Step "Building IoT Device Simulator..."
-
-$pythonCmd = $null
-if (Get-Command python -ErrorAction SilentlyContinue) { $pythonCmd = "python" }
-elseif (Get-Command python3 -ErrorAction SilentlyContinue) { $pythonCmd = "python3" }
-
-if ($null -eq $pythonCmd) {
-    Write-Warn "Python not found — skipping simulator build. Install Python 3.x and run: cd simulator; .\build.ps1"
-} else {
-    $prevLocation = Get-Location
-    try {
-        & ".\simulator\build.ps1"
-        if ($LASTEXITCODE -eq 0) {
-            Write-OK "Simulator built: simulator\dist\IoT_Simulator.exe"
-        } else {
-            Write-Warn "Simulator build failed. Run manually: cd simulator; .\build.ps1"
-        }
-    } catch {
-        Write-Warn "Simulator build error: $_"
-    } finally {
-        Set-Location $prevLocation
-    }
-}
 
 # ブラウザで管理者ログイン画面を開く
 Write-Host "  Opening admin login in your browser..." -ForegroundColor Cyan

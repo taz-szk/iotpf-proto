@@ -1,6 +1,10 @@
 """
-EMQX 起動時セットアップ: 全ルール・コネクタ・アクションを保証する。
+EMQX 起動時セットアップ: 全ルール・Webhookブリッジを保証する。
 emqx_data ボリュームが削除された場合に自動再作成する。
+
+/api/v5/bridges (webhook type) を使用する。
+Connector+Action方式はEMQX 5.8.x でconnector_not_found_or_wrong_typeエラーが
+発生するため使用しない。
 """
 import time
 import httpx
@@ -8,13 +12,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-# ─── ingestion-service (テレメトリ/ステータス) ───────────────────────
-_INGEST_CONNECTOR = "ingestion_connector"
-_INGEST_ACTION = "ingestion_action"
-_INGEST_RULE = "telemetry_and_status_ingest"
-# トピック例: /{tenant_id}/devices/{device_id}/telemetry
-# EMQX の tokens('/a/b/c', '/') → ["a", "b", "c"] (先頭セパレータは除去される)
-# nth(1, ...) = tenant_id, nth(3, ...) = device_id
+_INGEST_BRIDGE = "ingestion_bridge"
+_EVENT_BRIDGE  = "event_bridge"
+
 _INGEST_SQL = (
     "SELECT nth(1, tokens(topic, '/')) as tenant_id, "
     "nth(3, tokens(topic, '/')) as device_id, payload, "
@@ -25,16 +25,18 @@ _INGEST_BODY = (
     '{"tenant_id":"${tenant_id}","device_id":"${device_id}",'
     '"topic_type":"${topic_type}","payload":${payload}}'
 )
-
-# ─── core-api (接続/切断イベント) ────────────────────────────────────
-_EVENT_CONNECTOR = "coreapi_connector"
-_EVENT_ACTION = "device_event_action"
-_EVENT_RULE = "device_connection_events"
 _EVENT_BODY = (
     '{"event":"${event}","clientid":"${clientid}",'
     '"username":"${username}","peerhost":"${peerhost}",'
     '"timestamp":${timestamp}}'
 )
+_EVENT_SQL = (
+    'SELECT clientid, event, username, peerhost, timestamp '
+    'FROM "$events/client_connected", "$events/client_disconnected"'
+)
+
+_INGEST_RULE = "telemetry_and_status_ingest"
+_EVENT_RULE  = "device_connection_events"
 
 
 def _login(base_url: str, user: str, password: str) -> str | None:
@@ -51,10 +53,14 @@ def _login(base_url: str, user: str, password: str) -> str | None:
         return None
 
 
-def _exists(base_url: str, token: str, path: str) -> bool:
+def _auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def _bridge_exists(base_url: str, token: str, name: str) -> bool:
     try:
         r = httpx.get(
-            f"{base_url}{path}",
+            f"{base_url}/api/v5/bridges/webhook:{name}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=10.0,
         )
@@ -63,88 +69,60 @@ def _exists(base_url: str, token: str, path: str) -> bool:
         return False
 
 
-def _post(base_url: str, token: str, path: str, body: dict) -> bool:
-    try:
-        r = httpx.post(
-            f"{base_url}{path}",
-            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
-            json=body,
-            timeout=10.0,
-        )
-        if r.status_code not in (200, 201):
-            logger.warning("EMQX POST %s -> %d: %s", path, r.status_code, r.text[:200])
-        return r.status_code in (200, 201)
-    except Exception as e:
-        logger.warning("EMQX POST %s failed: %s", path, e)
-        return False
-
-
-def _ensure_connector(base_url: str, token: str, name: str, url: str) -> None:
-    if not _exists(base_url, token, f"/api/v5/connectors/http:{name}"):
-        ok = _post(base_url, token, "/api/v5/connectors", {
-            "name": name,
-            "type": "http",
-            "enable": True,
-            "url": url,
-            "connect_timeout": "15s",
-            "pool_size": 4,
-            "pool_type": "random",
-            "enable_pipelining": 100,
-            "headers": {"content-type": "application/json"},
-            "ssl": {"enable": False},
-        })
-        logger.info("Created EMQX connector %s: %s", name, "ok" if ok else "FAILED")
-    else:
-        logger.debug("EMQX connector %s already exists", name)
-
-
-def _delete_action(base_url: str, token: str, name: str) -> bool:
+def _delete_bridge(base_url: str, token: str, name: str) -> None:
     try:
         r = httpx.delete(
-            f"{base_url}/api/v5/actions/http:{name}",
+            f"{base_url}/api/v5/bridges/webhook:{name}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=10.0,
         )
-        ok = r.status_code in (200, 204, 404)
-        logger.info("Deleted EMQX action %s: %s", name, "ok" if ok else f"FAILED ({r.status_code})")
-        return ok
+        if r.status_code in (200, 204, 404):
+            logger.info("Deleted EMQX bridge %s: ok", name)
+        else:
+            logger.warning("Delete bridge %s: %d %s", name, r.status_code, r.text[:200])
     except Exception as e:
-        logger.warning("EMQX DELETE action %s failed: %s", name, e)
+        logger.warning("Delete bridge %s failed: %s", name, e)
+
+
+def _create_bridge(base_url: str, token: str, name: str, url: str, body: str, secret: str) -> bool:
+    try:
+        r = httpx.post(
+            f"{base_url}/api/v5/bridges",
+            headers=_auth(token),
+            json={
+                "name": name,
+                "type": "webhook",
+                "enable": True,
+                "url": url,
+                "method": "post",
+                "headers": {
+                    "content-type": "application/json",
+                    "x-api-key": secret,
+                },
+                "body": body,
+                "connect_timeout": "15s",
+                "pool_size": 4,
+                "pool_type": "random",
+                "enable_pipelining": 100,
+                "resource_opts": {
+                    "health_check_interval": "15s",
+                    "inflight_window": 100,
+                    "max_buffer_bytes": "256MB",
+                    "query_mode": "async",
+                    "request_ttl": "45s",
+                    "worker_pool_size": 4,
+                },
+            },
+            timeout=15.0,
+        )
+        if r.status_code in (200, 201):
+            logger.info("Created EMQX bridge %s: ok", name)
+            return True
+        logger.warning("Create bridge %s: %d %s", name, r.status_code, r.text[:300])
         return False
-
-
-def _create_action(base_url: str, token: str, name: str, connector: str, path: str, body: str, extra_headers: dict | None = None) -> bool:
-    headers = {"content-type": "application/json"}
-    if extra_headers:
-        headers.update(extra_headers)
-    ok = _post(base_url, token, "/api/v5/actions", {
-        "name": name,
-        "type": "http",
-        "enable": True,
-        "connector": f"http:{connector}",
-        "parameters": {
-            "method": "post",
-            "path": path,
-            "body": body,
-            "headers": headers,
-        },
-        "resource_opts": {
-            "health_check_interval": "15s",
-            "inflight_window": 100,
-            "max_buffer_bytes": "256MB",
-            "query_mode": "async",
-            "request_ttl": "45s",
-            "worker_pool_size": 4,
-        },
-    })
-    logger.info("Created EMQX action %s: %s", name, "ok" if ok else "FAILED")
-    return ok
-
-
-def _recreate_action(base_url: str, token: str, name: str, connector: str, path: str, body: str, extra_headers: dict | None = None) -> None:
-    """既存アクションを削除して再作成する（ヘッダー変更を反映するため）。"""
-    _delete_action(base_url, token, name)
-    _create_action(base_url, token, name, connector, path, body, extra_headers)
+    except Exception as e:
+        logger.warning("Create bridge %s failed: %s", name, e)
+        return False
 
 
 def _get_rule_id(base_url: str, token: str, name: str) -> str | None:
@@ -162,46 +140,40 @@ def _get_rule_id(base_url: str, token: str, name: str) -> str | None:
     return None
 
 
-def _delete_rule(base_url: str, token: str, name: str) -> bool:
+def _delete_rule(base_url: str, token: str, name: str) -> None:
     rule_id = _get_rule_id(base_url, token, name)
     if not rule_id:
-        return False
+        return
     try:
         r = httpx.delete(
             f"{base_url}/api/v5/rules/{rule_id}",
             headers={"Authorization": f"Bearer {token}"},
             timeout=10.0,
         )
-        ok = r.status_code in (200, 204)
-        logger.info("Deleted EMQX rule %s: %s", name, "ok" if ok else f"FAILED ({r.status_code})")
-        return ok
+        if r.status_code in (200, 204):
+            logger.info("Deleted EMQX rule %s: ok", name)
+        else:
+            logger.warning("Delete rule %s: %d %s", name, r.status_code, r.text[:200])
     except Exception as e:
-        logger.warning("EMQX DELETE rule %s failed: %s", name, e)
-        return False
+        logger.warning("Delete rule %s failed: %s", name, e)
 
 
 def _create_rule(base_url: str, token: str, name: str, sql: str, actions: list) -> bool:
-    ok = _post(base_url, token, "/api/v5/rules", {
-        "name": name,
-        "enable": True,
-        "sql": sql,
-        "actions": actions,
-    })
-    logger.info("Created EMQX rule %s: %s", name, "ok" if ok else "FAILED")
-    return ok
-
-
-def _ensure_rule(base_url: str, token: str, existing_names: set, name: str, sql: str, actions: list) -> None:
-    if name not in existing_names:
-        _create_rule(base_url, token, name, sql, actions)
-    else:
-        logger.debug("EMQX rule %s already exists", name)
-
-
-def _recreate_rule(base_url: str, token: str, name: str, sql: str, actions: list) -> None:
-    """既存ルールを削除して再作成する（SQL変更を反映するため）。"""
-    _delete_rule(base_url, token, name)
-    _create_rule(base_url, token, name, sql, actions)
+    try:
+        r = httpx.post(
+            f"{base_url}/api/v5/rules",
+            headers=_auth(token),
+            json={"name": name, "enable": True, "sql": sql, "actions": actions},
+            timeout=10.0,
+        )
+        if r.status_code in (200, 201):
+            logger.info("Created EMQX rule %s: ok", name)
+            return True
+        logger.warning("Create rule %s: %d %s", name, r.status_code, r.text[:200])
+        return False
+    except Exception as e:
+        logger.warning("Create rule %s failed: %s", name, e)
+        return False
 
 
 def _sync_connected_clients(base_url: str, token: str) -> None:
@@ -248,32 +220,34 @@ def ensure_emqx_rules(base_url: str, user: str, password: str, webhook_secret: s
         logger.error("EMQX unreachable after %d retries; skipping rule setup", retries)
         return
 
-    auth_header = {"x-api-key": webhook_secret}
-
-    # コネクタ
-    _ensure_connector(base_url, token, _INGEST_CONNECTOR, "http://ingestion-service:8001")
-    _ensure_connector(base_url, token, _EVENT_CONNECTOR, "http://core-api:8000")
-
-    # ルールを先に削除してからアクションを削除・再作成する（依存関係の逆順）
+    # ルールを先に削除（ブリッジへの依存を解除）
     _delete_rule(base_url, token, _INGEST_RULE)
     _delete_rule(base_url, token, _EVENT_RULE)
-    _recreate_action(base_url, token, _INGEST_ACTION, _INGEST_CONNECTOR, "/ingest", _INGEST_BODY, auth_header)
-    _recreate_action(base_url, token, _EVENT_ACTION, _EVENT_CONNECTOR, "/emqx/events", _EVENT_BODY, auth_header)
 
-    # ルールを再作成
-    _create_rule(
-        base_url, token,
-        _INGEST_RULE, _INGEST_SQL,
-        [f"http:{_INGEST_ACTION}"],
+    # ブリッジを削除して再作成（設定変更を確実に反映）
+    _delete_bridge(base_url, token, _INGEST_BRIDGE)
+    _delete_bridge(base_url, token, _EVENT_BRIDGE)
+
+    ingest_ok = _create_bridge(
+        base_url, token, _INGEST_BRIDGE,
+        "http://ingestion-service:8001/ingest",
+        _INGEST_BODY, webhook_secret,
     )
-    _create_rule(
-        base_url, token,
-        _EVENT_RULE,
-        'SELECT clientid, event, username, peerhost, timestamp '
-        'FROM "$events/client_connected", "$events/client_disconnected"',
-        [f"http:{_EVENT_ACTION}"],
+    event_ok = _create_bridge(
+        base_url, token, _EVENT_BRIDGE,
+        "http://core-api:8000/emqx/events",
+        _EVENT_BODY, webhook_secret,
     )
+
+    if not ingest_ok or not event_ok:
+        logger.error("EMQX bridge creation failed; rules will not be created")
+        return
+
+    _create_rule(base_url, token, _INGEST_RULE, _INGEST_SQL,
+                 [f"webhook:{_INGEST_BRIDGE}"])
+    _create_rule(base_url, token, _EVENT_RULE, _EVENT_SQL,
+                 [f"webhook:{_EVENT_BRIDGE}"])
+
     logger.info("EMQX rule setup complete")
 
-    # 現在接続中のクライアントを PostgreSQL/InfluxDB に同期
     _sync_connected_clients(base_url, token)
