@@ -76,6 +76,10 @@ const api = {
             request('POST', `/tenants/${tenantId}/users`, { email, password, role }),
         resetPassword: (tenantId, userId, password) =>
             request('PATCH', `/tenants/${tenantId}/users/${userId}/password`, { password }),
+        update: (tenantId, userId, body) =>
+            request('PATCH', `/tenants/${tenantId}/users/${userId}`, body),
+        delete: (tenantId, userId) =>
+            request('DELETE', `/tenants/${tenantId}/users/${userId}`),
     },
     auth: {
         changePassword: (currentPassword, newPassword) =>

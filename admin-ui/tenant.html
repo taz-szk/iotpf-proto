@@ -408,21 +408,33 @@
                 <tr>
                   <td class="px-4 py-3 text-sm font-medium" x-text="u.email"></td>
                   <td class="px-4 py-3">
-                    <span class="text-xs px-2 py-0.5 rounded font-medium"
-                          :class="{
-                            'bg-purple-100 text-purple-700': u.role === 'admin',
-                            'bg-blue-100 text-blue-700': u.role === 'operator',
-                            'bg-gray-100 text-gray-600': u.role === 'viewer',
-                          }"
-                          x-text="u.role"></span>
+                    <select @change="changeUserRole(u, $event.target.value)"
+                            class="text-xs px-2 py-0.5 rounded font-medium border-0 cursor-pointer focus:ring-1 focus:ring-blue-400"
+                            :class="{
+                              'bg-purple-100 text-purple-700': u.role === 'admin',
+                              'bg-blue-100 text-blue-700': u.role === 'operator',
+                              'bg-gray-100 text-gray-600': u.role === 'viewer',
+                            }">
+                      <option value="admin"    :selected="u.role === 'admin'">admin</option>
+                      <option value="operator" :selected="u.role === 'operator'">operator</option>
+                      <option value="viewer"   :selected="u.role === 'viewer'">viewer</option>
+                    </select>
                   </td>
-                  <td class="px-4 py-3 text-sm" x-text="u.is_active ? '有効' : '無効'"></td>
+                  <td class="px-4 py-3 text-sm">
+                    <button @click="toggleUserActive(u)"
+                            :class="u.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+                            class="text-xs px-2 py-0.5 rounded font-medium"
+                            x-text="u.is_active ? '有効' : '無効'"></button>
+                  </td>
                   <td class="px-4 py-3 text-sm text-gray-500"
                       x-text="u.created_at ? new Date(u.created_at).toLocaleDateString('ja-JP') : '-'"></td>
-                  <td class="px-4 py-3 text-right">
-                    <button @click="resetPwUserId = (resetPwUserId === u.id ? null : u.id); resetPwInput = ''"
+                  <td class="px-4 py-3 text-right flex items-center justify-end gap-2">
+                    <button @click="resetPwUserId = (resetPwUserId === u.id ? null : u.id); deleteUserId = null; resetPwInput = ''"
                             :class="resetPwUserId === u.id ? 'text-gray-400' : 'text-blue-500 hover:text-blue-700'"
                             class="text-xs">PW変更</button>
+                    <button @click="deleteUserId = (deleteUserId === u.id ? null : u.id); resetPwUserId = null; resetPwInput = ''"
+                            :class="deleteUserId === u.id ? 'text-gray-400' : 'text-red-500 hover:text-red-700'"
+                            class="text-xs">削除</button>
                   </td>
                 </tr>
                 <tr x-show="resetPwUserId === u.id" class="bg-blue-50">
@@ -436,6 +448,17 @@
                       <button type="button" @click="resetPwUserId = null; resetPwInput = ''"
                               class="text-gray-400 hover:text-gray-600 text-xs px-2 py-1.5">キャンセル</button>
                     </form>
+                  </td>
+                </tr>
+                <tr x-show="deleteUserId === u.id" class="bg-red-50">
+                  <td colspan="5" class="px-4 py-3">
+                    <div class="flex items-center gap-3">
+                      <span class="text-sm text-red-700" x-text="`「${u.email}」を削除しますか？この操作は元に戻せません。`"></span>
+                      <button @click="submitDeleteUser(u.id)"
+                              class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded">削除する</button>
+                      <button type="button" @click="deleteUserId = null"
+                              class="text-gray-400 hover:text-gray-600 text-xs px-2 py-1.5">キャンセル</button>
+                    </div>
                   </td>
                 </tr>
               </tbody>
@@ -858,6 +881,7 @@
         newUser: { email: '', password: '', role: 'viewer' },
         resetPwUserId: null,
         resetPwInput: '',
+        deleteUserId: null,
 
         // デバイス
         devices: [],
@@ -878,6 +902,35 @@
             this.users = await api.tenantUsers.list(tenantId);
             this.showUserForm = false;
             this.newUser = { email: '', password: '', role: 'viewer' };
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async changeUserRole(u, newRole) {
+          try {
+            await api.tenantUsers.update(tenantId, u.id, { role: newRole });
+            u.role = newRole;
+          } catch(e) {
+            this.error = e.message;
+            this.users = await api.tenantUsers.list(tenantId);
+          }
+        },
+
+        async toggleUserActive(u) {
+          try {
+            await api.tenantUsers.update(tenantId, u.id, { is_active: !u.is_active });
+            u.is_active = !u.is_active;
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        async submitDeleteUser(userId) {
+          try {
+            await api.tenantUsers.delete(tenantId, userId);
+            this.deleteUserId = null;
+            this.users = await api.tenantUsers.list(tenantId);
           } catch(e) {
             this.error = e.message;
           }

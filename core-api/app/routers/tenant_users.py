@@ -64,6 +64,11 @@ def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depend
         is_active=True, created_at="",
     )
 
+class UserUpdateBody(BaseModel):
+    role: str | None = None
+    is_active: bool | None = None
+
+
 class PasswordResetBody(BaseModel):
     password: str
 
@@ -78,6 +83,47 @@ def reset_tenant_user_password(tenant_id: UUID, user_id: str, body: PasswordRese
         result = conn.execute(
             text(f'UPDATE "{schema}".users SET password_hash = :hash WHERE id = :uid'),
             {"hash": hash_password(body.password), "uid": user_id},
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        conn.commit()
+
+
+@router.patch("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def update_tenant_user(tenant_id: UUID, user_id: str, body: UserUpdateBody, _: dict = Depends(_require_platform)):
+    if body.role is not None and body.role not in _ROLE_GRAFANA:
+        raise HTTPException(status_code=400, detail=f"role must be one of {list(_ROLE_GRAFANA)}")
+    if body.role is None and body.is_active is None:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    tenant_id_str = str(tenant_id)
+    _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+    sets, params = [], {"uid": user_id}
+    if body.role is not None:
+        sets.append("role = :role")
+        params["role"] = body.role
+    if body.is_active is not None:
+        sets.append("is_active = :is_active")
+        params["is_active"] = body.is_active
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'UPDATE "{schema}".users SET {", ".join(sets)} WHERE id = :uid'),
+            params,
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        conn.commit()
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_tenant_user(tenant_id: UUID, user_id: str, _: dict = Depends(_require_platform)):
+    tenant_id_str = str(tenant_id)
+    _get_active_tenant(tenant_id_str)
+    schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'DELETE FROM "{schema}".users WHERE id = :uid'),
+            {"uid": user_id},
         )
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
