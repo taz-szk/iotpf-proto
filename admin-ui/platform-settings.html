@@ -68,6 +68,7 @@
         },
         async toggle(key) {
           this.saved = false;
+          this.error = '';
           this.settings[key] = !this.settings[key];
           try {
             await api.platform.updateMfaSettings({ [key]: this.settings[key] });
