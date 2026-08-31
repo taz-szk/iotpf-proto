@@ -236,6 +236,54 @@ def create_user(body: UserCreate, payload: dict = Depends(_require_admin)):
     return {"id": user_id, "email": body.email, "role": body.role, "is_active": True}
 
 
+class UserUpdateBody(BaseModel):
+    role: Optional[Literal["admin", "operator", "viewer"]] = None
+    is_active: Optional[bool] = None
+
+
+@router.patch("/me/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def update_user(user_id: str, body: UserUpdateBody, payload: dict = Depends(_require_admin_or_operator)):
+    if payload["sub"] == user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot modify yourself")
+    if body.role is not None and payload.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required to change role")
+    if body.role is None and body.is_active is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing to update")
+    tenant_id = payload["tenant_id"]
+    schema = _schema(tenant_id)
+    sets, params = [], {"uid": user_id}
+    if body.role is not None:
+        sets.append("role = :role")
+        params["role"] = body.role
+    if body.is_active is not None:
+        sets.append("is_active = :is_active")
+        params["is_active"] = body.is_active
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'UPDATE "{schema}".users SET {", ".join(sets)} WHERE id = :uid'),
+            params,
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        conn.commit()
+
+
+@router.delete("/me/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator)):
+    if payload["sub"] == user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cannot delete yourself")
+    tenant_id = payload["tenant_id"]
+    schema = _schema(tenant_id)
+    with engine.connect() as conn:
+        result = conn.execute(
+            text(f'DELETE FROM "{schema}".users WHERE id = :uid'),
+            {"uid": user_id},
+        )
+        if result.rowcount == 0:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        conn.commit()
+
+
 class PasswordResetBody(BaseModel):
     password: str = Field(min_length=8)
 

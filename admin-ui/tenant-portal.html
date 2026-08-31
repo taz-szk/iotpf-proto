@@ -117,15 +117,51 @@
                     <tr>
                       <td class="px-4 py-3 text-sm font-medium" x-text="u.email"></td>
                       <td class="px-4 py-3">
-                        <span class="text-xs px-2 py-0.5 rounded font-medium"
-                              :class="{'bg-purple-100 text-purple-700': u.role === 'admin', 'bg-blue-100 text-blue-700': u.role === 'operator', 'bg-gray-100 text-gray-600': u.role === 'viewer'}"
-                              x-text="u.role"></span>
+                        <template x-if="isAdmin && u.id !== me.user_id">
+                          <select @change="changeUserRole(u, $event.target.value)"
+                                  class="text-xs px-2 py-0.5 rounded font-medium border-0 cursor-pointer focus:ring-1 focus:ring-blue-400"
+                                  :class="{'bg-purple-100 text-purple-700': u.role === 'admin', 'bg-blue-100 text-blue-700': u.role === 'operator', 'bg-gray-100 text-gray-600': u.role === 'viewer'}">
+                            <option value="admin"    :selected="u.role === 'admin'">admin</option>
+                            <option value="operator" :selected="u.role === 'operator'">operator</option>
+                            <option value="viewer"   :selected="u.role === 'viewer'">viewer</option>
+                          </select>
+                        </template>
+                        <template x-if="!isAdmin || u.id === me.user_id">
+                          <span class="text-xs px-2 py-0.5 rounded font-medium"
+                                :class="{'bg-purple-100 text-purple-700': u.role === 'admin', 'bg-blue-100 text-blue-700': u.role === 'operator', 'bg-gray-100 text-gray-600': u.role === 'viewer'}"
+                                x-text="u.role"></span>
+                        </template>
                       </td>
-                      <td class="px-4 py-3 text-sm" x-text="u.is_active ? '有効' : '無効'"></td>
+                      <td class="px-4 py-3 text-sm">
+                        <template x-if="canEdit && u.id !== me.user_id">
+                          <button @click="toggleUserActive(u)"
+                                  :class="u.is_active ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'"
+                                  class="text-xs px-2 py-0.5 rounded font-medium"
+                                  x-text="u.is_active ? '有効' : '無効'"></button>
+                        </template>
+                        <template x-if="!canEdit || u.id === me.user_id">
+                          <span x-text="u.is_active ? '有効' : '無効'"></span>
+                        </template>
+                      </td>
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="u.created_at ? new Date(u.created_at).toLocaleDateString('ja-JP') : '-'"></td>
-                      <td class="px-4 py-3 text-right">
+                      <td class="px-4 py-3 text-right flex items-center justify-end gap-2">
                         <button x-show="isAdmin" @click="resetUserPassword(u.id, u.email)"
                                 class="text-xs text-blue-500 hover:text-blue-700">PW変更</button>
+                        <button x-show="canEdit && u.id !== me.user_id"
+                                @click="deletePortalUserId = (deletePortalUserId === u.id ? null : u.id)"
+                                :class="deletePortalUserId === u.id ? 'text-gray-400' : 'text-red-500 hover:text-red-700'"
+                                class="text-xs">削除</button>
+                      </td>
+                    </tr>
+                    <tr x-show="deletePortalUserId === u.id" class="bg-red-50">
+                      <td colspan="5" class="px-4 py-3">
+                        <div class="flex items-center gap-3">
+                          <span class="text-sm text-red-700" x-text="`「${u.email}」を削除しますか？この操作は元に戻せません。`"></span>
+                          <button @click="submitDeletePortalUser(u.id)"
+                                  class="bg-red-600 hover:bg-red-700 text-white text-xs px-3 py-1.5 rounded">削除する</button>
+                          <button type="button" @click="deletePortalUserId = null"
+                                  class="text-gray-400 hover:text-gray-600 text-xs px-2 py-1.5">キャンセル</button>
+                        </div>
                       </td>
                     </tr>
                   </template>
@@ -759,6 +795,7 @@ function portalApp() {
     otaLoading: false, otaSubmitting: false, otaResults: [],
     // ユーザー
     users: [], showUserForm: false, newUser: { email: '', password: '', role: 'viewer' },
+    deletePortalUserId: null,
     // デバイス
     devices: [], devicesLoading: false, _devTimer: null,
 
@@ -1025,6 +1062,28 @@ function portalApp() {
       try {
         await portalFetch('PATCH', `/me/users/${userId}/password`, { password: newPass });
         alert(`${email} のパスワードを変更しました`);
+      } catch(e) { this.error = e.message; }
+    },
+    async changeUserRole(u, newRole) {
+      try {
+        await portalFetch('PATCH', `/me/users/${u.id}`, { role: newRole });
+        u.role = newRole;
+      } catch(e) {
+        this.error = e.message;
+        this.users = await portalFetch('GET', '/me/users') || [];
+      }
+    },
+    async toggleUserActive(u) {
+      try {
+        await portalFetch('PATCH', `/me/users/${u.id}`, { is_active: !u.is_active });
+        u.is_active = !u.is_active;
+      } catch(e) { this.error = e.message; }
+    },
+    async submitDeletePortalUser(userId) {
+      try {
+        await portalFetch('DELETE', `/me/users/${userId}`);
+        this.deletePortalUserId = null;
+        this.users = await portalFetch('GET', '/me/users') || [];
       } catch(e) { this.error = e.message; }
     },
 
