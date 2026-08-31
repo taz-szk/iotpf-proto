@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>2段階認証 - テナントログイン</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/admin/js/api.js?v=11"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center">
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8 w-full max-w-sm">
+    <h1 class="text-xl font-bold text-gray-800 mb-2">2段階認証</h1>
+    <p class="text-sm text-gray-500 mb-6">Google Authenticator に表示されている 6 桁のコードを入力してください。</p>
+    <div id="error" class="hidden mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2"></div>
+    <form id="form">
+      <input id="code" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6"
+             placeholder="000000" required
+             class="w-full border border-gray-300 rounded px-3 py-2 text-center text-2xl tracking-widest mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500">
+      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 rounded">
+        確認する
+      </button>
+    </form>
+    <p class="mt-4 text-center text-sm">
+      <a href="/admin/tenant-login.html" class="text-gray-400 hover:text-gray-600">← ログイン画面に戻る</a>
+    </p>
+  </div>
+  <script>
+    if (!sessionStorage.getItem('iot_partial_token')) {
+      window.location.href = '/admin/tenant-login.html';
+    }
+    document.getElementById('form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const code = document.getElementById('code').value.trim();
+      const errEl = document.getElementById('error');
+      errEl.classList.add('hidden');
+      try {
+        const data = await api.tenantTotpPartial.verify(code);
+        clearPartialToken();
+        window.location.href = data.redirect_url || '/admin/tenant-portal.html';
+      } catch (err) {
+        errEl.textContent = err.message || '認証に失敗しました';
+        errEl.classList.remove('hidden');
+        document.getElementById('code').value = '';
+      }
+    });
+  </script>
+</body>
+</html>

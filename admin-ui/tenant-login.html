@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ダッシュボードログイン - IoTAir-X</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/admin/js/api.js?v=11"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center">
@@ -63,7 +64,15 @@
               throw new Error(err.detail || 'ログインに失敗しました');
             }
             const data = await resp.json();
-            window.location.href = data.redirect_url;
+            if (data.status === 'totp_required') {
+              setPartialToken(data.partial_token);
+              window.location.href = '/admin/tenant-totp-verify.html';
+            } else if (data.status === 'totp_setup_required') {
+              setPartialToken(data.partial_token);
+              window.location.href = '/admin/tenant-totp-setup.html';
+            } else {
+              window.location.href = data.redirect_url || '/admin/tenant-portal.html';
+            }
           } catch(e) {
             this.error = e.message;
           } finally {

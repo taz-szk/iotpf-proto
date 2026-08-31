@@ -116,6 +116,11 @@ const api = {
         activate: (code) => partialRequest('POST', '/auth/totp/activate', { code }),
         verify:   (code) => partialRequest('POST', '/auth/totp/verify',   { code }),
     },
+    tenantTotpPartial: {
+        setup:    () => partialRequest('GET',  '/tenant-auth/totp/setup'),
+        activate: (code) => partialRequest('POST', '/tenant-auth/totp/activate', { code }),
+        verify:   (code) => partialRequest('POST', '/tenant-auth/totp/verify',   { code }),
+    },
     platform: {
         getMfaSettings: () => request('GET',   '/platform/mfa-settings'),
         updateMfaSettings: (body) => request('PATCH', '/platform/mfa-settings', body),
