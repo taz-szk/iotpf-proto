@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>プラットフォーム設定 - IoTAir-X</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <script src="/admin/js/api.js?v=11"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <a href="/admin/tenants.html" class="text-gray-400 hover:text-gray-600 text-sm">← テナント一覧</a>
+      <span class="text-gray-300">|</span>
+      <h1 class="text-lg font-bold text-gray-800">プラットフォーム設定</h1>
+    </div>
+    <div class="flex items-center gap-4">
+      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+    </div>
+  </nav>
+  <div x-data="settingsApp()" class="max-w-2xl mx-auto px-6 py-8">
+    <div x-show="loading" class="text-center py-12 text-gray-400">読み込み中...</div>
+    <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 rounded px-4 py-3 mb-4" x-text="error"></div>
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-4">多要素認証（TOTP）設定</h2>
+      <div class="space-y-4">
+        <div class="flex items-center justify-between py-3 border-b border-gray-100">
+          <div>
+            <p class="text-sm font-medium text-gray-700">プラットフォーム管理者に TOTP を必須にする</p>
+            <p class="text-xs text-gray-400 mt-0.5">有効にすると、管理者はログイン時に 6 桁コードの入力が必要になります</p>
+          </div>
+          <button @click="toggle('platform_required')"
+                  :class="settings.platform_required ? 'bg-blue-600' : 'bg-gray-200'"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
+            <span :class="settings.platform_required ? 'translate-x-6' : 'translate-x-1'"
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+          </button>
+        </div>
+        <div class="flex items-center justify-between py-3">
+          <div>
+            <p class="text-sm font-medium text-gray-700">テナントユーザーに TOTP を必須にする</p>
+            <p class="text-xs text-gray-400 mt-0.5">有効にすると、全テナントのユーザーがログイン時に 6 桁コードの入力が必要になります</p>
+          </div>
+          <button @click="toggle('tenant_required')"
+                  :class="settings.tenant_required ? 'bg-blue-600' : 'bg-gray-200'"
+                  class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors">
+            <span :class="settings.tenant_required ? 'translate-x-6' : 'translate-x-1'"
+                  class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform"></span>
+          </button>
+        </div>
+      </div>
+      <p x-show="saved" class="mt-4 text-sm text-green-600">設定を保存しました</p>
+    </div>
+  </div>
+  <script>
+    if (!api.isLoggedIn()) window.location.href = '/admin/';
+    function settingsApp() {
+      return {
+        loading: true, error: '', saved: false,
+        settings: { platform_required: false, tenant_required: false },
+        async init() {
+          try {
+            this.settings = await api.platform.getMfaSettings();
+          } catch(e) { this.error = e.message; }
+          finally { this.loading = false; }
+        },
+        async toggle(key) {
+          this.saved = false;
+          this.settings[key] = !this.settings[key];
+          try {
+            await api.platform.updateMfaSettings({ [key]: this.settings[key] });
+            this.saved = true;
+            setTimeout(() => this.saved = false, 3000);
+          } catch(e) { this.error = e.message; this.settings[key] = !this.settings[key]; }
+        },
+      };
+    }
+  </script>
+</body>
+</html>

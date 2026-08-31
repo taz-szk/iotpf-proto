@@ -12,6 +12,26 @@ function clearTokens() {
     localStorage.removeItem(REFRESH_KEY);
 }
 
+function getPartialToken() { return sessionStorage.getItem('iot_partial_token'); }
+function setPartialToken(t) { sessionStorage.setItem('iot_partial_token', t); }
+function clearPartialToken() { sessionStorage.removeItem('iot_partial_token'); }
+
+async function partialRequest(method, path, body = null) {
+    const token = getPartialToken();
+    const headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const resp = await fetch(`${API_BASE}${path}`, {
+        method, headers,
+        body: body ? JSON.stringify(body) : null,
+    });
+    if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || 'Request failed');
+    }
+    if (resp.status === 204) return null;
+    return resp.json();
+}
+
 async function request(method, path, body = null) {
     const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
@@ -85,7 +105,20 @@ const api = {
         changePassword: (currentPassword, newPassword) =>
             request('POST', '/auth/change-password', { current_password: currentPassword, new_password: newPassword }),
     },
+    totp: {
+        setup:    () => request('GET',    '/auth/totp/setup'),
+        activate: (code) => request('POST', '/auth/totp/activate', { code }),
+        verify:   (code) => request('POST', '/auth/totp/verify',   { code }),
+        disable:  (password) => request('DELETE', '/auth/totp', { password }),
+    },
+    totpPartial: {
+        setup:    () => partialRequest('GET',  '/auth/totp/setup'),
+        activate: (code) => partialRequest('POST', '/auth/totp/activate', { code }),
+        verify:   (code) => partialRequest('POST', '/auth/totp/verify',   { code }),
+    },
     platform: {
+        getMfaSettings: () => request('GET',   '/platform/mfa-settings'),
+        updateMfaSettings: (body) => request('PATCH', '/platform/mfa-settings', body),
         grafanaOrgId: () => request('GET', '/tenants/platform/grafana-org-id'),
     },
     tenantAuth: {
@@ -104,3 +137,5 @@ const api = {
 };
 
 window.api = api;
+window.setPartialToken = setPartialToken;
+window.clearPartialToken = clearPartialToken;
