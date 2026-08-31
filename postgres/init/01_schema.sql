@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS platform_users (
     password_hash TEXT NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     token_version INTEGER NOT NULL DEFAULT 1,
+    totp_secret VARCHAR(64),
+    totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -80,6 +82,17 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     metadata JSONB,
     occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- MFA グローバル設定（常に1行）
+CREATE TABLE IF NOT EXISTS mfa_settings (
+    id                INTEGER PRIMARY KEY DEFAULT 1,
+    platform_required BOOLEAN NOT NULL DEFAULT FALSE,
+    tenant_required   BOOLEAN NOT NULL DEFAULT FALSE,
+    CHECK (id = 1)
+);
+INSERT INTO mfa_settings (id, platform_required, tenant_required)
+VALUES (1, FALSE, FALSE)
+ON CONFLICT (id) DO NOTHING;
 
 -- インデックス
 CREATE INDEX idx_provisioning_tokens_token ON provisioning_tokens(token) WHERE is_active = TRUE;

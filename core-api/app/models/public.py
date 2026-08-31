@@ -23,6 +23,8 @@ class PlatformUser(Base):
     password_hash = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     token_version = Column(Integer, nullable=False, default=1)
+    totp_secret = Column(String(64), nullable=True)
+    totp_enabled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ProvisioningToken(Base):
@@ -35,3 +37,9 @@ class ProvisioningToken(Base):
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class MfaSettings(Base):
+    __tablename__ = "mfa_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    platform_required = Column(Boolean, nullable=False, default=False)
+    tenant_required = Column(Boolean, nullable=False, default=False)

@@ -30,6 +30,8 @@ def create_tenant_schema(tenant_id: str) -> None:
                 role VARCHAR(20) NOT NULL DEFAULT 'viewer'
                     CHECK (role IN (\'admin\', \'operator\', \'viewer\')),
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                totp_secret VARCHAR(64),
+                totp_enabled BOOLEAN NOT NULL DEFAULT FALSE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         '''))
@@ -186,5 +188,39 @@ def migrate_add_device_name() -> None:
             conn.execute(text(f"""
                 ALTER TABLE "{schema}".devices
                 ADD COLUMN IF NOT EXISTS device_name VARCHAR(255)
+            """))
+            conn.commit()
+
+
+def migrate_totp_columns() -> None:
+    """platform_users と全テナント users テーブルに TOTP 列を追加（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE platform_users
+            ADD COLUMN IF NOT EXISTS totp_secret  VARCHAR(64),
+            ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS mfa_settings (
+                id                INTEGER PRIMARY KEY DEFAULT 1,
+                platform_required BOOLEAN NOT NULL DEFAULT FALSE,
+                tenant_required   BOOLEAN NOT NULL DEFAULT FALSE,
+                CHECK (id = 1)
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO mfa_settings (id, platform_required, tenant_required)
+            VALUES (1, FALSE, FALSE)
+            ON CONFLICT (id) DO NOTHING
+        """))
+        rows = conn.execute(text("SELECT id FROM tenants WHERE status != 'deleted'")).fetchall()
+        conn.commit()
+    for row in rows:
+        schema = f"tenant_{str(row.id).replace('-', '_')}"
+        with engine.connect() as conn:
+            conn.execute(text(f"""
+                ALTER TABLE "{schema}".users
+                ADD COLUMN IF NOT EXISTS totp_secret  VARCHAR(64),
+                ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
             """))
             conn.commit()
