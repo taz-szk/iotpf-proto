@@ -7,7 +7,7 @@ import secrets as _secrets
 from app.services.auth import verify_password, create_access_token, hash_password, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
-from app.models.public import Tenant
+from app.models.public import Tenant, MfaSettings
 from app.database import SessionLocal, engine
 from app.config import settings
 
@@ -54,7 +54,7 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
     schema = f"tenant_{str(tenant.id).replace('-', '_')}"
     with engine.connect() as conn:
         row = conn.execute(
-            text(f'SELECT id, email, password_hash, role FROM "{schema}".users WHERE email = :email AND is_active = TRUE'),
+            text(f'SELECT id, email, password_hash, role, totp_enabled FROM "{schema}".users WHERE email = :email AND is_active = TRUE'),
             {"email": req.email}
         ).fetchone()
 
@@ -68,6 +68,28 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     clear_failures(rate_key)
+
+    # MFA 設定確認
+    with SessionLocal() as db:
+        mfa = db.query(MfaSettings).filter(MfaSettings.id == 1).first()
+    mfa_required = mfa.tenant_required if mfa else False
+
+    totp_enabled = bool(row.totp_enabled) if hasattr(row, "totp_enabled") else False
+
+    if mfa_required:
+        partial_payload = {
+            "sub": str(row.id),
+            "email": row.email,
+            "type": "partial_tenant",
+            "tenant_id": str(tenant.id),
+            "role": row.role,
+        }
+        partial_token = create_access_token(partial_payload, expires_delta=timedelta(minutes=10))
+        if totp_enabled:
+            return TenantLoginResponse(status="totp_required", partial_token=partial_token)
+        else:
+            return TenantLoginResponse(status="totp_setup_required", partial_token=partial_token)
+
     # Grafana org にユーザーを同期し、デフォルト org を設定する
     # 初回ログイン時に org メンバーシップが作られていない場合の保険
     if tenant.grafana_org_id:
@@ -97,6 +119,7 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
         max_age=expire_seconds, path="/",
     )
     return TenantLoginResponse(
+        status="ok",
         user_id=str(row.id),
         email=row.email,
         role=row.role,

@@ -8,8 +8,10 @@ class TenantLoginRequest(BaseModel):
 
 
 class TenantLoginResponse(BaseModel):
-    user_id: str
-    email: str
-    role: str
-    tenant_id: str
-    redirect_url: str
+    status: str = "ok"              # "ok" | "totp_required" | "totp_setup_required"
+    user_id: str | None = None
+    email: str | None = None
+    role: str | None = None
+    tenant_id: str | None = None
+    redirect_url: str | None = None
+    partial_token: str | None = None
