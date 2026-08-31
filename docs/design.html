@@ -467,6 +467,12 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(4)">
       <span class="sb-label">SEQ</span>シーケンス図
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(5)">
+      <span class="sb-label">MFA</span>TOTP 二要素認証
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(6)">
+      <span class="sb-label">MAIL</span>アラートメール
+    </button>
   </nav>
 </aside>
 
@@ -1667,6 +1673,323 @@ sequenceDiagram
     </div>
   </div>
 
+</section>
+
+<!-- ==================== TAB 5: TOTP MFA 設計 ==================== -->
+<section class="doc-section" id="tab-5">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Security Feature Design</div>
+    <h1 class="doc-title">TOTP 二要素認証 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>実装: v1.0.2</span><span>参照: docs/superpowers/specs/2026-08-31-totp-mfa-design.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・設計方針</h2></div>
+    <div class="callout">
+      <strong>partial_token アプローチ:</strong> ログイン成功後、MFA が必要な場合は通常の access_token の代わりに <code>partial_token</code>（有効期限 10分）を発行する。TOTP 検証成功後に正式な access_token + refresh_token を発行する二段階フローを採用。
+    </div>
+    <div class="subsection">
+      <h3>対象ユーザー</h3>
+      <ul class="checklist">
+        <li>プラットフォーム管理者 — <code>/auth/totp/*</code> エンドポイント群</li>
+        <li>テナントユーザー — <code>/tenant-auth/totp/*</code> エンドポイント群（対称設計）</li>
+      </ul>
+    </div>
+    <div class="subsection">
+      <h3>グローバル制御</h3>
+      <p>プラットフォーム管理者が <code>PATCH /platform/mfa-settings</code> で <code>platform_required</code> / <code>tenant_required</code> を ON/OFF できる。各フィールドは独立して制御可能。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>API エンドポイント</h2></div>
+    <div class="subsection">
+      <h3>プラットフォーム管理者 MFA (/auth/totp)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>認証</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/auth/totp/setup</code></td><td>partial_platform token</td><td>TOTP 設定情報取得（QR URI 返却）。設定済みの場合 409</td></tr>
+            <tr><td><code>POST</code></td><td><code>/auth/totp/activate</code></td><td>partial_platform token</td><td>TOTP コード検証 → secret を DB に保存、access/refresh token を発行</td></tr>
+            <tr><td><code>POST</code></td><td><code>/auth/totp/verify</code></td><td>partial_platform token</td><td>ログイン時の TOTP 検証 → access/refresh token を発行</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/auth/totp</code></td><td>通常 access token</td><td>TOTP 無効化（totp_enabled=False, secret クリア）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>テナントユーザー MFA (/tenant-auth/totp)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>認証</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/tenant-auth/totp/setup</code></td><td>partial_tenant token</td><td>QR URI 返却。設定済みの場合 409</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/totp/activate</code></td><td>partial_tenant token</td><td>TOTP コード検証 → Cookie 発行 + Grafana sync</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/totp/verify</code></td><td>partial_tenant token</td><td>ログイン時の TOTP 検証 → Cookie 発行 + Grafana sync</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/tenant-auth/totp</code></td><td>通常 Cookie</td><td>TOTP 無効化</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>MFA グローバル設定 (/platform/mfa-settings)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>認証</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/platform/mfa-settings</code></td><td>Platform JWT</td><td>現在の MFA 設定を取得</td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/platform/mfa-settings</code></td><td>Platform JWT</td><td><code>platform_required</code> / <code>tenant_required</code> を更新</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>データモデル変更</h2></div>
+    <div class="subsection">
+      <h3>public.platform_users（追加カラム）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>totp_secret</code></td><td>VARCHAR(64) NULL</td><td>Base32 エンコードされた TOTP シークレット（pyotp.random_base32()）</td></tr>
+            <tr><td><code>totp_enabled</code></td><td>BOOLEAN DEFAULT FALSE</td><td>TOTP 二要素認証の有効フラグ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.mfa_settings（新規テーブル）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>INT PK DEFAULT 1</td><td>シングルトン行（id=1 固定）</td></tr>
+            <tr><td><code>platform_required</code></td><td>BOOLEAN DEFAULT FALSE</td><td>プラットフォーム管理者に MFA を強制</td></tr>
+            <tr><td><code>tenant_required</code></td><td>BOOLEAN DEFAULT FALSE</td><td>全テナントユーザーに MFA を強制</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>tenant_{uuid}.users（追加カラム）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>totp_secret</code></td><td>TEXT NULL</td><td>テナントユーザーの TOTP シークレット</td></tr>
+            <tr><td><code>totp_enabled</code></td><td>BOOLEAN DEFAULT FALSE</td><td>テナントユーザーの TOTP 有効フラグ</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">マイグレーションは <code>migrate_totp_columns()</code> でサーバー起動時に冪等実行（ADD COLUMN IF NOT EXISTS）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>ログインフロー（MFA 分岐）</h2></div>
+    <div class="subsection">
+      <h3>POST /auth/login の 3 分岐</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>条件</th><th>レスポンス</th><th>status フィールド</th></tr></thead>
+          <tbody>
+            <tr><td>MFA 不要（platform_required=False OR totp_enabled=False）</td><td>access_token + refresh_token</td><td><code>"ok"</code></td></tr>
+            <tr><td>MFA 必要 + TOTP 未設定（totp_enabled=False）</td><td>partial_token（type: partial_platform, 10分）</td><td><code>"mfa_setup_required"</code></td></tr>
+            <tr><td>MFA 必要 + TOTP 設定済み（totp_enabled=True）</td><td>partial_token（type: partial_platform, 10分）</td><td><code>"mfa_required"</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="flow">
+      <div class="flow-step">POST /auth/login</div><span class="flow-arrow">→</span>
+      <div class="flow-step">認証成功</div><span class="flow-arrow">→</span>
+      <div class="flow-step">platform_required チェック</div><span class="flow-arrow">→</span>
+      <div class="flow-step">partial_token 発行（10分）</div><span class="flow-arrow">→</span>
+      <div class="flow-step">POST /auth/totp/verify</div><span class="flow-arrow">→</span>
+      <div class="flow-step">access_token + iot_token Cookie</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>セキュリティ実装</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>実装</th><th>詳細</th></tr></thead>
+        <tbody>
+          <tr><td>TOTP アルゴリズム</td><td>RFC 6238 準拠。<code>pyotp>=2.9.0</code>。<code>valid_window=1</code>（前後 30 秒許容）で実質 3 コードが有効</td></tr>
+          <tr><td>partial_token 検証</td><td><code>type == "partial_platform"</code> かつ <code>token_type != "refresh"</code> の両方を OR 条件でチェック。refresh トークン通過を防止</td></tr>
+          <tr><td>レートリミット</td><td>verify / activate に <code>rate_key = f"totp:{user_id}"</code> でユーザー ID ベースの制限。失敗で <code>record_failure</code>、成功で <code>clear_failures</code>、超過で 429</td></tr>
+          <tr><td>iot_token Cookie</td><td>verify / activate 成功後に <code>httponly=True, secure=True, samesite="lax"</code> で発行。Grafana Auth Proxy SSO を維持</td></tr>
+          <tr><td>シークレット保存</td><td>totp_secret は平文保存（TOTP 仕様上、ハッシュ化不可）。DB アクセス制御で保護</td></tr>
+          <tr><td>Issuer 名</td><td><code>IoTAir-X</code>（TOTP URI の issuer_name パラメータ）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>UI ページ</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ファイル</th><th>対象</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>admin-ui/totp-setup.html</code></td><td>プラットフォーム管理者</td><td>QR コード表示（qrcode.js）+ 初期 TOTP 設定</td></tr>
+          <tr><td><code>admin-ui/totp-verify.html</code></td><td>プラットフォーム管理者</td><td>ログイン時 TOTP 検証</td></tr>
+          <tr><td><code>admin-ui/platform-settings.html</code></td><td>プラットフォーム管理者</td><td>MFA グローバル ON/OFF トグル</td></tr>
+          <tr><td><code>admin-ui/tenant-totp-setup.html</code></td><td>テナントユーザー</td><td>QR コード表示 + 初期 TOTP 設定</td></tr>
+          <tr><td><code>admin-ui/tenant-totp-verify.html</code></td><td>テナントユーザー</td><td>ログイン時 TOTP 検証</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">07</span><h2>TOTP 紛失時のリカバリ</h2></div>
+    <div class="callout">詳細な SQL 手順は <code>docs/totp-recovery.md</code> を参照。</div>
+    <p>認証アプリ紛失時は DB 直接操作で TOTP を無効化する。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>対象</th><th>SQL（概要）</th></tr></thead>
+        <tbody>
+          <tr><td>プラットフォーム管理者</td><td><code>UPDATE public.platform_users SET totp_enabled=FALSE, totp_secret=NULL WHERE email='…'</code></td></tr>
+          <tr><td>テナントユーザー</td><td><code>UPDATE "tenant_{id}".users SET totp_enabled=FALSE, totp_secret=NULL WHERE email='…'</code></td></tr>
+          <tr><td>グローバル MFA 無効化</td><td><code>UPDATE public.mfa_settings SET platform_required=FALSE, tenant_required=FALSE WHERE id=1</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 6: アラートメール ==================== -->
+<section class="doc-section" id="tab-6">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Alert Service Design</div>
+    <h1 class="doc-title">アラートメール 送信トリガー仕様</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>参照: alert-service/app/scheduler.py · notifier.py · evaluator.py</span><span>評価間隔: 60秒</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>動作概要</h2></div>
+    <p>APScheduler が <strong>60秒間隔</strong>（<code>EVAL_INTERVAL_SEC</code>）で全テナントのアクティブなアラートルールを評価する。メール送信は「状態変化」にのみ反応する設計で、条件が継続して満たされても送信は繰り返されない。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>連続条件時のメール送信挙動</h2></div>
+    <div class="callout">
+      <strong>1回だけ送信（状態変化検知型）。</strong> 条件が満たされ続けても追加メールは送られない。条件が解消されたときに <code>[RESOLVED]</code> メールが1通送信される。
+    </div>
+    <div class="subsection">
+      <h3>評価ループの核心ロジック（scheduler.py:43）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>条件</th><th>動作</th></tr></thead>
+          <tbody>
+            <tr><td><code>should_alert == True</code> かつ 未解消イベントなし</td><td>alert_events に INSERT → メール送信（アラート）</td></tr>
+            <tr><td><code>should_alert == False</code> かつ 未解消イベントあり</td><td>alert_events を解消 → メール送信（<code>[RESOLVED]</code>）</td></tr>
+            <tr><td>上記以外（条件継続中 / 正常継続中）</td><td>何もしない（サイレント）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">イベント管理は <code>alert_events</code> テーブル（<code>resolved_at IS NULL</code> = 未解消）。既存の未解消イベントがある間は新規メールを送らない。</p>
+    </div>
+    <div class="subsection">
+      <h3>時系列での挙動（60秒ごとの評価）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>経過時間</th><th>状態</th><th>メール</th></tr></thead>
+          <tbody>
+            <tr><td>t=0</td><td>正常</td><td>—</td></tr>
+            <tr><td>t=60s</td><td>条件一致（初回）</td><td>📧 アラート送信</td></tr>
+            <tr><td>t=120s</td><td>条件継続</td><td>サイレント</td></tr>
+            <tr><td>t=180s</td><td>条件継続</td><td>サイレント</td></tr>
+            <tr><td>t=240s</td><td>条件解消</td><td>📧 [RESOLVED] 送信</td></tr>
+            <tr><td>t=300s</td><td>正常</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>送信トリガー</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>トリガー</th><th>件名プレフィックス</th><th>発火条件</th></tr></thead>
+        <tbody>
+          <tr><td>テレメトリアラート発火</td><td><code>[SEVERITY]</code></td><td>InfluxDB テレメトリが閾値条件を満たし、かつ同ルールの未解消イベントが存在しない</td></tr>
+          <tr><td>アラート解消</td><td><code>[RESOLVED]</code></td><td>発火中アラートが閾値条件を満たさなくなった</td></tr>
+          <tr><td>デバイスオフライン</td><td><code>[SEVERITY]</code></td><td><code>last_seen_at</code> が <code>DEVICE_OFFLINE_THRESHOLD_SEC</code> 超過、かつステータスが <code>offline</code> でない。送信後に devices テーブルを <code>offline</code> マークするため再接続まで再送なし</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>テレメトリ評価のトリガーモード</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>trigger_mode</th><th>発火条件</th><th>使用パラメータ</th></tr></thead>
+        <tbody>
+          <tr><td><code>consecutive</code></td><td>最新 N サンプルが連続して閾値条件を満たす</td><td><code>consecutive_count</code></td></tr>
+          <tr><td><code>duration</code></td><td>過去 D 分のサンプルがすべて閾値条件を満たす</td><td><code>duration_sec</code></td></tr>
+          <tr><td><code>consecutive_and_duration</code></td><td>連続カウント AND 継続時間の両方を満たす</td><td><code>consecutive_count</code> + <code>duration_sec</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">InfluxDB クエリ範囲: <code>max(duration_sec + 60, consecutive_count × 60 + 60)</code> 秒。データ取得できない場合は <code>should_alert = False</code>（誤報なし）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>閾値条件（condition）</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>condition</th><th>判定</th></tr></thead>
+        <tbody>
+          <tr><td><code>above</code></td><td>value &gt; threshold</td></tr>
+          <tr><td><code>below</code></td><td>value &lt; threshold</td></tr>
+          <tr><td><code>equal</code></td><td>|value − threshold| &lt; 1e-9</td></tr>
+          <tr><td><code>device_offline</code></td><td>last_seen_at が閾値超過（テレメトリ評価とは別フロー）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>送信メールの仕様</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>件名（アラート）</td><td><code>[SEVERITY] IoT Alert: {sensor_key} / {device_id}</code></td></tr>
+          <tr><td>件名（解消）</td><td><code>[RESOLVED] IoT Alert: {sensor_key} / {device_id}</code></td></tr>
+          <tr><td>本文（アラート）</td><td>sensor_key / device_id / condition &amp; threshold / current_value / tenant_id</td></tr>
+          <tr><td>本文（解消）</td><td>sensor_key / device_id / tenant_id のみ（current_value なし）</td></tr>
+          <tr><td>送信先</td><td>アラートルールの <code>notify_emails</code> 配列</td></tr>
+          <tr><td>From</td><td><code>SMTP_FROM</code> 環境変数（デフォルト: <code>alerts@iot-platform.local</code>）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">07</span><h2>SMTP 設定（.env）</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>環境変数</th><th>説明</th><th>デフォルト</th></tr></thead>
+        <tbody>
+          <tr><td><code>SMTP_FROM</code></td><td>差出人アドレス</td><td><code>alerts@iot-platform.local</code></td></tr>
+          <tr><td><code>SMTP_HOST</code></td><td>SMTP サーバーホスト</td><td><code>localhost</code></td></tr>
+          <tr><td><code>SMTP_PORT</code></td><td>ポート</td><td><code>587</code></td></tr>
+          <tr><td><code>SMTP_USER</code></td><td>認証ユーザー（空の場合は STARTTLS/認証なし）</td><td>—</td></tr>
+          <tr><td><code>SMTP_PASSWORD</code></td><td>認証パスワード</td><td>—</td></tr>
+          <tr><td><code>EVAL_INTERVAL_SEC</code></td><td>評価間隔（秒）</td><td><code>60</code></td></tr>
+          <tr><td><code>DEVICE_OFFLINE_THRESHOLD_SEC</code></td><td>オフライン判定閾値（秒）</td><td><code>180</code></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
 
 </main>
