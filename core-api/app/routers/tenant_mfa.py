@@ -3,8 +3,9 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
-from app.services.auth import verify_token, create_access_token, verify_password, hash_password
+from app.services.auth import verify_token, create_access_token, verify_password
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
+from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.config import settings
@@ -53,7 +54,7 @@ def tenant_totp_setup(payload: dict = Depends(_require_partial_tenant)):
     if not row:
         raise HTTPException(status_code=404, detail="User not found")
     if row.totp_enabled:
-        raise HTTPException(status_code=404, detail="TOTP already active")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="TOTP already active")
     secret = row.totp_secret
     if not secret:
         secret = generate_totp_secret()
@@ -86,6 +87,18 @@ def tenant_totp_activate(body: TotpCode, response: Response, payload: dict = Dep
             {"uid": user_id},
         )
         conn.commit()
+    # Grafana sync（non-fatal）
+    try:
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if tenant and tenant.grafana_org_id:
+            g_org_id = int(tenant.grafana_org_id)
+            g_login = f"{tenant_id}:{payload['email']}"
+            ensure_grafana_user_in_org(g_org_id, payload["email"], "Viewer", tenant_id)
+            set_user_default_org_via_proxy(g_login, g_org_id)
+    except Exception as e:
+        print(f"[tenant_totp_activate] grafana sync warning (non-fatal): {e}")
+
     full_payload = {
         "sub": user_id,
         "email": payload["email"],
@@ -118,6 +131,19 @@ def tenant_totp_verify(body: TotpCode, response: Response, payload: dict = Depen
         raise HTTPException(status_code=400, detail="TOTP not configured")
     if not verify_totp_code(row.totp_secret, body.code):
         raise HTTPException(status_code=400, detail="Invalid TOTP code")
+
+    # Grafana sync（non-fatal）
+    try:
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if tenant and tenant.grafana_org_id:
+            g_org_id = int(tenant.grafana_org_id)
+            g_login = f"{tenant_id}:{payload['email']}"
+            ensure_grafana_user_in_org(g_org_id, payload["email"], "Viewer", tenant_id)
+            set_user_default_org_via_proxy(g_login, g_org_id)
+    except Exception as e:
+        print(f"[tenant_totp_verify] grafana sync warning (non-fatal): {e}")
+
     full_payload = {
         "sub": user_id,
         "email": payload["email"],
