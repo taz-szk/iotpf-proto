@@ -2,11 +2,11 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from app.schemas.auth import LoginRequest, TokenOut, RefreshRequest
+from app.schemas.auth import LoginRequest, TokenOut, LoginOut, RefreshRequest
 from app.services.auth import verify_password, hash_password, create_access_token, create_refresh_token, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.token_blocklist import revoke_jti, is_revoked
-from app.models.public import PlatformUser
+from app.models.public import PlatformUser, MfaSettings
 from app.database import SessionLocal
 from app.config import settings
 from app.services.grafana import ensure_platform_admin_in_grafana
@@ -24,7 +24,7 @@ class LogoutRequest(BaseModel):
     refresh_token: str | None = None
 
 
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=LoginOut)
 def login(req: LoginRequest, request: Request, response: Response):
     ip = request.client.host if request.client else "unknown"
     rate_key = f"platform_login:{ip}"
@@ -37,6 +37,24 @@ def login(req: LoginRequest, request: Request, response: Response):
         record_failure(rate_key)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     clear_failures(rate_key)
+
+    # MFA 設定確認
+    with SessionLocal() as db:
+        mfa = db.query(MfaSettings).filter(MfaSettings.id == 1).first()
+    mfa_required = mfa.platform_required if mfa else False
+
+    if mfa_required:
+        partial_payload = {
+            "sub": str(user.id),
+            "email": user.email,
+            "type": "partial_platform",
+        }
+        partial_token = create_access_token(partial_payload, expires_delta=timedelta(minutes=10))
+        if user.totp_enabled:
+            return LoginOut(status="totp_required", partial_token=partial_token)
+        else:
+            return LoginOut(status="totp_setup_required", partial_token=partial_token)
+
     payload = {
         "sub": str(user.id),
         "email": user.email,
@@ -58,7 +76,11 @@ def login(req: LoginRequest, request: Request, response: Response):
         httponly=True, secure=True, samesite="lax",
         max_age=settings.grafana_session_expire_hours * 3600, path="/",
     )
-    return TokenOut(access_token=access, refresh_token=refresh)
+    return LoginOut(
+        status="ok",
+        access_token=access,
+        refresh_token=refresh,
+    )
 
 
 @router.post("/refresh", response_model=TokenOut)
