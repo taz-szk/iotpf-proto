@@ -4,8 +4,10 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from app.services.auth import verify_token, create_access_token, create_refresh_token, verify_password
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
+from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.models.public import PlatformUser
 from app.database import SessionLocal
+from app.config import settings
 
 router = APIRouter(prefix="/auth/totp", tags=["mfa"])
 _bearer = HTTPBearer()
@@ -41,7 +43,7 @@ def totp_setup(payload: dict = Depends(_require_partial_platform)):
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         if user.totp_enabled:
-            raise HTTPException(status_code=404, detail="TOTP already active")
+            raise HTTPException(status_code=409, detail="TOTP already active")
         if not user.totp_secret:
             user.totp_secret = generate_totp_secret()
             db.commit()
@@ -52,39 +54,69 @@ def totp_setup(payload: dict = Depends(_require_partial_platform)):
 
 
 @router.post("/activate")
-def totp_activate(body: TotpCode, payload: dict = Depends(_require_partial_platform)):
+def totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_platform)):
+    rate_key = f"totp:{payload['sub']}"
+    if is_rate_limited(rate_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
     with SessionLocal() as db:
         user = db.query(PlatformUser).filter(PlatformUser.id == payload["sub"]).first()
         if not user or not user.totp_secret:
+            record_failure(rate_key)
             raise HTTPException(status_code=400, detail="TOTP not initialized")
         if not verify_totp_code(user.totp_secret, body.code):
+            record_failure(rate_key)
             raise HTTPException(status_code=400, detail="Invalid TOTP code")
         user.totp_enabled = True
         db.commit()
         db.refresh(user)
         full = _full_payload(user)
+    clear_failures(rate_key)
     from app.services.grafana import ensure_platform_admin_in_grafana
     try:
         ensure_platform_admin_in_grafana(user.email)
     except Exception:
         pass
+    grafana_token = create_access_token(
+        full,
+        expires_delta=timedelta(hours=settings.grafana_session_expire_hours),
+    )
+    response.set_cookie(
+        key="iot_token", value=grafana_token,
+        httponly=True, secure=True, samesite="lax",
+        max_age=settings.grafana_session_expire_hours * 3600, path="/",
+    )
     return {"access_token": create_access_token(full), "refresh_token": create_refresh_token(full), "token_type": "bearer"}
 
 
 @router.post("/verify")
-def totp_verify(body: TotpCode, payload: dict = Depends(_require_partial_platform)):
+def totp_verify(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_platform)):
+    rate_key = f"totp:{payload['sub']}"
+    if is_rate_limited(rate_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
     with SessionLocal() as db:
         user = db.query(PlatformUser).filter(PlatformUser.id == payload["sub"]).first()
         if not user or not user.totp_enabled or not user.totp_secret:
+            record_failure(rate_key)
             raise HTTPException(status_code=400, detail="TOTP not configured")
         if not verify_totp_code(user.totp_secret, body.code):
+            record_failure(rate_key)
             raise HTTPException(status_code=400, detail="Invalid TOTP code")
         full = _full_payload(user)
+    clear_failures(rate_key)
     from app.services.grafana import ensure_platform_admin_in_grafana
     try:
         ensure_platform_admin_in_grafana(user.email)
     except Exception:
         pass
+    grafana_token = create_access_token(
+        full,
+        expires_delta=timedelta(hours=settings.grafana_session_expire_hours),
+    )
+    response.set_cookie(
+        key="iot_token", value=grafana_token,
+        httponly=True, secure=True, samesite="lax",
+        max_age=settings.grafana_session_expire_hours * 3600, path="/",
+    )
     return {"access_token": create_access_token(full), "refresh_token": create_refresh_token(full), "token_type": "bearer"}
 
 

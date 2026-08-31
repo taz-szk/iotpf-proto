@@ -23,13 +23,25 @@ def test_login_success(client):
     mock_user.is_active = True
     mock_user.token_version = 1
 
+    mock_mfa = MagicMock()
+    mock_mfa.platform_required = False
+
+    def query_side_effect(model):
+        mock_q = MagicMock()
+        if hasattr(model, "__name__") and model.__name__ == "MfaSettings":
+            mock_q.filter.return_value.first.return_value = mock_mfa
+        else:
+            mock_q.filter.return_value.first.return_value = mock_user
+        return mock_q
+
     with patch("app.routers.auth.SessionLocal") as mock_session, \
-         patch("app.routers.auth.verify_password", return_value=True):
+         patch("app.routers.auth.verify_password", return_value=True), \
+         patch("app.routers.auth.ensure_platform_admin_in_grafana"):
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
         mock_db.__exit__ = MagicMock(return_value=False)
         mock_session.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_user
+        mock_db.query.side_effect = query_side_effect
 
         resp = client.post("/auth/login", json={
             "email": "admin@example.com",
