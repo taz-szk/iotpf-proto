@@ -231,7 +231,7 @@ ok "Server certificate issued for ${PLATFORM_DOMAIN:-localhost}."
 # ---- start services ---------------------------------------------------------
 
 step "Starting services..."
-docker compose up -d
+docker compose up -d --build
 ok "Containers started."
 
 # ---- wait for health --------------------------------------------------------

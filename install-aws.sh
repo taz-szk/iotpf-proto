@@ -248,7 +248,7 @@ ok "Step-CA ready. Device CA: certs/ca/root_ca.crt"
 # nginx を後で起動することで certbot standalone がポート 80 を使える
 
 step "Starting services (nginx starts after Let's Encrypt)..."
-docker compose up -d \
+docker compose up -d --build \
     postgres influxdb emqx minio grafana core-api ingestion-service alert-service mailhog
 ok "Services started."
 
