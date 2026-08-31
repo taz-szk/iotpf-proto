@@ -183,3 +183,47 @@ nginx/conf.d/                            /api/platform/* ルーティング追�
 
 - 既存ユーザーは `totp_enabled = false`。MFA 設定が OFF のうちはログインフロー変化なし。
 - `mfa_settings` の初期値は両方 `false` なので、デプロイ直後は既存動作を維持。
+
+## マイグレーション計画
+
+### 新規テナント
+
+`postgres/init/01_init.sql` のテナントスキーマ定義に `totp_secret` / `totp_enabled` 列を追加するだけ。テナント作成時に自動で列が入る。
+
+### 既存テナント
+
+各テナントは独立したスキーマ（`tenant_{id}`）を持つため、デプロイ後に既存スキーマへの ALTER TABLE が必要。
+
+**対策：core-api 起動時マイグレーション**
+
+`database.py` に以下の関数を追加し、`main.py` の startup イベントで呼び出す：
+
+```python
+def migrate_totp_columns():
+    """既存テナント users テーブルに TOTP 列を追加（べき等）"""
+    with SessionLocal() as db:
+        tenants = db.query(Tenant).all()
+    with engine.connect() as conn:
+        for tenant in tenants:
+            schema = f"tenant_{str(tenant.id).replace('-', '_')}"
+            conn.execute(text(f"""
+                ALTER TABLE "{schema}".users
+                ADD COLUMN IF NOT EXISTS totp_secret  VARCHAR(64),
+                ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
+            """))
+        conn.commit()
+```
+
+- `ADD COLUMN IF NOT EXISTS` により**べき等**（何度実行しても安全）
+- 起動時に毎回実行するため、デプロイ後に手動 SQL を叩く作業不要
+- 新規テナントが増えても次回 core-api 再起動時に自動適用される
+- `platform_users` への列追加は Alembic 不使用のため `02_mfa.sql` で `ALTER TABLE IF NOT EXISTS` を使って対応
+
+### デプロイ手順
+
+```bash
+git pull
+docker compose up -d --build core-api   # 起動時マイグレーションが自動実行される
+```
+
+追加の手動作業は不要。`mfa_settings` の初期値が `false` なので、管理者が明示的に ON にするまで既存のログインフローは維持される。
