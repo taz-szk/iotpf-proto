@@ -2,6 +2,18 @@ import httpx
 import secrets
 from app.config import settings
 
+PANEL_DATA_MODE: dict[str, str] = {
+    "timeseries":     "timeseries",
+    "barchart":       "timeseries",
+    "histogram":      "timeseries",
+    "heatmap":        "timeseries",
+    "state-timeline": "timeseries",
+    "gauge":          "last_value",
+    "stat":           "last_value",
+    "bargauge":       "last_value",
+    "table":          "any",
+}
+
 _FLUX_TELEMETRY = (
     'from(bucket: "telemetry")\n'
     '  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n'
@@ -190,6 +202,121 @@ _DEFAULT_DASHBOARD = {
     },
     "overwrite": True,
 }
+
+
+def _flux_telemetry_field(sensor_key: str) -> str:
+    """単一フィールド用 Flux クエリ（集計有り）"""
+    escaped = sensor_key.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        'from(bucket: "telemetry")\n'
+        '  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        '  |> filter(fn: (r) => r.device_name =~ /^${device_name:regex}$/)\n'
+        f'  |> filter(fn: (r) => r._field == "{escaped}")\n'
+        '  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n'
+        '  |> yield(name: "mean")'
+    )
+
+def _flux_last_field(sensor_key: str) -> str:
+    """単一フィールド用 Flux クエリ（最新値のみ）"""
+    escaped = sensor_key.replace("\\", "\\\\").replace('"', '\\"')
+    return (
+        'from(bucket: "telemetry")\n'
+        '  |> range(start: -1h)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        '  |> filter(fn: (r) => r.device_name =~ /^${device_name:regex}$/)\n'
+        f'  |> filter(fn: (r) => r._field == "{escaped}")\n'
+        '  |> last()'
+    )
+
+def build_sensor_panel(sensor_key: str, panel_type: str, panel_id: int, x: int, y: int) -> dict:
+    """センサーキーとパネルタイプからGrafanaパネル定義を生成する。"""
+    use_last = PANEL_DATA_MODE.get(panel_type) == "last_value"
+    query = _flux_last_field(sensor_key) if use_last else _flux_telemetry_field(sensor_key)
+    ds = {"type": "influxdb"}
+
+    base: dict = {
+        "id": panel_id,
+        "title": sensor_key,
+        "type": panel_type,
+        "gridPos": {"x": x, "y": y, "w": 9, "h": 6},
+        "targets": [{"refId": "A", "datasource": ds, "query": query}],
+        "fieldConfig": {"defaults": {"displayName": "${__field.name}"}},
+    }
+
+    if panel_type == "timeseries":
+        base["options"] = {
+            "tooltip": {"mode": "multi"},
+            "legend": {"displayMode": "list", "placement": "bottom"},
+        }
+        base["fieldConfig"]["defaults"]["custom"] = {"lineWidth": 2}
+    elif panel_type == "barchart":
+        base["options"] = {"xTickLabelRotation": 0, "barWidth": 0.6}
+    elif panel_type == "histogram":
+        base["options"] = {"fillOpacity": 80, "gradientMode": "none"}
+    elif panel_type == "heatmap":
+        base["options"] = {"calculate": False, "color": {"scheme": "Oranges"}}
+    elif panel_type == "state-timeline":
+        base["options"] = {"mergeValues": True, "showValue": "auto"}
+    elif panel_type == "gauge":
+        base["options"] = {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+        }
+    elif panel_type == "stat":
+        base["options"] = {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "auto",
+            "textMode": "auto",
+            "colorMode": "background",
+            "graphMode": "none",
+        }
+    elif panel_type == "bargauge":
+        base["options"] = {
+            "reduceOptions": {"calcs": ["lastNotNull"]},
+            "orientation": "horizontal",
+            "displayMode": "gradient",
+        }
+    # table: Grafana のデフォルト設定で動作するため options 不要
+
+    return base
+
+def build_dashboard_panels(configs: list[dict]) -> list[dict]:
+    """パネル設定リストからGrafanaパネル配列を構築する。
+    configs: [{"sensor_key": str, "panel_type": str}]
+    空の場合は全フィールド timeseries のフォールバックを返す。
+    """
+    import copy
+
+    # 固定パネル（既存 _DEFAULT_DASHBOARD の定義から抽出）
+    row_panel = {
+        "id": 1,
+        "type": "row",
+        "title": "${device_name}",
+        "gridPos": {"x": 0, "y": 0, "w": 24, "h": 1},
+        "repeat": "device_name",
+        "repeatDirection": "v",
+        "collapsed": False,
+    }
+    stat_deleted = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][1])  # id=2
+    stat_status  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][2])  # id=4
+    fallback_ts  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][3])  # id=3
+
+    fixed = [row_panel, stat_deleted, stat_status]
+
+    if not configs:
+        return fixed + [fallback_ts]
+
+    sensor_panels = []
+    for i, cfg in enumerate(configs):
+        panel_id = 10 + i
+        x = 6 + (i % 2) * 9   # x=6 または x=15（2列）
+        y = 1 + (i // 2) * 7
+        sensor_panels.append(
+            build_sensor_panel(cfg["sensor_key"], cfg["panel_type"], panel_id, x, y)
+        )
+
+    return fixed + sensor_panels
 
 
 def mark_device_deleted(influxdb_org_id: str, device_name: str) -> None:
@@ -732,6 +859,50 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
+
+    httpx.post(
+        f"{settings.grafana_url}/api/dashboards/db",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        json=dashboard,
+        timeout=10.0,
+    ).raise_for_status()
+
+
+def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: list[dict]) -> None:
+    """パネル設定付きでテナントダッシュボードを再生成する。PUT API から呼び出す。"""
+    import copy
+    auth = _admin_auth()
+
+    prefs = httpx.get(
+        f"{settings.grafana_url}/api/org/preferences",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    prefs.raise_for_status()
+    uid = prefs.json().get("homeDashboardUID")
+
+    if not uid:
+        # ダッシュボード未作成の場合は新規作成
+        create_default_dashboard(org_id, tenant_name)
+        return
+
+    dash_resp = httpx.get(
+        f"{settings.grafana_url}/api/dashboards/uid/{uid}",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    if dash_resp.status_code != 200:
+        return
+    current_version = dash_resp.json()["dashboard"].get("version", 0)
+
+    dashboard = copy.deepcopy(_DEFAULT_DASHBOARD)
+    dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
+    dashboard["dashboard"]["uid"] = uid
+    dashboard["dashboard"]["version"] = current_version
+    dashboard["dashboard"]["panels"] = build_dashboard_panels(configs)
 
     httpx.post(
         f"{settings.grafana_url}/api/dashboards/db",
