@@ -712,8 +712,14 @@
               <div class="flex gap-2 items-start">
                 <div class="flex-1">
                   <input type="text" x-model="newSensorKey" placeholder="例: temperature"
+                         list="sensor-key-suggestions"
                          class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
                          @keydown.enter="addPanelConfig()">
+                  <datalist id="sensor-key-suggestions">
+                    <template x-for="k in knownSensorKeys" :key="k">
+                      <option :value="k"></option>
+                    </template>
+                  </datalist>
                   <p class="text-xs text-gray-400 mt-0.5">英数字・アンダースコア・ハイフンのみ</p>
                 </div>
                 <select x-model="newPanelType" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
@@ -915,6 +921,7 @@ function portalApp() {
     newPanelType: 'timeseries',
     panelConfigSaving: false,
     panelConfigError: '',
+    knownSensorKeys: [],
 
     async init() {
       try {
@@ -930,6 +937,7 @@ function portalApp() {
         document.title = `${me.tenant_name} - IoTAir-X`;
         if (me.grafana_url) this.grafanaUrl = me.grafana_url;
         await this.loadPanelConfigs();
+        this.loadSensorKeys();
       } catch(e) {
         this.error = e.message;
       } finally {
@@ -1225,6 +1233,13 @@ function portalApp() {
     },
 
     // ----- ダッシュボード設定 -----
+    async loadSensorKeys() {
+      try {
+        const keys = await portalFetch('GET', '/dashboard/sensor-keys');
+        if (Array.isArray(keys)) this.knownSensorKeys = keys;
+      } catch(e) { /* センサーキー取得失敗は無視 */ }
+    },
+
     async loadPanelConfigs() {
       try {
         this.panelConfigs = await portalFetch('GET', '/dashboard/panel-configs') || [];

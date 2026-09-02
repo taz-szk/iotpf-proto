@@ -876,3 +876,24 @@ def put_panel_configs(
             sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs)
         except Exception as e:
             print(f"[panel_configs] Grafana sync failed: {e}")
+
+
+@router.get("/dashboard/sensor-keys")
+def get_sensor_keys(payload: dict = Depends(_require_tenant)):
+    """テナントのデバイスが持つ InfluxDB フィールドキー（センサーキー）一覧を返す。"""
+    from app.services.grafana import get_tenant_sensor_keys
+    tenant_id = payload["tenant_id"]
+    with engine.connect() as conn:
+        tenant_row = conn.execute(
+            text("SELECT name, influxdb_org_id FROM tenants WHERE id = :tid"),
+            {"tid": tenant_id},
+        ).first()
+    if not tenant_row or not tenant_row.influxdb_org_id:
+        return []
+    schema = tenant_row.name
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(f'SELECT device_name FROM "{schema}".devices WHERE device_name IS NOT NULL')
+        ).fetchall()
+    device_names = [r.device_name for r in rows if r.device_name]
+    return get_tenant_sensor_keys(tenant_row.influxdb_org_id, device_names)

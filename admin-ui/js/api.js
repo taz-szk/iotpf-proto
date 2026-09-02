@@ -138,6 +138,7 @@ const api = {
     dashboardConfig: {
         list: () => request('GET', '/tenant-portal/dashboard/panel-configs'),
         update: (body) => request('PUT', '/tenant-portal/dashboard/panel-configs', body),
+        sensorKeys: () => request('GET', '/tenant-portal/dashboard/sensor-keys'),
     },
     isLoggedIn: () => !!getToken(),
     logout: () => { clearTokens(); window.location.href = '/admin/'; },

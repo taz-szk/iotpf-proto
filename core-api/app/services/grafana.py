@@ -991,3 +991,46 @@ def remove_tenant_datasource_from_platform_org(platform_org_id: int, influxdb_or
                 break
     except Exception as e:
         print(f"[platform_org] datasource remove failed: {e}")
+
+
+def get_tenant_sensor_keys(influxdb_org_id: str, device_names: list[str]) -> list[str]:
+    """テナントのデバイスが持つ InfluxDB フィールドキー一覧を返す（ソート済み）。"""
+    if not device_names:
+        return []
+    import csv as _csv
+    import io as _io
+    import re as _re
+
+    def _esc(name: str) -> str:
+        return _re.sub(r'([.+*?^${}()|[\]\\/])', r'\\\1', name)
+
+    pattern = "^(" + "|".join(_esc(n) for n in device_names) + ")$"
+    flux = (
+        'from(bucket: "telemetry")\n'
+        '  |> range(start: -30d)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        f'  |> filter(fn: (r) => r.device_name =~ /{pattern}/)\n'
+        '  |> keep(columns: ["_field"])\n'
+        '  |> group()\n'
+        '  |> distinct(column: "_field")'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={
+                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Content-Type": "application/json",
+                "Accept": "application/csv",
+            },
+            json={"query": flux, "type": "flux"},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        lines = [l for l in resp.text.splitlines() if l.strip() and not l.startswith("#")]
+        if len(lines) < 2:
+            return []
+        reader = _csv.DictReader(lines)
+        return sorted({row["_value"] for row in reader if row.get("_value", "").strip()})
+    except Exception as e:
+        print(f"[get_tenant_sensor_keys] failed: {e}")
+        return []
