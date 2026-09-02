@@ -890,7 +890,7 @@ def get_sensor_keys(payload: dict = Depends(_require_tenant)):
         ).first()
     if not tenant_row or not tenant_row.influxdb_org_id:
         return []
-    schema = tenant_row.name
+    schema = _schema(tenant_id)
     with engine.connect() as conn:
         rows = conn.execute(
             text(f'SELECT device_name FROM "{schema}".devices WHERE device_name IS NOT NULL')
