@@ -120,3 +120,14 @@ def test_put_panel_configs_empty_list_clears_configs():
 def test_put_panel_configs_requires_auth():
     resp = client.put("/tenant-portal/dashboard/panel-configs", json=[])
     assert resp.status_code == 401
+
+def test_put_panel_configs_duplicate_sensor_key():
+    resp = client.put(
+        "/tenant-portal/dashboard/panel-configs",
+        json=[
+            {"sensor_key": "temperature", "panel_type": "gauge"},
+            {"sensor_key": "temperature", "panel_type": "timeseries"},
+        ],
+        cookies={"iot_token": _tenant_token("admin")},
+    )
+    assert resp.status_code == 422

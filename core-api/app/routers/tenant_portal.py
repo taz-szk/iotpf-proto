@@ -819,7 +819,7 @@ class PanelConfigItem(BaseModel):
     @field_validator("sensor_key")
     @classmethod
     def validate_sensor_key(cls, v: str) -> str:
-        if not re.match(r'^[a-zA-Z0-9_-]{1,64}$', v):
+        if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', v):
             raise ValueError("sensor_key must be alphanumeric, underscore, or hyphen (1-64 chars)")
         return v
 
@@ -844,10 +844,19 @@ def put_panel_configs(
     from app.services.grafana import sync_tenant_dashboard_with_configs
     tenant_id = payload["tenant_id"]
 
+    # Validate: no duplicate sensor_keys
+    sensor_keys = [item.sensor_key for item in items]
+    if len(sensor_keys) != len(set(sensor_keys)):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Duplicate sensor_key values")
+
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        # Capture values before commit to avoid DetachedInstanceError
+        grafana_org_id = tenant.grafana_org_id
+        tenant_name = tenant.name
 
         # 全件置き換え
         db.query(DashboardPanelConfig).filter(
@@ -861,9 +870,9 @@ def put_panel_configs(
             ))
         db.commit()
 
-    if tenant.grafana_org_id:
+    if grafana_org_id:
         configs = [{"sensor_key": i.sensor_key, "panel_type": i.panel_type.value} for i in items]
         try:
-            sync_tenant_dashboard_with_configs(int(tenant.grafana_org_id), tenant.name, configs)
+            sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs)
         except Exception as e:
             print(f"[panel_configs] Grafana sync failed: {e}")
