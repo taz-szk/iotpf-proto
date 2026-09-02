@@ -640,6 +640,116 @@
             </div>
           </div>
 
+          <!-- ===== ダッシュボード設定 ===== -->
+          <div x-show="activeTab === 'dashboard-config'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">センサー別チャートタイプ設定</h3>
+            </div>
+
+            <div x-show="panelConfigError" class="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded" x-text="panelConfigError"></div>
+
+            <!-- 設定一覧 -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+              <div x-show="panelConfigs.length === 0" class="py-8 text-center text-gray-400 text-sm">
+                設定なし — フォールバック（全フィールド折れ線グラフ）で表示されます
+              </div>
+              <table x-show="panelConfigs.length > 0" class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">センサーキー</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">チャートタイプ</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="(cfg, idx) in panelConfigs" :key="cfg.sensor_key">
+                    <tr>
+                      <td class="px-4 py-3 text-sm font-mono font-medium" x-text="cfg.sensor_key"></td>
+                      <td class="px-4 py-3">
+                        <div>
+                          <template x-if="canEdit">
+                            <select x-model="panelConfigs[idx].panel_type"
+                                    class="text-sm border border-gray-300 rounded px-2 py-1">
+                              <optgroup label="時系列（推移グラフ）">
+                                <option value="timeseries">折れ線グラフ</option>
+                                <option value="barchart">棒グラフ</option>
+                                <option value="histogram">ヒストグラム</option>
+                                <option value="heatmap">ヒートマップ</option>
+                                <option value="state-timeline">状態タイムライン</option>
+                              </optgroup>
+                              <optgroup label="現在値（最新値のみ）">
+                                <option value="gauge">ゲージ</option>
+                                <option value="stat">シグナル</option>
+                                <option value="bargauge">バーゲージ</option>
+                              </optgroup>
+                              <optgroup label="汎用">
+                                <option value="table">テーブル</option>
+                              </optgroup>
+                            </select>
+                          </template>
+                          <template x-if="!canEdit">
+                            <span class="text-sm" x-text="cfg.panel_type"></span>
+                          </template>
+                          <p x-show="isPanelTypeLastValue(cfg.panel_type)"
+                             class="text-xs text-amber-600 mt-0.5">
+                            ⚠ 最新値のみ表示されます（時系列データは集計されません）
+                          </p>
+                        </div>
+                      </td>
+                      <td class="px-4 py-3 text-right">
+                        <button x-show="canEdit" @click="removePanelConfig(cfg.sensor_key)"
+                                class="text-xs text-red-500 hover:text-red-700">削除</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- 新規追加フォーム -->
+            <div x-show="canEdit" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+              <p class="text-xs font-medium text-gray-600 mb-2">センサーキーを追加</p>
+              <div class="flex gap-2 items-start">
+                <div class="flex-1">
+                  <input type="text" x-model="newSensorKey" placeholder="例: temperature"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm font-mono"
+                         @keydown.enter="addPanelConfig()">
+                  <p class="text-xs text-gray-400 mt-0.5">英数字・アンダースコア・ハイフンのみ</p>
+                </div>
+                <select x-model="newPanelType" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                  <optgroup label="時系列">
+                    <option value="timeseries">折れ線グラフ</option>
+                    <option value="barchart">棒グラフ</option>
+                    <option value="histogram">ヒストグラム</option>
+                    <option value="heatmap">ヒートマップ</option>
+                    <option value="state-timeline">状態タイムライン</option>
+                  </optgroup>
+                  <optgroup label="現在値">
+                    <option value="gauge">ゲージ</option>
+                    <option value="stat">シグナル</option>
+                    <option value="bargauge">バーゲージ</option>
+                  </optgroup>
+                  <optgroup label="汎用">
+                    <option value="table">テーブル</option>
+                  </optgroup>
+                </select>
+                <button @click="addPanelConfig()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm whitespace-nowrap">
+                  + 追加
+                </button>
+              </div>
+            </div>
+
+            <!-- 反映ボタン -->
+            <div x-show="canEdit" class="flex justify-end">
+              <button @click="savePanelConfigs()"
+                      :disabled="panelConfigSaving"
+                      class="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white px-4 py-2 rounded text-sm font-medium">
+                <span x-text="panelConfigSaving ? '反映中...' : 'ダッシュボードに反映'"></span>
+              </button>
+            </div>
+          </div>
+
           <!-- ===== テナント削除（管理者のみ） ===== -->
           <div x-show="activeTab === 'danger' && isAdmin">
             <div class="bg-red-50 border border-red-200 rounded-xl p-6">
@@ -730,6 +840,7 @@ function portalApp() {
         { id: 'devices',   label: 'デバイス',                icon: '📡' },
         { id: 'alerts',    label: 'アラートルール',           icon: '🔔' },
         { id: 'firmware',  label: 'ファームウェア',           icon: '💾' },
+        { id: 'dashboard-config', icon: '⚙', label: 'ダッシュボード設定' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
@@ -798,6 +909,12 @@ function portalApp() {
     deletePortalUserId: null,
     // デバイス
     devices: [], devicesLoading: false, _devTimer: null,
+    // ダッシュボード設定
+    panelConfigs: [],
+    newSensorKey: '',
+    newPanelType: 'timeseries',
+    panelConfigSaving: false,
+    panelConfigError: '',
 
     async init() {
       try {
@@ -812,6 +929,7 @@ function portalApp() {
         this.alertRules = rules || [];
         document.title = `${me.tenant_name} - IoTAir-X`;
         if (me.grafana_url) this.grafanaUrl = me.grafana_url;
+        await this.loadPanelConfigs();
       } catch(e) {
         this.error = e.message;
       } finally {
@@ -1104,6 +1222,53 @@ function portalApp() {
         await portalFetch('DELETE', `/me/devices/${deviceId}`);
         this.devices = this.devices.filter(d => d.device_id !== deviceId);
       } catch(e) { this.error = e.message; }
+    },
+
+    // ----- ダッシュボード設定 -----
+    async loadPanelConfigs() {
+      try {
+        this.panelConfigs = await portalFetch('GET', '/dashboard/panel-configs') || [];
+      } catch(e) {
+        // 設定なしは空配列なので無視
+      }
+    },
+    addPanelConfig() {
+      const key = this.newSensorKey.trim();
+      if (!key || !/^[a-zA-Z0-9_-]{1,64}$/.test(key)) {
+        this.panelConfigError = 'センサーキーは英数字・アンダースコア・ハイフンのみ使用できます';
+        return;
+      }
+      if (this.panelConfigs.find(c => c.sensor_key === key)) {
+        this.panelConfigError = `"${key}" は既に追加されています`;
+        return;
+      }
+      this.panelConfigs.push({ sensor_key: key, panel_type: this.newPanelType });
+      this.newSensorKey = '';
+      this.newPanelType = 'timeseries';
+      this.panelConfigError = '';
+    },
+    removePanelConfig(sensor_key) {
+      this.panelConfigs = this.panelConfigs.filter(c => c.sensor_key !== sensor_key);
+    },
+    async savePanelConfigs() {
+      this.panelConfigSaving = true;
+      this.panelConfigError = '';
+      try {
+        await portalFetch('PUT', '/dashboard/panel-configs', this.panelConfigs);
+        this.switchTab('dashboard');
+        // iframe を強制リロード
+        this.$nextTick(() => {
+          const iframe = document.querySelector('iframe');
+          if (iframe) iframe.src = iframe.src;
+        });
+      } catch(e) {
+        this.panelConfigError = 'ダッシュボードの更新に失敗しました: ' + (e.message || e);
+      } finally {
+        this.panelConfigSaving = false;
+      }
+    },
+    isPanelTypeLastValue(panel_type) {
+      return ['gauge', 'stat', 'bargauge'].includes(panel_type);
     },
 
     // ----- ユーティリティ -----

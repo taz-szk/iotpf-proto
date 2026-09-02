@@ -5,10 +5,11 @@ import secrets
 import time
 import uuid as uuid_lib
 from datetime import datetime, timezone, timedelta
+from enum import Enum
 from typing import Optional, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
@@ -793,3 +794,85 @@ def delete_my_tenant(background_tasks: BackgroundTasks, payload: dict = Depends(
         db.commit()
     background_tasks.add_task(teardown_tenant, tenant_id, influxdb_org_id, grafana_org_id)
     return {"status": "deletion_queued"}
+
+
+# ---------------------------------------------------------------------------
+# ダッシュボードパネル設定
+# ---------------------------------------------------------------------------
+
+class PanelType(str, Enum):
+    timeseries    = "timeseries"
+    barchart      = "barchart"
+    histogram     = "histogram"
+    heatmap       = "heatmap"
+    state_timeline = "state-timeline"
+    gauge         = "gauge"
+    stat          = "stat"
+    bargauge      = "bargauge"
+    table         = "table"
+
+
+class PanelConfigItem(BaseModel):
+    sensor_key: str
+    panel_type: PanelType
+
+    @field_validator("sensor_key")
+    @classmethod
+    def validate_sensor_key(cls, v: str) -> str:
+        if not re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', v):
+            raise ValueError("sensor_key must be alphanumeric, underscore, or hyphen (1-64 chars)")
+        return v
+
+
+@router.get("/dashboard/panel-configs")
+def get_panel_configs(payload: dict = Depends(_require_tenant)):
+    from app.models.public import DashboardPanelConfig
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        rows = db.query(DashboardPanelConfig).filter(
+            DashboardPanelConfig.tenant_id == tenant_id
+        ).all()
+    return [{"sensor_key": r.sensor_key, "panel_type": r.panel_type} for r in rows]
+
+
+@router.put("/dashboard/panel-configs", status_code=204)
+def put_panel_configs(
+    items: list[PanelConfigItem],
+    payload: dict = Depends(_require_admin_or_operator),
+):
+    from app.models.public import DashboardPanelConfig, Tenant
+    from app.services.grafana import sync_tenant_dashboard_with_configs
+    tenant_id = payload["tenant_id"]
+
+    # Validate: no duplicate sensor_keys
+    sensor_keys = [item.sensor_key for item in items]
+    if len(sensor_keys) != len(set(sensor_keys)):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Duplicate sensor_key values")
+
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        # Capture values before commit to avoid DetachedInstanceError
+        grafana_org_id = tenant.grafana_org_id
+        tenant_name = tenant.name
+
+        # 全件置き換え
+        db.query(DashboardPanelConfig).filter(
+            DashboardPanelConfig.tenant_id == tenant_id
+        ).delete()
+        for item in items:
+            db.add(DashboardPanelConfig(
+                tenant_id=tenant_id,
+                sensor_key=item.sensor_key,
+                panel_type=item.panel_type.value,
+            ))
+        db.commit()
+
+    if grafana_org_id:
+        configs = [{"sensor_key": i.sensor_key, "panel_type": i.panel_type.value} for i in items]
+        try:
+            sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs)
+        except Exception as e:
+            print(f"[panel_configs] Grafana sync failed: {e}")

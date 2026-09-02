@@ -135,6 +135,10 @@ const api = {
                 body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
             }).then(r => { if (!r.ok) return r.json().then(e => { throw new Error(e.detail) }); }),
     },
+    dashboardConfig: {
+        list: () => request('GET', '/tenant-portal/dashboard/panel-configs'),
+        update: (body) => request('PUT', '/tenant-portal/dashboard/panel-configs', body),
+    },
     isLoggedIn: () => !!getToken(),
     logout: () => { clearTokens(); window.location.href = '/admin/'; },
     setTokens,
