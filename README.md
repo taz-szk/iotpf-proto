@@ -25,6 +25,10 @@ MQTT mTLS 接続・リアルタイム可視化・OTA 配信・アラート通知
 | インストール手順 | https://taz-szk.github.io/iotpf-proto/install-guide.html |
 | システム設計 | https://taz-szk.github.io/iotpf-proto/design.html |
 
+## 簡易動作確認環境
+https://iot.suzuki-net.org/admin/tenant-login.html
+（※ユーザ登録が必要です）
+
 ## Tech Stack
 
 | レイヤー | 技術 |
