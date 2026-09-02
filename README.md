@@ -43,7 +43,7 @@ MQTT mTLS 接続・リアルタイム可視化・OTA 配信・アラート通知
 
 ## ライセンス
 
-[MIT License](LICENSE) — Copyright (c) 2026 taz-szk
+[MIT License](LICENSE) — Copyright (c) 2026 Suzukita
 
 > **依存サービスについて:** MinIO および Grafana OSS は AGPL-3.0 です。
 > 変更なしで使用する範囲では本プロジェクトへの影響はありませんが、
