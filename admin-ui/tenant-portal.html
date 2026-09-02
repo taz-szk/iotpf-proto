@@ -63,14 +63,14 @@
 <div x-data="portalApp()" x-init="init()" class="flex h-screen overflow-hidden">
 
   <!-- ===== 左サイドバー ===== -->
-  <aside class="w-52 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+  <aside class="w-52 flex flex-col flex-shrink-0" style="background:#1a1f2e;border-right:1px solid #2a3147;">
 
     <!-- ロゴ + テナント名 -->
-    <div class="px-4 py-4 border-b border-gray-100">
+    <div class="px-4 py-4" style="border-bottom:1px solid rgba(255,255,255,0.08);">
       <div class="mb-2">
-        <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="w-full max-h-8 object-contain object-left">
+        <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" style="height:28px;width:auto;max-width:100%;object-fit:contain;object-position:left;">
       </div>
-      <p class="text-xs font-semibold text-gray-700 leading-tight" x-text="me.tenant_name || '読み込み中...'"></p>
+      <p class="text-xs font-semibold leading-tight" style="color:rgba(255,255,255,0.85);" x-text="me.tenant_name || '読み込み中...'"></p>
     </div>
 
     <!-- ナビゲーション -->
@@ -86,11 +86,11 @@
     </nav>
 
     <!-- ユーザー情報 + ログアウト -->
-    <div class="border-t border-gray-100 px-4 py-3 space-y-2">
-      <p class="text-xs text-gray-400 truncate" x-text="me.email"></p>
+    <div class="px-4 py-3 space-y-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+      <p class="text-xs truncate" style="color:rgba(255,255,255,0.38);" x-text="me.email"></p>
       <div class="flex gap-3">
-        <a href="/admin/change-password.html" class="text-xs text-amber-600 hover:underline">PW変更</a>
-        <button @click="logout" class="text-xs text-gray-400 hover:text-gray-600">ログアウト</button>
+        <a href="/admin/change-password.html" class="text-xs hover:underline" style="color:#f59e0b;">PW変更</a>
+        <button @click="logout" class="text-xs" style="color:rgba(255,255,255,0.38);">ログアウト</button>
       </div>
     </div>
   </aside>
