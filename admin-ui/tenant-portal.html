@@ -6,29 +6,78 @@
   <title>テナントポータル - IoTAir-X</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <style>
+    /* ===== Design A: Dark Navy + Amber ===== */
+
+    /* Sidebar */
+    aside.w-52 { background: #1a1f2e !important; border-color: #2a3147 !important; }
+    aside.w-52 .text-gray-700, aside.w-52 .font-semibold { color: rgba(255,255,255,0.88) !important; }
+    aside.w-52 .text-gray-600 { color: rgba(255,255,255,0.5) !important; }
+    aside.w-52 .text-gray-400 { color: rgba(255,255,255,0.38) !important; }
+    aside.w-52 .border-gray-100 { border-color: rgba(255,255,255,0.08) !important; }
+    aside.w-52 .hover\:bg-gray-50:hover { background: rgba(255,255,255,0.06) !important; }
+    aside.w-52 .hover\:text-gray-800:hover { color: rgba(255,255,255,0.75) !important; }
+    aside.w-52 .text-amber-600 { color: #f59e0b !important; }
+    aside.w-52 .hover\:underline:hover { text-decoration: underline; }
+
+    /* Nav active / inactive */
+    .nav-active {
+      background: rgba(245,158,11,0.12) !important;
+      color: #f59e0b !important;
+      border-right: 2px solid #f59e0b;
+      font-weight: 500;
+    }
+    .nav-inactive { color: rgba(255,255,255,0.5) !important; }
+    .nav-inactive:hover { background: rgba(255,255,255,0.06) !important; color: rgba(255,255,255,0.8) !important; }
+
+    /* Primary buttons: amber */
+    .bg-amber-500 { background-color: #f59e0b !important; color: #1a1f2e !important; }
+    .hover\:bg-blue-700:hover { background-color: #d97706 !important; color: #1a1f2e !important; }
+    .text-white.bg-amber-500, .text-white.hover\:bg-blue-700 { color: #1a1f2e !important; }
+    .disabled\:bg-blue-300:disabled { background-color: #fcd34d !important; color: #92400e !important; }
+
+    /* Text links: amber */
+    .text-amber-600 { color: #d97706 !important; }
+    .text-amber-600 { color: #d97706 !important; }
+    .hover\:text-blue-700:hover, .hover\:text-blue-800:hover { color: #b45309 !important; }
+    .disabled\:text-blue-300:disabled { color: #fcd34d !important; }
+    .border-amber-300 { border-color: #fcd34d !important; }
+
+    /* operator ロールバッジ: amber */
+    .bg-blue-100 { background-color: #fef3c7 !important; }
+    .bg-blue-100.text-blue-700, .text-blue-700 { color: #92400e !important; }
+    .bg-blue-100.text-blue-700:not(.nav-active) { color: #92400e !important; }
+
+    /* info アラートバッジ */
+    .bg-blue-100 { background-color: #fef3c7 !important; }
+
+    /* 角丸を抑える */
+    .rounded { border-radius: 4px !important; }
+    .rounded { border-radius: 3px !important; }
+    .shadow-xl { box-shadow: 0 8px 24px rgba(0,0,0,0.12) !important; }
+    .shadow-sm { box-shadow: none !important; }
+  </style>
 </head>
 <body class="bg-gray-50" style="overflow:hidden;height:100vh;">
 
 <div x-data="portalApp()" x-init="init()" class="flex h-screen overflow-hidden">
 
   <!-- ===== 左サイドバー ===== -->
-  <aside class="w-52 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
+  <aside class="w-52 flex flex-col flex-shrink-0" style="background:#1a1f2e;border-right:1px solid #2a3147;">
 
     <!-- ロゴ + テナント名 -->
-    <div class="px-4 py-4 border-b border-gray-100">
+    <div class="px-4 py-4" style="border-bottom:1px solid rgba(255,255,255,0.08);">
       <div class="mb-2">
-        <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="h-7">
+        <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" style="width:100%;height:auto;display:block;">
       </div>
-      <p class="text-xs font-semibold text-gray-700 leading-tight" x-text="me.tenant_name || '読み込み中...'"></p>
+      <p class="text-xs font-semibold leading-tight" style="color:rgba(255,255,255,0.85);" x-text="me.tenant_name || '読み込み中...'"></p>
     </div>
 
     <!-- ナビゲーション -->
     <nav class="flex-1 py-2 overflow-y-auto">
       <template x-for="tab in tabs" :key="tab.id">
         <button @click="switchTab(tab.id)"
-                :class="activeTab === tab.id
-                  ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-600 font-medium'
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'"
+                :class="activeTab === tab.id ? 'nav-active' : 'nav-inactive'"
                 class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors">
           <span x-text="tab.icon" class="w-4 text-center text-base leading-none"></span>
           <span x-text="tab.label"></span>
@@ -37,11 +86,11 @@
     </nav>
 
     <!-- ユーザー情報 + ログアウト -->
-    <div class="border-t border-gray-100 px-4 py-3 space-y-2">
-      <p class="text-xs text-gray-400 truncate" x-text="me.email"></p>
+    <div class="px-4 py-3 space-y-2" style="border-top:1px solid rgba(255,255,255,0.08);">
+      <p class="text-xs truncate" style="color:rgba(255,255,255,0.38);" x-text="me.email"></p>
       <div class="flex gap-3">
-        <a href="/admin/change-password.html" class="text-xs text-blue-500 hover:underline">PW変更</a>
-        <button @click="logout" class="text-xs text-gray-400 hover:text-gray-600">ログアウト</button>
+        <a href="/admin/change-password.html" class="text-xs hover:underline" style="color:#f59e0b;">PW変更</a>
+        <button @click="logout" class="text-xs" style="color:rgba(255,255,255,0.38);">ログアウト</button>
       </div>
     </div>
   </aside>
@@ -72,11 +121,11 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">テナントユーザー</h3>
               <button x-show="isAdmin" @click="showUserForm = !showUserForm"
-                      class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm">
                 + ユーザー追加
               </button>
             </div>
-            <div x-show="showUserForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+            <div x-show="showUserForm" class="bg-white rounded border border-gray-200 p-4 mb-4">
               <form @submit.prevent="createUser" class="grid grid-cols-2 gap-3">
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">メールアドレス</label>
@@ -96,11 +145,11 @@
                 </div>
                 <div class="col-span-2 flex justify-end gap-2">
                   <button type="button" @click="showUserForm = false" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
-                  <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded">作成</button>
+                  <button type="submit" class="bg-amber-500 text-white text-sm px-3 py-1.5 rounded">作成</button>
                 </div>
               </form>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="bg-white rounded shadow-sm border border-gray-200">
               <div x-show="users.length === 0" class="py-8 text-center text-gray-400 text-sm">ユーザーがいません</div>
               <table x-show="users.length > 0" class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100">
@@ -146,7 +195,7 @@
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="u.created_at ? new Date(u.created_at).toLocaleDateString('ja-JP') : '-'"></td>
                       <td class="px-4 py-3 text-right flex items-center justify-end gap-2">
                         <button x-show="isAdmin" @click="resetUserPassword(u.id, u.email)"
-                                class="text-xs text-blue-500 hover:text-blue-700">PW変更</button>
+                                class="text-xs text-amber-600 hover:text-amber-700">PW変更</button>
                         <button x-show="canEdit && u.id !== me.user_id"
                                 @click="deletePortalUserId = (deletePortalUserId === u.id ? null : u.id)"
                                 :class="deletePortalUserId === u.id ? 'text-gray-400' : 'text-red-500 hover:text-red-700'"
@@ -175,7 +224,7 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">ブートストラップトークン</h3>
               <button x-show="canEdit" @click="createToken()" :disabled="creatingToken"
-                      class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-3 py-1.5 rounded text-sm">
+                      class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
                 + トークン発行
               </button>
             </div>
@@ -183,7 +232,7 @@
               <p class="text-sm font-medium text-green-800 mb-1">新しいトークンが発行されました（この画面のみ表示）</p>
               <code class="text-xs bg-white border border-green-200 rounded px-2 py-1 break-all" x-text="newTokenValue"></code>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="bg-white rounded shadow-sm border border-gray-200">
               <div x-show="tokens.length === 0" class="py-8 text-center text-gray-400 text-sm">トークンがありません</div>
               <table x-show="tokens.length > 0" class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100">
@@ -254,12 +303,12 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">登録デバイス</h3>
               <button @click="loadDevices()" :disabled="devicesLoading"
-                      class="text-sm text-blue-600 hover:text-blue-800 disabled:text-blue-300">
+                      class="text-sm text-amber-600 hover:text-amber-800 disabled:text-amber-200">
                 <span x-show="!devicesLoading">↻ 更新</span>
                 <span x-show="devicesLoading">更新中...</span>
               </button>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="bg-white rounded shadow-sm border border-gray-200">
               <div x-show="!devicesLoading && devices.length === 0" class="py-8 text-center text-gray-400 text-sm">デバイスが登録されていません</div>
               <div class="overflow-x-auto">
                 <table x-show="devices.length > 0" class="w-full text-sm">
@@ -308,11 +357,11 @@
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">アラートルール</h3>
               <button x-show="canEdit" @click="openAlertForm()"
-                      class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm">
+                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm">
                 + ルール追加
               </button>
             </div>
-            <div x-show="showAlertForm" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+            <div x-show="showAlertForm" class="bg-white rounded border border-gray-200 p-4 mb-4">
               <p class="text-sm font-medium text-gray-700 mb-3" x-text="editingRuleId ? 'ルール編集' : 'ルール追加'"></p>
               <form @submit.prevent="saveAlertRule" class="grid grid-cols-2 gap-3">
                 <div>
@@ -411,12 +460,12 @@
                 </div>
                 <div class="col-span-2 flex justify-end gap-2">
                   <button type="button" @click="closeAlertForm()" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
-                  <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded"
+                  <button type="submit" class="bg-amber-500 text-white text-sm px-3 py-1.5 rounded"
                           x-text="editingRuleId ? '更新' : '作成'"></button>
                 </div>
               </form>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="bg-white rounded shadow-sm border border-gray-200">
               <div x-show="alertRules.length === 0" class="py-8 text-center text-gray-400 text-sm">アラートルールがありません</div>
               <table x-show="alertRules.length > 0" class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100">
@@ -444,7 +493,7 @@
                           :class="r.last_triggered_at ? 'text-gray-700' : 'text-gray-300'"
                           x-text="r.last_triggered_at ? timeAgo(r.last_triggered_at) : '未発火'"></td>
                       <td class="px-4 py-3 text-right space-x-3">
-                        <button x-show="canEdit" @click="editAlertRule(r)" class="text-blue-500 hover:text-blue-700 text-xs">編集</button>
+                        <button x-show="canEdit" @click="editAlertRule(r)" class="text-amber-600 hover:text-amber-700 text-xs">編集</button>
                         <button x-show="canEdit" @click="deleteAlertRule(r.id)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
                       </td>
                     </tr>
@@ -458,12 +507,12 @@
           <div x-show="activeTab === 'firmware'">
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">ファームウェア一覧</h3>
-              <label x-show="canEdit" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm cursor-pointer">
+              <label x-show="canEdit" class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm cursor-pointer">
                 + アップロード
                 <input type="file" class="hidden" @change="selectFirmwareFile($event)">
               </label>
             </div>
-            <div x-show="uploadFile" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+            <div x-show="uploadFile" class="bg-white rounded border border-gray-200 p-4 mb-4">
               <p class="text-sm font-medium text-gray-700 mb-3" x-text="'ファイル: ' + uploadFile?.name"></p>
               <div class="grid grid-cols-2 gap-3">
                 <div>
@@ -486,13 +535,13 @@
                 <button @click="uploadFile = null; fwVersion = ''; fwTargetModel = ''; fwDescription = ''"
                         class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
                 <button @click="submitFirmwareUpload()" :disabled="!fwVersion || uploading"
-                        class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+                        class="bg-amber-500 disabled:bg-amber-200 text-white text-sm px-3 py-1.5 rounded">
                   <span x-show="!uploading">アップロード</span>
                   <span x-show="uploading">アップロード中...</span>
                 </button>
               </div>
             </div>
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div class="bg-white rounded shadow-sm border border-gray-200">
               <div x-show="firmwareList.length === 0" class="py-8 text-center text-gray-400 text-sm">ファームウェアがありません</div>
               <table x-show="firmwareList.length > 0" class="w-full">
                 <thead class="bg-gray-50 border-b border-gray-100">
@@ -512,7 +561,7 @@
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="(fw.file_size / 1024).toFixed(1) + ' KB'"></td>
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="fw.uploaded_at ? new Date(fw.uploaded_at).toLocaleDateString('ja-JP') : '-'"></td>
                       <td class="px-4 py-3 text-right flex gap-2 justify-end">
-                        <button x-show="canEdit" @click="sendOta(fw.id, fw.version)" class="text-blue-500 hover:text-blue-700 text-xs">OTA送信</button>
+                        <button x-show="canEdit" @click="sendOta(fw.id, fw.version)" class="text-amber-600 hover:text-amber-700 text-xs">OTA送信</button>
                         <button x-show="canEdit" @click="deactivateFirmware(fw.id)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
                       </td>
                     </tr>
@@ -522,7 +571,7 @@
             </div>
             <!-- OTA ダイアログ -->
             <div x-show="otaTargetFirmware" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
-              <div class="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+              <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
                 <h3 class="font-medium text-gray-800 mb-1" x-text="'OTA送信: v' + otaTargetFirmware?.version"></h3>
                 <p class="text-xs text-gray-400 mb-4">送信対象のデバイスを選択してください</p>
 
@@ -578,7 +627,7 @@
                       <button @click="otaClose()" :disabled="otaSubmitting"
                               class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
                       <button @click="submitOta()" :disabled="otaSelectedCount() === 0 || otaSubmitting"
-                              class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+                              class="bg-amber-500 disabled:bg-amber-200 text-white text-sm px-3 py-1.5 rounded">
                         <span x-show="!otaSubmitting">送信</span>
                         <span x-show="otaSubmitting">送信中...</span>
                       </button>
@@ -591,7 +640,7 @@
 
           <!-- ===== 公開ダッシュボード（管理者のみ） ===== -->
           <div x-show="activeTab === 'public' && isAdmin">
-            <div class="bg-white border border-gray-200 rounded-xl p-6 max-w-2xl">
+            <div class="bg-white border border-gray-200 rounded p-6 max-w-2xl">
               <h3 class="text-base font-semibold text-gray-800 mb-1">公開ダッシュボードURL</h3>
               <p class="text-sm text-gray-500 mb-5">
                 URLを知っている人なら誰でもログインなしでGrafanaダッシュボードを閲覧できます。<br>
@@ -605,7 +654,7 @@
                   <code class="flex-1 bg-gray-50 border border-gray-200 rounded px-3 py-2 text-sm font-mono break-all"
                         x-text="location.origin + me.public_url"></code>
                   <button @click="copyPublicUrl()"
-                          class="flex-shrink-0 text-xs text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-3 py-2">
+                          class="flex-shrink-0 text-xs text-amber-600 hover:text-amber-800 border border-amber-300 rounded px-3 py-2">
                     コピー
                   </button>
                 </div>
@@ -624,7 +673,7 @@
                 <button x-show="!me.public_url"
                         @click="setPublicAccess(true)"
                         :disabled="publicAccessLoading"
-                        class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white text-sm px-4 py-2 rounded">
+                        class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white text-sm px-4 py-2 rounded">
                   <span x-show="!publicAccessLoading">公開URLを有効にする</span>
                   <span x-show="publicAccessLoading">処理中...</span>
                 </button>
@@ -649,7 +698,7 @@
             <div x-show="panelConfigError" class="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded" x-text="panelConfigError"></div>
 
             <!-- 設定一覧 -->
-            <div class="bg-white rounded-xl shadow-sm border border-gray-200 mb-4">
+            <div class="bg-white rounded shadow-sm border border-gray-200 mb-4">
               <div x-show="panelConfigs.length === 0" class="py-8 text-center text-gray-400 text-sm">
                 設定なし — フォールバック（全フィールド折れ線グラフ）で表示されます
               </div>
@@ -707,7 +756,7 @@
             </div>
 
             <!-- 新規追加フォーム -->
-            <div x-show="canEdit" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-4">
+            <div x-show="canEdit" class="bg-white rounded shadow-sm border border-gray-200 p-4 mb-4">
               <p class="text-xs font-medium text-gray-600 mb-2">センサーキーを追加</p>
               <div class="flex gap-2 items-start">
                 <div class="flex-1">
@@ -740,7 +789,7 @@
                   </optgroup>
                 </select>
                 <button @click="addPanelConfig()"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm whitespace-nowrap">
+                        class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm whitespace-nowrap">
                   + 追加
                 </button>
               </div>
@@ -758,7 +807,7 @@
 
           <!-- ===== テナント削除（管理者のみ） ===== -->
           <div x-show="activeTab === 'danger' && isAdmin">
-            <div class="bg-red-50 border border-red-200 rounded-xl p-6">
+            <div class="bg-red-50 border border-red-200 rounded p-6">
               <h3 class="text-lg font-bold text-red-700 mb-2">テナントの完全削除</h3>
               <p class="text-sm text-gray-700 mb-4">
                 このテナントとその全データを完全に削除します。この操作は取り消せません。
@@ -840,13 +889,13 @@ function portalApp() {
 
     get tabs() {
       const base = [
-        { id: 'dashboard', label: 'ダッシュボード', icon: '▦' },
-        { id: 'users',     label: 'ユーザー管理',            icon: '👤' },
-        { id: 'tokens',    label: 'プロビジョニングトークン', icon: '🔑' },
-        { id: 'devices',   label: 'デバイス',                icon: '📡' },
-        { id: 'alerts',    label: 'アラートルール',           icon: '🔔' },
-        { id: 'firmware',  label: 'ファームウェア',           icon: '💾' },
-        { id: 'dashboard-config', icon: '⚙', label: 'ダッシュボード設定' },
+        { id: 'dashboard',        label: 'ダッシュボード',           icon: '▦' },
+        { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
+        { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
+        { id: 'devices',          label: 'デバイス',                 icon: '📡' },
+        { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
+        { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
+        { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
