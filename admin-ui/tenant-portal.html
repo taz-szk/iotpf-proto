@@ -889,13 +889,13 @@ function portalApp() {
 
     get tabs() {
       const base = [
-        { id: 'dashboard', label: 'ダッシュボード', icon: '▦' },
-        { id: 'users',     label: 'ユーザー管理',            icon: '👤' },
-        { id: 'tokens',    label: 'プロビジョニングトークン', icon: '🔑' },
-        { id: 'devices',   label: 'デバイス',                icon: '📡' },
-        { id: 'alerts',    label: 'アラートルール',           icon: '🔔' },
-        { id: 'firmware',  label: 'ファームウェア',           icon: '💾' },
-        { id: 'dashboard-config', icon: '⚙', label: 'ダッシュボード設定' },
+        { id: 'dashboard',        label: 'ダッシュボード',           icon: '▦' },
+        { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
+        { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
+        { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
+        { id: 'devices',          label: 'デバイス',                 icon: '📡' },
+        { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
+        { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
