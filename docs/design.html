@@ -424,13 +424,17 @@ td code { font-size: 12px; }
 .test-priority { grid-column: 2; grid-row: 1 / 3; align-self: center; }
 
 .seq-card {
-  background: var(--surface);
+  background: #ffffff;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 24px;
   overflow-x: auto;
 }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .seq-card { background: #1A1F30; }
+}
+:root[data-theme="dark"] .seq-card { background: #1A1F30; }
 .seq-card .mermaid {
   min-width: 480px;
 }
@@ -1997,7 +2001,65 @@ sequenceDiagram
 
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script>
-mermaid.initialize({ startOnLoad: true, theme: 'neutral', sequence: { actorFontFamily: 'system-ui, sans-serif', noteFontFamily: 'system-ui, sans-serif', messageFontFamily: 'system-ui, sans-serif' } });
+(function() {
+  const dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+             || document.documentElement.getAttribute('data-theme') === 'dark';
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: dark ? {
+      background:           '#1A1F30',
+      primaryColor:         '#19253F',
+      primaryTextColor:     '#EDF1F8',
+      primaryBorderColor:   '#2d3a5e',
+      lineColor:            '#4a5575',
+      secondaryColor:       '#131724',
+      tertiaryColor:        '#131724',
+      textColor:            '#EDF1F8',
+      signalColor:          '#7BA3F7',
+      signalTextColor:      '#EDF1F8',
+      actorBorder:          '#2d3a5e',
+      actorBkg:             '#19253F',
+      actorTextColor:       '#EDF1F8',
+      actorLineColor:       '#2d3a5e',
+      labelBoxBkgColor:     '#19253F',
+      labelBoxBorderColor:  '#2d3a5e',
+      labelTextColor:       '#8B9AB0',
+      loopTextColor:        '#8B9AB0',
+      noteBorderColor:      '#2d3a5e',
+      noteBkgColor:         '#131724',
+      noteTextColor:        '#EDF1F8',
+      activationBorderColor:'#5B8AF5',
+      activationBkgColor:   '#19253F',
+      sequenceNumberColor:  '#EDF1F8',
+    } : {
+      background:           '#ffffff',
+      primaryColor:         '#EAF0FF',
+      primaryTextColor:     '#131921',
+      primaryBorderColor:   '#b8caee',
+      lineColor:            '#8B9AB0',
+      secondaryColor:       '#F7F9FC',
+      tertiaryColor:        '#F0F4FF',
+      textColor:            '#131921',
+      signalColor:          '#0048CC',
+      signalTextColor:      '#131921',
+      actorBorder:          '#b8caee',
+      actorBkg:             '#EAF0FF',
+      actorTextColor:       '#131921',
+      actorLineColor:       '#b8caee',
+      labelBoxBkgColor:     '#F7F9FC',
+      labelBoxBorderColor:  '#d4ddf0',
+      labelTextColor:       '#505A6B',
+      loopTextColor:        '#505A6B',
+      noteBorderColor:      '#d4ddf0',
+      noteBkgColor:         '#FFFBEA',
+      noteTextColor:        '#131921',
+      activationBorderColor:'#0048CC',
+      activationBkgColor:   '#EAF0FF',
+      sequenceNumberColor:  '#ffffff',
+    },
+  });
+})();
 </script>
 <script>
 function switchTab(idx) {
