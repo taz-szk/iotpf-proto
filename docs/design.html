@@ -1995,6 +1995,10 @@ sequenceDiagram
 </main>
 </div><!-- /wrap -->
 
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: true, theme: 'neutral', sequence: { actorFontFamily: 'system-ui, sans-serif', noteFontFamily: 'system-ui, sans-serif', messageFontFamily: 'system-ui, sans-serif' } });
+</script>
 <script>
 function switchTab(idx) {
   document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
