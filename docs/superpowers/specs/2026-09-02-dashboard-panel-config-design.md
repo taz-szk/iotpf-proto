@@ -38,14 +38,43 @@ CREATE TABLE dashboard_panel_configs (
 );
 ```
 
-### 1.2 panel_type の値
+### 1.2 panel_type の値と data_mode
 
-| 値 | Grafana パネルタイプ | 表示名 |
-|---|---|---|
-| `timeseries` | timeseries | 折れ線グラフ |
-| `barchart` | barchart | 棒グラフ |
-| `gauge` | gauge | ゲージ |
-| `stat` | stat | シグナル |
+`data_mode` はバックエンドのFluxクエリ選択とUIの注記表示を整合させるための内部属性。
+- `timeseries`: `aggregateWindow()` でグラフ全体を描画
+- `last_value`: `last()` で最新値のみ取得
+- `any`: どちらでも動作
+
+| 値 | 表示名 | data_mode | 用途 |
+|---|---|---|---|
+| `timeseries` | 折れ線グラフ | timeseries | 時系列推移（デフォルト） |
+| `barchart` | 棒グラフ | timeseries | カテゴリ比較・集計値 |
+| `histogram` | ヒストグラム | timeseries | 値の分布 |
+| `heatmap` | ヒートマップ | timeseries | 時間×値の密度 |
+| `state-timeline` | 状態タイムライン | timeseries | ON/OFF等の状態変化 |
+| `gauge` | ゲージ | last_value | 現在値（メーター型） |
+| `stat` | シグナル | last_value | 現在値（数値＋色） |
+| `bargauge` | バーゲージ | last_value | 現在値（バー型） |
+| `piechart` | 円グラフ | last_value | 割合表示 |
+| `table` | テーブル | any | 生データ一覧 |
+
+**バックエンド定数** (`grafana.py` に定義):
+```python
+PANEL_DATA_MODE = {
+    "timeseries":     "timeseries",
+    "barchart":       "timeseries",
+    "histogram":      "timeseries",
+    "heatmap":        "timeseries",
+    "state-timeline": "timeseries",
+    "gauge":          "last_value",
+    "stat":           "last_value",
+    "bargauge":       "last_value",
+    "piechart":       "last_value",
+    "table":          "any",
+}
+```
+
+`build_sensor_panel()` はこの辞書を参照してFluxクエリ（`_flux_telemetry_field` / `_flux_last_field`）を選択する。`PanelType` Enum の allowlist もこの10種に拡張する。
 
 ### 1.3 マイグレーション
 
@@ -269,6 +298,33 @@ def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: l
 - viewer ロールは追加・削除・変更ボタンを非表示（読み取り専用表示）
 - PUT 中はボタンを disabled + "反映中..." 表示
 - エラー時はエラーバーに表示（既存パターン踏襲）
+
+**チャートタイプ選択 UIの整合性表示:**
+
+ドロップダウンは `data_mode` でグループ分けして表示する:
+```html
+<select>
+  <optgroup label="時系列（推移グラフ）">
+    <option value="timeseries">折れ線グラフ</option>
+    <option value="barchart">棒グラフ</option>
+    <option value="histogram">ヒストグラム</option>
+    <option value="heatmap">ヒートマップ</option>
+    <option value="state-timeline">状態タイムライン</option>
+  </optgroup>
+  <optgroup label="現在値（最新値のみ）">
+    <option value="gauge">ゲージ</option>
+    <option value="stat">シグナル</option>
+    <option value="bargauge">バーゲージ</option>
+    <option value="piechart">円グラフ</option>
+  </optgroup>
+  <optgroup label="汎用">
+    <option value="table">テーブル</option>
+  </optgroup>
+</select>
+```
+
+`last_value` グループを選択すると行に注記を表示:
+`⚠ このチャートは最新値のみ表示します（時系列データは集計されません）`
 
 ### 4.4 api.js への追加
 
