@@ -45,17 +45,20 @@ CREATE TABLE dashboard_panel_configs (
 - `last_value`: `last()` で最新値のみ取得
 - `any`: どちらでも動作
 
+このプラットフォームの全テレメトリデータは InfluxDB に時系列で保存される。
+そのため、時系列データに対して意味を持つパネルタイプのみを対象とする。
+`piechart`（割合表示）は時系列データと構造的に合わないため除外。
+
 | 値 | 表示名 | data_mode | 用途 |
 |---|---|---|---|
 | `timeseries` | 折れ線グラフ | timeseries | 時系列推移（デフォルト） |
-| `barchart` | 棒グラフ | timeseries | カテゴリ比較・集計値 |
+| `barchart` | 棒グラフ | timeseries | 時間軸集計値の比較 |
 | `histogram` | ヒストグラム | timeseries | 値の分布 |
 | `heatmap` | ヒートマップ | timeseries | 時間×値の密度 |
 | `state-timeline` | 状態タイムライン | timeseries | ON/OFF等の状態変化 |
 | `gauge` | ゲージ | last_value | 現在値（メーター型） |
 | `stat` | シグナル | last_value | 現在値（数値＋色） |
 | `bargauge` | バーゲージ | last_value | 現在値（バー型） |
-| `piechart` | 円グラフ | last_value | 割合表示 |
 | `table` | テーブル | any | 生データ一覧 |
 
 **バックエンド定数** (`grafana.py` に定義):
@@ -69,7 +72,6 @@ PANEL_DATA_MODE = {
     "gauge":          "last_value",
     "stat":           "last_value",
     "bargauge":       "last_value",
-    "piechart":       "last_value",
     "table":          "any",
 }
 ```
@@ -315,7 +317,6 @@ def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: l
     <option value="gauge">ゲージ</option>
     <option value="stat">シグナル</option>
     <option value="bargauge">バーゲージ</option>
-    <option value="piechart">円グラフ</option>
   </optgroup>
   <optgroup label="汎用">
     <option value="table">テーブル</option>
