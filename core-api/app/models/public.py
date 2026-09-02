@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, func
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 import uuid
 from app.database import Base
@@ -43,3 +43,13 @@ class MfaSettings(Base):
     id = Column(Integer, primary_key=True, default=1)
     platform_required = Column(Boolean, nullable=False, default=False)
     tenant_required = Column(Boolean, nullable=False, default=False)
+
+class DashboardPanelConfig(Base):
+    __tablename__ = "dashboard_panel_configs"
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id  = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    sensor_key = Column(String(64), nullable=False)
+    panel_type = Column(String(20), nullable=False, default="timeseries")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    __table_args__ = (UniqueConstraint("tenant_id", "sensor_key"),)

@@ -224,3 +224,20 @@ def migrate_totp_columns() -> None:
                 ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE
             """))
             conn.commit()
+
+
+def migrate_dashboard_panel_configs() -> None:
+    """dashboard_panel_configs テーブルを作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS dashboard_panel_configs (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                sensor_key  VARCHAR(64) NOT NULL,
+                panel_type  VARCHAR(20) NOT NULL DEFAULT 'timeseries',
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (tenant_id, sensor_key)
+            )
+        """))
+        conn.commit()
