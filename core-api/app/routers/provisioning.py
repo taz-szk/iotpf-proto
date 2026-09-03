@@ -17,6 +17,8 @@ from app.services.provisioning import issue_device_cert_for_tenant
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
+_UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
 @router.post("/provision", response_model=ProvisionOut)
 def provision(req: ProvisionRequest):
     with SessionLocal() as db:
@@ -30,10 +32,19 @@ def provision(req: ProvisionRequest):
 
         now = datetime.now(timezone.utc)
         expires_at = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
-        if expires_at.year < 2099 and expires_at < now:
+        if expires_at < _UNLIMITED_EXPIRES and expires_at < now:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
 
-        if token.registered_count >= token.max_devices:
+        # registered_count のチェックと加算をアトミックなUPDATEで行い、TOCTOU競合を防ぐ
+        result = db.execute(
+            text('''UPDATE public.provisioning_tokens
+                    SET registered_count = registered_count + 1
+                    WHERE id = :tid AND registered_count < max_devices AND is_active = TRUE
+                    RETURNING id'''),
+            {"tid": str(token.id)},
+        )
+        db.flush()
+        if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Device limit reached")
 
         tenant_id = str(token.tenant_id)
@@ -66,7 +77,6 @@ def provision(req: ProvisionRequest):
             {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name,
              "tok_id": str(token.id), "cert_not_after": cert_not_after}
         )
-        token.registered_count += 1
         db.commit()
 
     try:

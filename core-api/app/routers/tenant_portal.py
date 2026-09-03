@@ -371,6 +371,7 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
 
 @router.get("/me/tokens/{token_id}/devices")
 def list_token_devices(token_id: str, payload: dict = Depends(_require_tenant)):
+    _validate_uuid(token_id, "token_id")
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
     with engine.connect() as conn:
@@ -546,6 +547,8 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
+    _ALLOWED_ALERT_COLS = {"sensor_key", "condition", "threshold", "trigger_mode",
+                           "consecutive_count", "duration_sec", "severity", "device_id"}
     with SessionLocal() as db:
         row = db.execute(text(f'''
             SELECT id FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
@@ -553,7 +556,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
         set_clauses = ", ".join(
-            f"{col} = :{col}" for col in updates if col != "notify_emails"
+            f"{col} = :{col}" for col in updates if col != "notify_emails" and col in _ALLOWED_ALERT_COLS
         )
         params = {"rid": rule_id, **{k: v for k, v in updates.items() if k != "notify_emails"}}
         if "notify_emails" in updates:

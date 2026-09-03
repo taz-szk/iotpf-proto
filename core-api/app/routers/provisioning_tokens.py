@@ -100,6 +100,7 @@ def list_provisioning_tokens(tenant_id: str, _: dict = Depends(_require_platform
 @router.get("/{tenant_id}/provisioning-tokens/{token_id}/devices")
 def list_token_devices(tenant_id: str, token_id: str, _: dict = Depends(_require_platform)):
     tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
+    token_uuid = _parse_uuid(token_id, "token_id")
     schema = f"tenant_{str(tenant_uuid).replace('-', '_')}"
     with engine.connect() as conn:
         rows = conn.execute(text(f'''
@@ -107,7 +108,7 @@ def list_token_devices(tenant_id: str, token_id: str, _: dict = Depends(_require
             FROM "{schema}".devices
             WHERE provisioning_token_id = :tid
             ORDER BY created_at DESC
-        '''), {"tid": token_id}).fetchall()
+        '''), {"tid": str(token_uuid)}).fetchall()
     return [
         {
             "device_id": r.device_id,
