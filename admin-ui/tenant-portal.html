@@ -597,8 +597,8 @@
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="(fw.file_size / 1024).toFixed(1) + ' KB'"></td>
                       <td class="px-4 py-3 text-sm text-gray-500" x-text="fw.uploaded_at ? new Date(fw.uploaded_at).toLocaleDateString('ja-JP') : '-'"></td>
                       <td class="px-4 py-3 text-right flex gap-2 justify-end">
-                        <button x-show="canEdit" @click="sendOta(fw.id, fw.version)" class="text-amber-600 hover:text-amber-700 text-xs">OTA送信</button>
-                        <button x-show="canEdit" @click="deactivateFirmware(fw.id)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                        <button x-show="canEdit" @click="sendOta(fw.id, fw.version)" class="bg-amber-500 hover:bg-amber-600 text-white text-xs px-2.5 py-1 rounded">OTA送信</button>
+                        <button x-show="canEdit" @click="deactivateFirmware(fw.id)" class="bg-red-100 hover:bg-red-200 text-red-600 text-xs px-2.5 py-1 rounded">削除</button>
                       </td>
                     </tr>
                   </template>
