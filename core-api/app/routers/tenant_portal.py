@@ -307,9 +307,11 @@ def reset_user_password(user_id: str, body: PasswordResetBody, payload: dict = D
 # プロビジョニングトークン
 # ---------------------------------------------------------------------------
 
+_UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
 class TokenCreate(BaseModel):
     max_devices: int = Field(default=100, gt=0, le=10000)
-    expires_days: int = Field(default=365, gt=0, le=1825)
+    expires_days: Optional[int] = Field(default=365, gt=0, le=1825)
 
 
 @router.get("/me/tokens")
@@ -335,7 +337,7 @@ def list_tokens(payload: dict = Depends(_require_tenant)):
                 "registered_count": t.registered_count,
                 "active_count": int(active_count),
                 "deleted_count": max(0, t.registered_count - int(active_count)),
-                "expires_at": t.expires_at.isoformat(),
+                "expires_at": None if t.expires_at >= _UNLIMITED_EXPIRES else t.expires_at.isoformat(),
                 "is_active": t.is_active,
             })
         return result
@@ -351,7 +353,8 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
             token=secrets.token_urlsafe(32),
             tenant_id=tenant_uuid,
             max_devices=body.max_devices,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=body.expires_days),
+            expires_at=_UNLIMITED_EXPIRES if body.expires_days is None
+                       else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
         db.add(token)
         db.commit()
@@ -361,7 +364,7 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
             "token": token.token,
             "max_devices": token.max_devices,
             "registered_count": token.registered_count,
-            "expires_at": token.expires_at.isoformat(),
+            "expires_at": None if token.expires_at >= _UNLIMITED_EXPIRES else token.expires_at.isoformat(),
             "is_active": token.is_active,
         }
 
