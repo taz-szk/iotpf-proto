@@ -1,0 +1,11 @@
+{
+  "name": "iotpf-proto-admin-ui",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./admin-ui/src/input.css -o ./admin-ui/static/tailwind.css --minify",
+    "watch:css": "tailwindcss -i ./admin-ui/src/input.css -o ./admin-ui/static/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

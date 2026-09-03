@@ -33,6 +33,9 @@ __pycache__/
 simulator/build/
 simulator/dist/
 
+# Node.js
+node_modules/
+
 # Migration exports (large data blobs)
 iot-platform-migration/
 
