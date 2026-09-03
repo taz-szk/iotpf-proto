@@ -665,7 +665,7 @@ td code { font-size: 12px; }
         <text x="250" y="84"  class="arch-sub"   style="fill:#0048CC">MQTT Broker :8883</text>
 
         <rect x="194" y="147" width="112" height="46" rx="5" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
-        <text x="250" y="164" class="arch-label">nginx 1.25</text>
+        <text x="250" y="164" class="arch-label">nginx stable</text>
         <text x="250" y="178" class="arch-sub">TLS Termination</text>
 
         <rect x="194" y="241" width="112" height="46" rx="5" class="arch-box" style="fill:currentColor;fill-opacity:0.05"/>
@@ -748,7 +748,7 @@ td code { font-size: 12px; }
       <table>
         <thead><tr><th>サービス</th><th>イメージ</th><th>ネットワーク</th><th>役割</th></tr></thead>
         <tbody>
-          <tr><td>nginx</td><td><code>nginx:1.25-alpine</code></td><td>internal, external, grafana-net</td><td>TLS 終端・リバースプロキシ</td></tr>
+          <tr><td>nginx</td><td><code>nginx:stable-alpine</code></td><td>internal, external, grafana-net</td><td>TLS 終端・リバースプロキシ</td></tr>
           <tr><td>core-api</td><td>カスタムビルド (FastAPI)</td><td>internal, grafana-net</td><td>プラットフォーム管理 API</td></tr>
           <tr><td>ingestion-service</td><td>カスタムビルド (FastAPI)</td><td>internal</td><td>テレメトリ取り込み</td></tr>
           <tr><td>alert-service</td><td>カスタムビルド (Python)</td><td>internal</td><td>アラートルール評価・メール通知</td></tr>
@@ -756,9 +756,9 @@ td code { font-size: 12px; }
           <tr><td>postgres</td><td><code>postgres:16-alpine</code></td><td>internal</td><td>メタデータ・テナントユーザー</td></tr>
           <tr><td>influxdb</td><td><code>influxdb:2-alpine</code></td><td>internal</td><td>時系列テレメトリ・デバイス状態</td></tr>
           <tr><td>grafana</td><td><code>grafana/grafana-oss</code></td><td>internal, grafana-net</td><td>ダッシュボード（Auth Proxy SSO）</td></tr>
-          <tr><td>minio</td><td><code>minio/minio</code></td><td>internal</td><td>ファームウェアオブジェクトストレージ</td></tr>
+          <tr><td>minio</td><td><code>pgsty/minio</code></td><td>internal</td><td>ファームウェアオブジェクトストレージ</td></tr>
           <tr><td>step-ca</td><td><code>smallstep/step-ca</code></td><td>internal</td><td>デバイス証明書 PKI</td></tr>
-          <tr><td>mailhog</td><td><code>mailhog/mailhog</code></td><td>internal, external</td><td>SMTP（アラートメール中継）</td></tr>
+          <tr><td>mailhog</td><td><code>axllent/mailpit</code></td><td>internal, external</td><td>SMTP（アラートメール中継）</td></tr>
         </tbody>
       </table>
     </div>
