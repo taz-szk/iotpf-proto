@@ -56,15 +56,15 @@ class TenantDialog(tk.Toplevel):
         self.title("テナント設定" if existing is None else "テナント編集")
         self.transient(parent)
         self.grab_set()
-        self.resizable(False, False)
+        self.resizable(False, True)
         self.result: dict | None = None
+        self._token_rows: list[dict] = []
 
         d = existing or {}
         self._name_var   = tk.StringVar(value=d.get("name", ""))
         self._api_var    = tk.StringVar(value=d.get("api_url", "https://localhost/api"))
         self._host_var   = tk.StringVar(value=d.get("broker_host", "localhost"))
         self._port_var   = tk.IntVar(value=d.get("broker_port", 8883))
-        self._token_var  = tk.StringVar(value=d.get("bootstrap_token", ""))
         self._ssl_var    = tk.BooleanVar(value=d.get("ssl_verify", True))
         self._email_var  = tk.StringVar(value=d.get("platform_email", ""))
         self._passwd_var = tk.StringVar(value=d.get("platform_password", ""))
@@ -73,9 +73,9 @@ class TenantDialog(tk.Toplevel):
         f.pack(fill=tk.BOTH, expand=True)
 
         fields = [
-            ("テナント名 *",        self._name_var,   False, 36),
-            ("API URL",            self._api_var,    False, 36),
-            ("MQTTホスト",         self._host_var,   False, 24),
+            ("テナント名 *",  self._name_var,   False, 36),
+            ("API URL",      self._api_var,    False, 36),
+            ("MQTTホスト",   self._host_var,   False, 24),
         ]
         for i, (lbl, var, secret, w) in enumerate(fields):
             ttk.Label(f, text=lbl).grid(row=i, column=0, sticky=tk.W, pady=3, padx=(0, 6))
@@ -86,41 +86,90 @@ class TenantDialog(tk.Toplevel):
         ttk.Spinbox(f, textvariable=self._port_var, from_=1, to=65535, width=9).grid(
             row=3, column=1, sticky=tk.W)
 
-        ttk.Label(f, text="Bootstrap Token").grid(row=4, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._token_var, width=36, show="*").grid(
-            row=4, column=1, sticky=tk.W)
+        # ── Bootstrap Tokens リスト ──
+        ttk.Separator(f, orient=tk.HORIZONTAL).grid(row=4, column=0, columnspan=2, sticky=tk.EW, pady=(8, 4))
+        ttk.Label(f, text="Bootstrap Tokens", font=("", 9, "bold")).grid(
+            row=5, column=0, columnspan=2, sticky=tk.W, pady=(0, 3))
 
-        ttk.Separator(f, orient=tk.HORIZONTAL).grid(row=5, column=0, columnspan=2, sticky=tk.EW, pady=(8, 4))
-        ttk.Label(f, text="管理者メール", foreground="gray").grid(row=6, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=6, column=1, sticky=tk.W)
-        ttk.Label(f, text="管理者パスワード", foreground="gray").grid(row=7, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=7, column=1, sticky=tk.W)
+        self._token_container = ttk.Frame(f)
+        self._token_container.grid(row=6, column=0, columnspan=2, sticky=tk.EW, pady=(0, 2))
+
+        hdr = tk.Frame(self._token_container)
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text="ラベル", width=16, anchor=tk.W, font=("", 8, "bold")).pack(side=tk.LEFT, padx=1)
+        tk.Label(hdr, text="トークン", width=30, anchor=tk.W, font=("", 8, "bold")).pack(side=tk.LEFT, padx=1)
+
+        self._token_rows_frame = tk.Frame(self._token_container)
+        self._token_rows_frame.pack(fill=tk.X)
+
+        existing_tokens = d.get("bootstrap_tokens", [])
+        if not existing_tokens and d.get("bootstrap_token"):
+            existing_tokens = [{"label": "デフォルト", "token": d["bootstrap_token"]}]
+        for tok in existing_tokens:
+            self._add_token_row(tok)
+        if not existing_tokens:
+            self._add_token_row()
+
+        ttk.Button(f, text="+ トークン追加", command=self._add_token_row).grid(
+            row=7, column=0, columnspan=2, sticky=tk.W, pady=(0, 4))
+
+        # ── 管理者情報 ──
+        ttk.Separator(f, orient=tk.HORIZONTAL).grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(4, 4))
+        ttk.Label(f, text="管理者メール", foreground="gray").grid(row=9, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=9, column=1, sticky=tk.W)
+        ttk.Label(f, text="管理者パスワード", foreground="gray").grid(row=10, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=10, column=1, sticky=tk.W)
         ttk.Label(f, text="↑ デバイス削除時にPF側APIを呼ぶために使用",
-                  foreground="gray", font=("", 8)).grid(row=8, column=0, columnspan=2, sticky=tk.W)
+                  foreground="gray", font=("", 8)).grid(row=11, column=0, columnspan=2, sticky=tk.W)
 
         ttk.Checkbutton(f, text="SSL証明書を検証する（オフ=自己署名証明書を許可）",
-                        variable=self._ssl_var).grid(row=9, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
+                        variable=self._ssl_var).grid(row=12, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
 
         bf = ttk.Frame(f)
-        bf.grid(row=10, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
+        bf.grid(row=13, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
         ttk.Button(bf, text="OK",       command=self._ok,      width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="キャンセル", command=self.destroy, width=8).pack(side=tk.LEFT)
 
-        self.minsize(440, 280)
+        self.minsize(480, 340)
         _center_on_parent(self, parent)
         self.wait_window()
+
+    def _add_token_row(self, data: dict | None = None) -> None:
+        d = data or {}
+        label_var = tk.StringVar(value=d.get("label", f"トークン{len(self._token_rows)+1}"))
+        token_var = tk.StringVar(value=d.get("token", ""))
+        row_frame = tk.Frame(self._token_rows_frame)
+        row_frame.pack(fill=tk.X, pady=1)
+        ttk.Entry(row_frame, textvariable=label_var, width=16).pack(side=tk.LEFT, padx=1)
+        ttk.Entry(row_frame, textvariable=token_var, width=30, show="*").pack(side=tk.LEFT, padx=1)
+        rd: dict = {"label": label_var, "token": token_var, "frame": row_frame}
+        self._token_rows.append(rd)
+
+        def remove(r: dict = rd) -> None:
+            r["frame"].destroy()
+            self._token_rows.remove(r)
+
+        ttk.Button(row_frame, text="×", width=2, command=remove).pack(side=tk.LEFT, padx=2)
 
     def _ok(self) -> None:
         name = self._name_var.get().strip()
         if not name:
             messagebox.showwarning("入力エラー", "テナント名を入力してください", parent=self)
             return
+        tokens = [
+            {"label": r["label"].get().strip() or f"トークン{i+1}", "token": r["token"].get()}
+            for i, r in enumerate(self._token_rows)
+            if r["token"].get().strip()
+        ]
+        if not tokens:
+            messagebox.showwarning("入力エラー", "Bootstrap Token を少なくとも1つ入力してください", parent=self)
+            return
         self.result = {
             "name": name,
             "api_url": self._api_var.get().strip(),
             "broker_host": self._host_var.get().strip(),
             "broker_port": self._port_var.get(),
-            "bootstrap_token": self._token_var.get(),
+            "bootstrap_tokens": tokens,
             "ssl_verify": self._ssl_var.get(),
             "platform_email": self._email_var.get().strip(),
             "platform_password": self._passwd_var.get(),
@@ -318,7 +367,8 @@ class SimulatorApp(tk.Tk):
         self._state_labels: dict[int, tk.Label] = {}
         self._device_rows: dict[int, tk.Frame] = {}
         self._tenants: list[dict] = []
-        self._device_tenants: dict[int, str] = {}   # wid -> tenant name
+        self._device_tenants: dict[int, str] = {}       # wid -> tenant name
+        self._device_token_labels: dict[int, str] = {}  # wid -> bootstrap token label
         self._field_rows: list[dict] = []            # ランダムフィールド行
 
         self._use_random = tk.BooleanVar(value=True)
@@ -537,19 +587,43 @@ class SimulatorApp(tk.Tk):
         dlg.grab_set()
         dlg.resizable(False, False)
 
-        device_id_var = tk.StringVar(value=self._next_device_id())
-        tenant_var    = tk.StringVar(value=self._tenants[0]["name"])
+        device_id_var   = tk.StringVar(value=self._next_device_id())
+        tenant_var      = tk.StringVar(value=self._tenants[0]["name"])
+        token_label_var = tk.StringVar()
 
         f = ttk.Frame(dlg, padding=14)
         f.pack(fill=tk.BOTH, expand=True)
         ttk.Label(f, text="Device ID:").grid(row=0, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         ttk.Entry(f, textvariable=device_id_var, width=28).grid(row=0, column=1, sticky=tk.W)
         ttk.Label(f, text="テナント:").grid(row=1, column=0, sticky=tk.W, pady=4, padx=(0, 8))
-        ttk.Combobox(f, textvariable=tenant_var,
-                     values=[t["name"] for t in self._tenants],
-                     state="readonly", width=27).grid(row=1, column=1, sticky=tk.W)
+        tenant_combo = ttk.Combobox(f, textvariable=tenant_var,
+                                    values=[t["name"] for t in self._tenants],
+                                    state="readonly", width=27)
+        tenant_combo.grid(row=1, column=1, sticky=tk.W)
 
-        def ok():
+        token_lbl   = ttk.Label(f, text="トークン:")
+        token_combo = ttk.Combobox(f, textvariable=token_label_var, state="readonly", width=27)
+        token_lbl.grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        token_combo.grid(row=2, column=1, sticky=tk.W)
+
+        def refresh_tokens(*_: object) -> None:
+            t = next((t for t in self._tenants if t["name"] == tenant_var.get()), None)
+            tokens = t.get("bootstrap_tokens", []) if t else []
+            labels = [tok["label"] for tok in tokens]
+            token_combo["values"] = labels
+            if labels:
+                token_label_var.set(labels[0])
+            if len(labels) <= 1:
+                token_lbl.grid_remove()
+                token_combo.grid_remove()
+            else:
+                token_lbl.grid()
+                token_combo.grid()
+
+        tenant_combo.bind("<<ComboboxSelected>>", refresh_tokens)
+        refresh_tokens()
+
+        def ok() -> None:
             dev_id = device_id_var.get().strip()
             if not dev_id:
                 messagebox.showwarning("入力エラー", "Device ID を入力してください", parent=dlg)
@@ -565,17 +639,23 @@ class SimulatorApp(tk.Tk):
             tenant = next((t for t in self._tenants if t["name"] == tenant_var.get()), None)
             if not tenant:
                 return
+            tokens = tenant.get("bootstrap_tokens", [])
+            selected_label = token_label_var.get()
+            token_obj = next((t for t in tokens if t["label"] == selected_label), None) or (tokens[0] if tokens else None)
+            if not token_obj:
+                messagebox.showwarning("エラー", "有効なBootstrap Tokenがありません", parent=dlg)
+                return
             dlg.destroy()
-            self._add_device(dev_id, tenant)
+            self._add_device(dev_id, tenant, token_obj["token"], token_obj["label"])
 
         bf = ttk.Frame(f)
-        bf.grid(row=2, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
+        bf.grid(row=3, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
         ttk.Button(bf, text="OK",       command=ok,          width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="キャンセル", command=dlg.destroy, width=8).pack(side=tk.LEFT)
         _center_on_parent(dlg, self)
         dlg.wait_window()
 
-    def _add_device(self, device_id: str, tenant: dict) -> None:
+    def _add_device(self, device_id: str, tenant: dict, bootstrap_token: str = "", token_label: str = "") -> None:
         wid = self._next_wid
         self._next_wid += 1
         cert_dir = os.path.join(CERT_BASE, tenant["name"], device_id)
@@ -585,13 +665,14 @@ class SimulatorApp(tk.Tk):
             api_url=tenant["api_url"],
             broker_host=tenant["broker_host"],
             broker_port=tenant["broker_port"],
-            bootstrap_token=tenant["bootstrap_token"],
+            bootstrap_token=bootstrap_token,
             cert_dir=cert_dir,
             event_queue=self._event_queue,
             ssl_verify=tenant["ssl_verify"],
         )
         self._workers[wid] = worker
         self._device_tenants[wid] = tenant["name"]
+        self._device_token_labels[wid] = token_label
 
         row = tk.Frame(self._device_list_frame)
         row.pack(fill=tk.X, pady=1, anchor=tk.W)
@@ -901,8 +982,14 @@ class SimulatorApp(tk.Tk):
             custom_json = self._custom_json_text.get("1.0", tk.END).strip() if self._custom_json_text else ""
             cfg = {
                 "tenants": self._tenants,
-                "devices": [{"device_id": w.device_id, "tenant_name": self._device_tenants[wid]}
-                            for wid, w in self._workers.items()],
+                "devices": [
+                    {
+                        "device_id": w.device_id,
+                        "tenant_name": self._device_tenants[wid],
+                        "bootstrap_token_label": self._device_token_labels.get(wid, ""),
+                    }
+                    for wid, w in self._workers.items()
+                ],
                 "use_random":    self._use_random.get(),
                 "interval":      self._interval.get(),
                 "custom_json":   custom_json,
@@ -921,6 +1008,10 @@ class SimulatorApp(tk.Tk):
                 cfg = json.load(f)
 
             self._tenants = cfg.get("tenants", [])
+            # 旧形式(bootstrap_token文字列)を新形式(bootstrap_tokensリスト)に変換
+            for t in self._tenants:
+                if "bootstrap_token" in t and "bootstrap_tokens" not in t:
+                    t["bootstrap_tokens"] = [{"label": "デフォルト", "token": t.pop("bootstrap_token")}]
             self._refresh_tenant_list()
 
             self._use_random.set(cfg.get("use_random", True))
@@ -941,14 +1032,20 @@ class SimulatorApp(tk.Tk):
             self._refresh_mode()
 
             for dev in cfg.get("devices", []):
-                did, tn = dev["device_id"], dev["tenant_name"]
+                did = dev["device_id"]
+                tn  = dev["tenant_name"]
+                token_label = dev.get("bootstrap_token_label", "")
                 tenant = next((t for t in self._tenants if t["name"] == tn), None)
                 already = any(
                     w.device_id == did and self._device_tenants.get(k) == tn
                     for k, w in self._workers.items()
                 )
                 if tenant and not already:
-                    self._add_device(did, tenant)
+                    tokens = tenant.get("bootstrap_tokens", [])
+                    token_obj = next((t for t in tokens if t["label"] == token_label), None) or (tokens[0] if tokens else None)
+                    bootstrap_token = token_obj["token"] if token_obj else ""
+                    label = token_obj["label"] if token_obj else token_label
+                    self._add_device(did, tenant, bootstrap_token, label)
                 elif not tenant:
                     self._append_log(f"デバイス '{did}': テナント '{tn}' が見つかりません", level="warn")
 
