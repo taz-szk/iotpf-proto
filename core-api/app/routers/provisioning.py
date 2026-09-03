@@ -30,7 +30,7 @@ def provision(req: ProvisionRequest):
 
         now = datetime.now(timezone.utc)
         expires_at = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
-        if expires_at < now:
+        if expires_at.year < 2099 and expires_at < now:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
 
         if token.registered_count >= token.max_devices:

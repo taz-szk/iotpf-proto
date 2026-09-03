@@ -223,10 +223,45 @@
           <div x-show="activeTab === 'tokens'">
             <div class="flex items-center justify-between mb-4">
               <h3 class="font-medium text-gray-700">ブートストラップトークン</h3>
-              <button x-show="canEdit" @click="createToken()" :disabled="creatingToken"
-                      class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
+              <button x-show="canEdit && !showTokenForm" @click="showTokenForm=true"
+                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm">
                 + トークン発行
               </button>
+            </div>
+            <!-- 発行フォーム -->
+            <div x-show="showTokenForm" class="bg-gray-50 border border-gray-200 rounded p-4 mb-4">
+              <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">有効期限</label>
+                  <select x-model="tokenForm.preset" @change="tokenForm.custom=''"
+                          class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="7">7日</option>
+                    <option value="30">30日</option>
+                    <option value="90">90日</option>
+                    <option value="365">365日</option>
+                    <option value="null">無期限</option>
+                    <option value="custom">カスタム</option>
+                  </select>
+                </div>
+                <div x-show="tokenForm.preset === 'custom'">
+                  <label class="block text-xs font-medium text-gray-600 mb-1">日数</label>
+                  <input type="number" x-model.number="tokenForm.custom" min="1" max="1825" placeholder="例: 180"
+                         class="border border-gray-300 rounded px-2 py-1.5 text-sm w-24">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">台数上限</label>
+                  <input type="number" x-model.number="tokenForm.max_devices" min="1" max="10000"
+                         class="border border-gray-300 rounded px-2 py-1.5 text-sm w-24">
+                </div>
+                <div class="flex gap-2">
+                  <button @click="showTokenForm=false" class="border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded text-sm">キャンセル</button>
+                  <button @click="createToken()" :disabled="creatingToken || (tokenForm.preset==='custom' && !tokenForm.custom)"
+                          class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
+                    <span x-show="!creatingToken">発行</span>
+                    <span x-show="creatingToken">発行中...</span>
+                  </button>
+                </div>
+              </div>
             </div>
             <div x-show="newTokenValue" class="bg-green-50 border border-green-200 rounded p-4 mb-4">
               <p class="text-sm font-medium text-green-800 mb-1">新しいトークンが発行されました（この画面のみ表示）</p>
@@ -255,7 +290,8 @@
                       <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="t.active_count + ' 台'"></td>
                       <td class="px-4 py-3 text-sm" :class="t.deleted_count > 0 ? 'text-red-500' : 'text-gray-300'"
                           x-text="t.deleted_count + ' 台'"></td>
-                      <td class="px-4 py-3 text-sm text-gray-500" x-text="new Date(t.expires_at).toLocaleDateString('ja-JP')"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500"
+                          x-text="t.expires_at ? new Date(t.expires_at).toLocaleDateString('ja-JP') : '無期限'"></td>
                       <td class="px-4 py-3 text-right" @click.stop>
                         <button x-show="canEdit" @click="revokeToken(t.id)" class="text-red-500 hover:text-red-700 text-xs">失効</button>
                       </td>
@@ -946,6 +982,8 @@ function portalApp() {
 
     // トークン
     tokens: [], newTokenValue: '', creatingToken: false,
+    showTokenForm: false,
+    tokenForm: { preset: '365', custom: '', max_devices: 100 },
     expandedToken: null, tokenDevices: [], tokenDevicesLoading: false,
     // アラート
     alertRules: [], sensorKeys: [], sensorKeySelect: '',
@@ -1020,9 +1058,20 @@ function portalApp() {
     },
     async createToken() {
       this.creatingToken = true; this.newTokenValue = '';
+      const expires_days = this.tokenForm.preset === 'null' ? null
+                         : this.tokenForm.preset === 'custom' ? this.tokenForm.custom
+                         : parseInt(this.tokenForm.preset);
       try {
-        const t = await portalFetch('POST', '/me/tokens', { max_devices: 100, expires_days: 365 });
-        if (t) { this.newTokenValue = t.token; this.tokens = await portalFetch('GET', '/me/tokens') || []; }
+        const t = await portalFetch('POST', '/me/tokens', {
+          max_devices: this.tokenForm.max_devices,
+          expires_days,
+        });
+        if (t) {
+          this.newTokenValue = t.token;
+          this.tokens = await portalFetch('GET', '/me/tokens') || [];
+          this.showTokenForm = false;
+          this.tokenForm = { preset: '365', custom: '', max_devices: 100 };
+        }
       } catch(e) { this.error = e.message; } finally { this.creatingToken = false; }
     },
     async revokeToken(id) {

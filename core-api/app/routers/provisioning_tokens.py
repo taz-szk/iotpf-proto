@@ -2,11 +2,14 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from sqlalchemy import text
 from app.models.public import ProvisioningToken, Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token
 import uuid, secrets
+
+_UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 
 router = APIRouter(prefix="/tenants")
 _bearer = HTTPBearer()
@@ -25,7 +28,7 @@ def _parse_uuid(value: str, field_name: str) -> uuid.UUID:
 
 class TokenCreate(BaseModel):
     max_devices: int = Field(default=100, gt=0, le=10000)
-    expires_days: int = Field(default=365, gt=0, le=1825)
+    expires_days: Optional[int] = Field(default=365, gt=0, le=1825)
 
 class TokenOut(BaseModel):
     id: str
@@ -35,7 +38,7 @@ class TokenOut(BaseModel):
     registered_count: int
     active_count: int = 0
     deleted_count: int = 0
-    expires_at: datetime
+    expires_at: Optional[datetime]
     is_active: bool
 
 @router.post("/{tenant_id}/provisioning-tokens", response_model=TokenOut, status_code=201)
@@ -50,7 +53,8 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
             token=secrets.token_urlsafe(32),
             tenant_id=tenant_uuid,
             max_devices=body.max_devices,
-            expires_at=datetime.now(timezone.utc) + timedelta(days=body.expires_days),
+            expires_at=_UNLIMITED_EXPIRES if body.expires_days is None
+                       else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
         db.add(token)
         db.commit()
@@ -61,7 +65,7 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
             tenant_id=str(token.tenant_id),
             max_devices=token.max_devices,
             registered_count=token.registered_count,
-            expires_at=token.expires_at,
+            expires_at=None if token.expires_at >= _UNLIMITED_EXPIRES else token.expires_at,
             is_active=token.is_active,
         )
 
@@ -88,7 +92,8 @@ def list_provisioning_tokens(tenant_id: str, _: dict = Depends(_require_platform
                 max_devices=t.max_devices, registered_count=t.registered_count,
                 active_count=int(active_count),
                 deleted_count=max(0, t.registered_count - int(active_count)),
-                expires_at=t.expires_at, is_active=t.is_active,
+                expires_at=None if t.expires_at >= _UNLIMITED_EXPIRES else t.expires_at,
+                is_active=t.is_active,
             ))
         return result
 
