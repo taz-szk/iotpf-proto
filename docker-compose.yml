@@ -272,7 +272,7 @@ services:
         condition: service_healthy
 
   mailhog:
-    image: mailhog/mailhog:latest
+    image: axllent/mailpit:latest
     container_name: mailhog
     restart: unless-stopped
     networks: [internal, external]
@@ -282,7 +282,7 @@ services:
       - "1025"
 
   nginx:
-    image: nginx:1.25-alpine
+    image: nginx:stable-alpine
     container_name: nginx
     restart: unless-stopped
     networks: [internal, external, grafana-net]
