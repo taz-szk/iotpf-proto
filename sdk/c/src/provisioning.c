@@ -50,6 +50,7 @@ int iot_provision_exec(const char *api_url,
                        const char *bootstrap_token,
                        const char *device_id,
                        const char *cert_dir,
+                       const char *ca_cert_path,
                        char *tenant_id_out, size_t tid_max) {
     char body[512];
     snprintf(body, sizeof(body),
@@ -74,9 +75,17 @@ int iot_provision_exec(const char *api_url,
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, _write_cb);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &wb);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT, 30L);
-    /* SSL peer verification disabled: device has no CA bundle before provisioning.
-     * Known bootstrap problem with private CA; token is one-time-use and short-lived. */
-    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+    /* Certificate verification is always on. If the API endpoint is served by a
+     * private CA (e.g. step-ca in local/dev setups), the caller must supply that
+     * CA's root cert via iot_client_set_ca_cert_path() beforehand; otherwise the
+     * platform's default CA bundle is used (correct for public CAs such as
+     * Let's Encrypt). bootstrap_token is a long-lived, reusable credential
+     * (not one-time-use), so it must never be sent over an unverified channel. */
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+    curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
+    if (ca_cert_path && ca_cert_path[0]) {
+        curl_easy_setopt(curl, CURLOPT_CAINFO, ca_cert_path);
+    }
 
     CURLcode rc = curl_easy_perform(curl);
     long http_code = 0;
