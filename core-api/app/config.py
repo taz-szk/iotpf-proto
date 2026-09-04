@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -25,7 +26,10 @@ class Settings(BaseSettings):
     emqx_api_url: str = "http://emqx:18083"
     emqx_api_user: str = "admin"
     emqx_api_password: str
-    emqx_webhook_secret: str
+    # min_length: docker-compose passes "" (not unset) when EMQX_WEBHOOK_SECRET is
+    # missing from .env; an empty/weak secret makes the HMAC check in
+    # emqx_events.py trivially bypassable (hmac.compare_digest(b"", b"") == True).
+    emqx_webhook_secret: str = Field(min_length=32)
     platform_domain: str = "localhost"
     grafana_session_expire_hours: int = 24
 
