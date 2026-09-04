@@ -1,7 +1,8 @@
 from unittest.mock import patch, MagicMock
 from app.services.grafana import (
     create_grafana_org, setup_grafana_datasource, create_default_dashboard,
-    build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE
+    build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
+    _flux_string_escape, retire_device_in_influxdb,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -88,3 +89,26 @@ def test_build_dashboard_panels_with_configs():
 def test_build_sensor_panel_sensor_key_escaped():
     panel = build_sensor_panel('temp"test', "timeseries", 10, 6, 1)
     assert '\\"' in panel["targets"][0]["query"]
+
+def test_flux_string_escape_neutralizes_interpolation():
+    # $ 単独、および ${...} 形式のFlux文字列補間構文が有効なままにならないこと
+    # (エスケープ後は必ず \$ の形になっており、素の $ は残らない)
+    esc = _flux_string_escape('device" }} import "system"; system.exec(...) ${1+1}')
+    assert '\\$' in esc
+    assert esc.replace('\\$', '').count('$') == 0
+    assert '\\"' in esc
+
+def test_flux_string_escape_handles_backslash_before_dollar_and_quote():
+    # バックスラッシュのエスケープが先に行われ、$ / " のエスケープで生成した
+    # バックスラッシュが二重エスケープされないこと
+    esc = _flux_string_escape('a\\b$c"d')
+    assert esc == 'a\\\\b\\$c\\"d'
+
+def test_retire_device_in_influxdb_escapes_dollar_in_flux_query():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        retire_device_in_influxdb("org-1", 'evil" }} ${badExpr}')
+    copy_call = mock_httpx.post.call_args_list[0]
+    flux_query = copy_call.kwargs["json"]["query"]
+    assert '\\${badExpr}' in flux_query
+    assert flux_query.replace('\\$', '').count('$') == 0
