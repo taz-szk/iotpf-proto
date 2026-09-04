@@ -277,7 +277,7 @@ services:
     restart: unless-stopped
     networks: [internal, external]
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
     expose:
       - "1025"
 
