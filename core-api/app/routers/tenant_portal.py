@@ -36,7 +36,7 @@ def _require_tenant(iot_token: str = Cookie(default=None)) -> dict:
     if not iot_token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     payload = verify_token(iot_token)
-    if not payload or payload.get("type") != "tenant":
+    if not payload or payload.get("type") != "tenant" or payload.get("public"):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
     return payload
 
