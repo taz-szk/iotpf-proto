@@ -8,6 +8,7 @@
 /* Forward declarations from provisioning.c */
 int iot_provision_exec(const char *api_url, const char *bootstrap_token,
                        const char *device_id, const char *cert_dir,
+                       const char *ca_cert_path,
                        char *tenant_id_out, size_t tid_max);
 int iot_load_credentials_from_dir(const char *cert_dir,
                                   char *tenant_id_out, size_t tid_max,
@@ -20,6 +21,7 @@ struct iot_client_t {
     char tenant_id[64];
     char device_id[128];
     char cert_dir[512];
+    char ca_cert_path[512];
     MQTTClient mqtt;
     iot_command_callback_t callback;
     void *user_data;
@@ -86,6 +88,16 @@ void iot_client_destroy(iot_client_t *client) {
     free(client);
 }
 
+int iot_client_set_ca_cert_path(iot_client_t *client, const char *ca_cert_path) {
+    if (!client) return IOT_ERR_BADPARAM;
+    if (ca_cert_path) {
+        strncpy(client->ca_cert_path, ca_cert_path, sizeof(client->ca_cert_path) - 1);
+    } else {
+        client->ca_cert_path[0] = '\0';
+    }
+    return IOT_OK;
+}
+
 int iot_provision(iot_client_t *client,
                   const char *bootstrap_token,
                   const char *device_id,
@@ -93,7 +105,9 @@ int iot_provision(iot_client_t *client,
     if (!client || !bootstrap_token || !device_id || !cert_dir)
         return IOT_ERR_BADPARAM;
 
+    const char *ca_cert_path = client->ca_cert_path[0] ? client->ca_cert_path : NULL;
     int rc = iot_provision_exec(client->api_url, bootstrap_token, device_id, cert_dir,
+                                ca_cert_path,
                                 client->tenant_id, sizeof(client->tenant_id));
     if (rc != IOT_OK) return rc;
 

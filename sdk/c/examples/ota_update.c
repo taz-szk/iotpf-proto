@@ -5,6 +5,9 @@
  *   export IOT_API_URL=https://localhost/api
  *   export MQTT_BROKER=localhost
  *   export CERT_DIR=./certs
+ *   # Only needed if IOT_API_URL is served by a private CA (e.g. local step-ca
+ *   # setups). Leave unset for public-CA deployments (e.g. Let's Encrypt).
+ *   export CA_CERT_PATH=./certs/platform_ca.pem
  *   ./ota_update
  */
 #include <stdio.h>
@@ -18,7 +21,8 @@ static void _sig(int s) { (void)s; running = 0; }
 
 static void on_command(const char *type, const char *json,
                        size_t json_len, void *user_data) {
-    (void)user_data; (void)json_len;
+    const char *ca_cert_path = (const char *)user_data;
+    (void)json_len;
 
     if (strcmp(type, "ota") != 0) {
         printf("Unknown command: %s\n", type);
@@ -59,7 +63,7 @@ static void on_command(const char *type, const char *json,
 
     const char *fw_path = "/tmp/firmware_update.bin";
     printf("Downloading from: %s\n", url);
-    int rc = iot_ota_download(url, fw_path, checksum);
+    int rc = iot_ota_download(url, fw_path, checksum, ca_cert_path);
     if (rc == IOT_OK) {
         printf("Firmware downloaded and verified: %s\n", fw_path);
         printf("TODO: apply firmware (platform-specific)\n");
@@ -74,6 +78,7 @@ int main(void) {
     const char *cert_dir    = getenv("CERT_DIR")       ?: "./certs";
     const char *bootstrap   = getenv("BOOTSTRAP_TOKEN");
     const char *device_id   = getenv("DEVICE_ID")      ?: "my-device-001";
+    const char *ca_cert_path = getenv("CA_CERT_PATH"); /* NULL = system default CA bundle */
     int         broker_port = atoi(getenv("MQTT_PORT") ?: "8883");
     if (broker_port == 0) broker_port = 8883;
 
@@ -82,6 +87,7 @@ int main(void) {
 
     iot_client_t *client = iot_client_create(api_url, broker_host, broker_port);
     if (!client) { fprintf(stderr, "create failed\n"); return 1; }
+    iot_client_set_ca_cert_path(client, ca_cert_path);
 
     /* Provision if BOOTSTRAP_TOKEN provided and no existing creds */
     if (bootstrap) {
@@ -100,7 +106,7 @@ int main(void) {
         }
     }
 
-    iot_set_command_callback(client, on_command, NULL);
+    iot_set_command_callback(client, on_command, (void *)ca_cert_path);
 
     if (iot_connect(client) != IOT_OK) {
         fprintf(stderr, "connect failed\n");
