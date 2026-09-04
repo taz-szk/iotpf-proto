@@ -427,7 +427,7 @@ Write-Host ""
 Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
 Write-Host "  |  IoT Platform is running!                               |" -ForegroundColor Cyan
 Write-Host "  +---------------------------------------------------------+" -ForegroundColor Cyan
-Write-Host "  Admin / Login  https://localhost/admin/" -ForegroundColor Cyan
+Write-Host "  Admin / Login  https://localhost/iotairx-console/" -ForegroundColor Cyan
 Write-Host "                 $adminEmail / see PLATFORM_ADMIN_PASSWORD in .env" -ForegroundColor Cyan
 Write-Host "  Grafana        https://localhost/grafana/  (behind admin login)" -ForegroundColor Cyan
 Write-Host "  MailHog        http://localhost:8025" -ForegroundColor Cyan
@@ -447,7 +447,7 @@ Write-Host '    certutil -addstore -f "ROOT" certs\ca\root_ca.crt' -ForegroundCo
 Write-Host "  (Chrome/Edge may need a restart to pick up the new trust store)" -ForegroundColor Cyan
 Write-Host "" -ForegroundColor Cyan
 Write-Host "  Next steps:" -ForegroundColor Cyan
-Write-Host "    1. Open https://localhost/admin/ and log in as" -ForegroundColor Cyan
+Write-Host "    1. Open https://localhost/iotairx-console/ and log in as" -ForegroundColor Cyan
 Write-Host "       $adminEmail (password in .env)" -ForegroundColor Cyan
 Write-Host "    2. Create a tenant" -ForegroundColor Cyan
 Write-Host "    3. Provision your first device using the bootstrap token" -ForegroundColor Cyan
@@ -461,4 +461,4 @@ Write-Host ""
 
 # ブラウザで管理者ログイン画面を開く
 Write-Host "  Opening admin login in your browser..." -ForegroundColor Cyan
-Start-Process "https://localhost/admin/"
+Start-Process "https://localhost/iotairx-console/"

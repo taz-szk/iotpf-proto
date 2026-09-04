@@ -51,13 +51,13 @@
             const data = await api.login(this.email, this.password);
             if (data.status === 'totp_required') {
               setPartialToken(data.partial_token);
-              window.location.href = '/admin/totp-verify.html';
+              window.location.href = '/iotairx-console/totp-verify.html';
             } else if (data.status === 'totp_setup_required') {
               setPartialToken(data.partial_token);
-              window.location.href = '/admin/totp-setup.html';
+              window.location.href = '/iotairx-console/totp-setup.html';
             } else {
               api.setTokens(data.access_token, data.refresh_token);
-              window.location.href = '/admin/tenants.html';
+              window.location.href = '/iotairx-console/tenants.html';
             }
           } catch(e) {
             this.error = e.message || 'ログインに失敗しました';
@@ -66,7 +66,7 @@
           }
         },
         init() {
-          if (api.isLoggedIn()) window.location.href = '/admin/tenants.html';
+          if (api.isLoggedIn()) window.location.href = '/iotairx-console/tenants.html';
         }
       };
     }

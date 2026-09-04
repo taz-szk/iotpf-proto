@@ -294,6 +294,7 @@ services:
       - ./certs/server/server.key:/etc/nginx/certs/server.key:ro
       - ./certs/ca/root_ca.crt:/etc/nginx/certs/root_ca.crt:ro
       - ./admin-ui:/usr/share/nginx/admin-ui:ro
+      - ./platform-ui:/usr/share/nginx/platform-ui:ro
       - ./docs:/usr/share/nginx/docs:ro
     ports:
       - "80:80"

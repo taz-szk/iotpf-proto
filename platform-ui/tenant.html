@@ -12,14 +12,14 @@
 
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
     <div class="flex items-center gap-3">
-      <a href="/admin/tenants.html" class="text-gray-400 hover:text-gray-600 text-sm">← テナント一覧</a>
+      <a href="/iotairx-console/tenants.html" class="text-gray-400 hover:text-gray-600 text-sm">← テナント一覧</a>
       <span class="text-gray-300">|</span>
       <h1 class="text-lg font-bold text-gray-800" x-data="{}" x-text="document.title"></h1>
     </div>
     <div class="flex items-center gap-4">
       <a id="nav-grafana-link" href="#" target="_blank"
          class="text-sm text-gray-500 hover:text-gray-700 hidden">Grafana</a>
-      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <a href="/iotairx-console/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
       <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
     </div>
   </nav>
@@ -658,7 +658,7 @@
         },
 
         async init() {
-          if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+          if (!api.isLoggedIn()) { window.location.href = '/iotairx-console/'; return; }
           if (!tenantId) { this.error = 'テナントIDが指定されていません'; this.loading = false; return; }
           // Grafana ナビリンクを設定（プラットフォーム管理 org）
           api.platform.grafanaOrgId().then(r => {
