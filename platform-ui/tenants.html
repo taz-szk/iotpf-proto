@@ -16,8 +16,8 @@
     <div class="flex items-center gap-4">
       <a id="nav-grafana-link" href="#" target="_blank"
          class="text-sm text-gray-500 hover:text-gray-700 hidden">Grafana</a>
-      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
-      <a href="/admin/platform-settings.html" class="text-sm text-gray-500 hover:text-gray-700">設定</a>
+      <a href="/iotairx-console/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <a href="/iotairx-console/platform-settings.html" class="text-sm text-gray-500 hover:text-gray-700">設定</a>
       <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
     </div>
   </nav>
@@ -123,7 +123,7 @@
                   x-text="new Date(tenant.created_at).toLocaleDateString('ja-JP')"></td>
               <td class="px-6 py-4 text-right">
                 <div class="flex items-center justify-end gap-2">
-                  <button @click="window.location.href='/admin/tenant.html?id='+tenant.id"
+                  <button @click="window.location.href='/iotairx-console/tenant.html?id='+tenant.id"
                           class="px-3 py-1.5 text-sm font-medium text-blue-600 border border-blue-300 rounded hover:bg-blue-50">詳細</button>
                   <button @click="openDeleteModal(tenant)"
                           :disabled="tenant.status === 'active'"
@@ -295,7 +295,7 @@
         },
 
         async init() {
-          if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+          if (!api.isLoggedIn()) { window.location.href = '/iotairx-console/'; return; }
           await this.loadTenants();
           // Grafana ナビリンクを設定
           api.platform.grafanaOrgId().then(r => {

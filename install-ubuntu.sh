@@ -309,7 +309,7 @@ echo -e "${CYAN}
   +---------------------------------------------------------+
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
-  Admin / Login  https://localhost/admin/
+  Admin / Login  https://localhost/iotairx-console/
                  ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} / see PLATFORM_ADMIN_PASSWORD in .env
   Grafana        https://localhost/grafana/  (behind admin login)
   MailHog        http://localhost:8025
@@ -331,7 +331,7 @@ echo -e "${CYAN}
   store too — see chrome://settings/certificates or about:preferences#privacy)
 
   Next steps:
-    1. Open https://localhost/admin/ and log in as
+    1. Open https://localhost/iotairx-console/ and log in as
        ${PLATFORM_ADMIN_EMAIL:-admin@platform.local} (password in .env)
     2. Create a tenant
     3. Provision your first device using the bootstrap token
@@ -342,4 +342,4 @@ ${NC}"
 
 # ブラウザで管理者ログイン画面を開く
 echo "  Opening admin login in your browser..."
-xdg-open "https://localhost/admin/" 2>/dev/null || true
+xdg-open "https://localhost/iotairx-console/" 2>/dev/null || true

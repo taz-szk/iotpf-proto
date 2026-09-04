@@ -57,7 +57,7 @@ async function request(method, path, body = null) {
             throw new Error(errorMessage(err, 'メールアドレスまたはパスワードが正しくありません'));
         }
         clearTokens();
-        window.location.href = '/admin/';
+        window.location.href = '/iotairx-console/';
         return;
     }
     if (!resp.ok) {
@@ -149,7 +149,7 @@ const api = {
         sensorKeys: () => request('GET', '/tenant-portal/dashboard/sensor-keys'),
     },
     isLoggedIn: () => !!getToken(),
-    logout: () => { clearTokens(); window.location.href = '/admin/'; },
+    logout: () => { clearTokens(); window.location.href = '/iotairx-console/'; },
     setTokens,
     request: (method, path, body = null) => request(method, path, body),
 };
