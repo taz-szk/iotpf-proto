@@ -10,6 +10,7 @@ from app.services.auth import verify_token
 import uuid, secrets
 
 _UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+_UNLIMITED_DEVICES = 2_000_000_000
 
 router = APIRouter(prefix="/tenants")
 _bearer = HTTPBearer()
@@ -52,7 +53,7 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
             id=uuid.uuid4(),
             token=secrets.token_urlsafe(32),
             tenant_id=tenant_uuid,
-            max_devices=body.max_devices,
+            max_devices=_UNLIMITED_DEVICES if body.max_devices is None else body.max_devices,
             expires_at=_UNLIMITED_EXPIRES if body.expires_days is None
                        else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
@@ -63,7 +64,7 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
             id=str(token.id),
             token=token.token,
             tenant_id=str(token.tenant_id),
-            max_devices=token.max_devices,
+            max_devices=None if token.max_devices >= _UNLIMITED_DEVICES else token.max_devices,
             registered_count=token.registered_count,
             expires_at=None if token.expires_at >= _UNLIMITED_EXPIRES else token.expires_at,
             is_active=token.is_active,
@@ -89,7 +90,8 @@ def list_provisioning_tokens(tenant_id: str, _: dict = Depends(_require_platform
                 active_count = 0
             result.append(TokenOut(
                 id=str(t.id), token=t.token, tenant_id=str(t.tenant_id),
-                max_devices=t.max_devices, registered_count=t.registered_count,
+                max_devices=None if t.max_devices >= _UNLIMITED_DEVICES else t.max_devices,
+                registered_count=t.registered_count,
                 active_count=int(active_count),
                 deleted_count=max(0, t.registered_count - int(active_count)),
                 expires_at=None if t.expires_at >= _UNLIMITED_EXPIRES else t.expires_at,

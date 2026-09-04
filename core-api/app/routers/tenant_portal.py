@@ -308,6 +308,7 @@ def reset_user_password(user_id: str, body: PasswordResetBody, payload: dict = D
 # ---------------------------------------------------------------------------
 
 _UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+_UNLIMITED_DEVICES = 2_000_000_000
 
 class TokenCreate(BaseModel):
     max_devices: Optional[int] = Field(default=100, gt=0, le=10000)
@@ -333,7 +334,7 @@ def list_tokens(payload: dict = Depends(_require_tenant)):
             result.append({
                 "id": str(t.id),
                 "token": t.token,
-                "max_devices": t.max_devices,
+                "max_devices": None if t.max_devices >= _UNLIMITED_DEVICES else t.max_devices,
                 "registered_count": t.registered_count,
                 "active_count": int(active_count),
                 "deleted_count": max(0, t.registered_count - int(active_count)),
@@ -352,7 +353,7 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
             id=uuid_lib.uuid4(),
             token=secrets.token_urlsafe(32),
             tenant_id=tenant_uuid,
-            max_devices=body.max_devices,
+            max_devices=_UNLIMITED_DEVICES if body.max_devices is None else body.max_devices,
             expires_at=_UNLIMITED_EXPIRES if body.expires_days is None
                        else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
@@ -362,7 +363,7 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
         return {
             "id": str(token.id),
             "token": token.token,
-            "max_devices": token.max_devices,
+            "max_devices": None if token.max_devices >= _UNLIMITED_DEVICES else token.max_devices,
             "registered_count": token.registered_count,
             "expires_at": None if token.expires_at >= _UNLIMITED_EXPIRES else token.expires_at.isoformat(),
             "is_active": token.is_active,

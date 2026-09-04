@@ -39,7 +39,7 @@ def provision(req: ProvisionRequest):
         result = db.execute(
             text('''UPDATE public.provisioning_tokens
                     SET registered_count = registered_count + 1
-                    WHERE id = :tid AND (max_devices IS NULL OR registered_count < max_devices) AND is_active = TRUE
+                    WHERE id = :tid AND registered_count < max_devices AND is_active = TRUE
                     RETURNING id'''),
             {"tid": str(token.id)},
         )

@@ -226,16 +226,6 @@ def migrate_totp_columns() -> None:
             conn.commit()
 
 
-def migrate_provisioning_token_unlimited_devices() -> None:
-    """provisioning_tokens.max_devices を NULL 許容にする（NULL = 台数無制限）。"""
-    with engine.connect() as conn:
-        conn.execute(text("""
-            ALTER TABLE provisioning_tokens
-            ALTER COLUMN max_devices DROP NOT NULL
-        """))
-        conn.commit()
-
-
 def migrate_dashboard_panel_configs() -> None:
     """dashboard_panel_configs テーブルを作成する（べき等）。"""
     with engine.connect() as conn:
