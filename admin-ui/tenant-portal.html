@@ -242,6 +242,9 @@
                     <option value="null">無期限</option>
                     <option value="custom">カスタム</option>
                   </select>
+                  <p x-show="tokenForm.preset === 'null'" class="text-xs text-gray-400 mt-1 max-w-[16rem]">
+                    ※「無期限」は数学的な無限ではなく、2099年12月31日までの期限として登録されます
+                  </p>
                 </div>
                 <div x-show="tokenForm.preset === 'custom'">
                   <label class="block text-xs font-medium text-gray-600 mb-1">日数（最大1825日＝5年、それ以上は「無期限」を選択）</label>
@@ -256,6 +259,9 @@
                     <option value="limited">台数指定</option>
                     <option value="unlimited">無制限</option>
                   </select>
+                  <p x-show="tokenForm.devicesPreset === 'unlimited'" class="text-xs text-gray-400 mt-1 max-w-[16rem]">
+                    ※「無制限」は数学的な無限ではなく、20億台（2,000,000,000台）までの上限として登録されます
+                  </p>
                 </div>
                 <div x-show="tokenForm.devicesPreset === 'limited'">
                   <label class="block text-xs font-medium text-gray-600 mb-1">台数（最大10000台、それ以上は「無制限」を選択）</label>
@@ -296,12 +302,14 @@
                         @click="toggleTokenDevices(t.id)">
                       <td class="px-4 py-3 text-gray-400 text-xs select-none"
                           x-text="expandedToken === t.id ? '▾' : '▸'"></td>
-                      <td class="px-4 py-3 text-sm" x-text="t.max_devices ? (t.max_devices + ' 台') : '無制限'"></td>
+                      <td class="px-4 py-3 text-sm" x-text="t.max_devices ? (t.max_devices + ' 台') : '無制限'"
+                          :title="t.max_devices ? null : '実際の上限: 2,000,000,000台'"></td>
                       <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="t.active_count + ' 台'"></td>
                       <td class="px-4 py-3 text-sm" :class="t.deleted_count > 0 ? 'text-red-500' : 'text-gray-300'"
                           x-text="t.deleted_count + ' 台'"></td>
                       <td class="px-4 py-3 text-sm text-gray-500"
-                          x-text="t.expires_at ? new Date(t.expires_at).toLocaleDateString('ja-JP') : '無期限'"></td>
+                          x-text="t.expires_at ? new Date(t.expires_at).toLocaleDateString('ja-JP') : '無期限'"
+                          :title="t.expires_at ? null : '実際の期限: 2099年12月31日'"></td>
                       <td class="px-4 py-3 text-right" @click.stop>
                         <button x-show="canEdit" @click="revokeToken(t.id)" class="text-red-500 hover:text-red-700 text-xs">失効</button>
                       </td>
