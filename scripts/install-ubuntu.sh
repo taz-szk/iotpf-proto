@@ -160,6 +160,7 @@ generate_env() {
 
   local influx_token; influx_token=$(openssl rand -hex 32)
   local jwt_secret;   jwt_secret=$(openssl rand -hex 32)
+  local webhook_secret; webhook_secret=$(openssl rand -hex 32)
   local pg_pass;      pg_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local emqx_pass;    emqx_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local emqx_cookie;  emqx_cookie=$(openssl rand -base64 24 | tr -d '+/=')
@@ -188,6 +189,7 @@ INFLUXDB_BUCKET=system
 # EMQX
 EMQX_DASHBOARD_PASSWORD=${emqx_pass}
 EMQX_NODE_COOKIE=${emqx_cookie}
+EMQX_WEBHOOK_SECRET=${webhook_secret}
 
 # MinIO
 MINIO_ROOT_USER=minioadmin
