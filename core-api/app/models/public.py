@@ -32,7 +32,7 @@ class ProvisioningToken(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     token = Column(String(255), nullable=False, unique=True)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    max_devices = Column(Integer, nullable=False, default=100)
+    max_devices = Column(Integer, nullable=True, default=100)  # NULL = 無制限
     registered_count = Column(Integer, nullable=False, default=0)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)

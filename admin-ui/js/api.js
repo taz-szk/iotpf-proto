@@ -2,6 +2,14 @@ const API_BASE = '/api';
 const TOKEN_KEY = 'iot_access_token';
 const REFRESH_KEY = 'iot_refresh_token';
 
+function errorMessage(err, fallback) {
+    const d = err && err.detail;
+    if (typeof d === 'string') return d;
+    if (Array.isArray(d)) return d.map(e => (e && e.msg) || JSON.stringify(e)).join(', ');
+    if (d && typeof d === 'object') return JSON.stringify(d);
+    return fallback;
+}
+
 function getToken() { return localStorage.getItem(TOKEN_KEY); }
 function setTokens(access, refresh) {
     localStorage.setItem(TOKEN_KEY, access);
@@ -26,7 +34,7 @@ async function partialRequest(method, path, body = null) {
     });
     if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(err.detail || 'Request failed');
+        throw new Error(errorMessage(err, 'Request failed'));
     }
     if (resp.status === 204) return null;
     return resp.json();
@@ -46,7 +54,7 @@ async function request(method, path, body = null) {
     if (resp.status === 401) {
         if (path === '/auth/login') {
             const err = await resp.json().catch(() => ({ detail: 'メールアドレスまたはパスワードが正しくありません' }));
-            throw new Error(err.detail || 'メールアドレスまたはパスワードが正しくありません');
+            throw new Error(errorMessage(err, 'メールアドレスまたはパスワードが正しくありません'));
         }
         clearTokens();
         window.location.href = '/admin/';
@@ -54,7 +62,7 @@ async function request(method, path, body = null) {
     }
     if (!resp.ok) {
         const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-        throw new Error(err.detail || 'Request failed');
+        throw new Error(errorMessage(err, 'Request failed'));
     }
     if (resp.status === 204) return null;
     return resp.json();

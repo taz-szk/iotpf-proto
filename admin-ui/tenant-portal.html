@@ -250,12 +250,20 @@
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">台数上限</label>
+                  <select x-model="tokenForm.devicesPreset"
+                          class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="limited">台数指定</option>
+                    <option value="unlimited">無制限</option>
+                  </select>
+                </div>
+                <div x-show="tokenForm.devicesPreset === 'limited'">
+                  <label class="block text-xs font-medium text-gray-600 mb-1">台数</label>
                   <input type="number" x-model.number="tokenForm.max_devices" min="1" max="10000"
                          class="border border-gray-300 rounded px-2 py-1.5 text-sm w-24">
                 </div>
                 <div class="flex gap-2">
                   <button @click="showTokenForm=false" class="border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded text-sm">キャンセル</button>
-                  <button @click="createToken()" :disabled="creatingToken || (tokenForm.preset==='custom' && !tokenForm.custom)"
+                  <button @click="createToken()" :disabled="creatingToken || (tokenForm.preset==='custom' && !tokenForm.custom) || (tokenForm.devicesPreset==='limited' && !tokenForm.max_devices)"
                           class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
                     <span x-show="!creatingToken">発行</span>
                     <span x-show="creatingToken">発行中...</span>
@@ -286,7 +294,7 @@
                         @click="toggleTokenDevices(t.id)">
                       <td class="px-4 py-3 text-gray-400 text-xs select-none"
                           x-text="expandedToken === t.id ? '▾' : '▸'"></td>
-                      <td class="px-4 py-3 text-sm" x-text="t.max_devices + ' 台'"></td>
+                      <td class="px-4 py-3 text-sm" x-text="t.max_devices ? (t.max_devices + ' 台') : '無制限'"></td>
                       <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="t.active_count + ' 台'"></td>
                       <td class="px-4 py-3 text-sm" :class="t.deleted_count > 0 ? 'text-red-500' : 'text-gray-300'"
                           x-text="t.deleted_count + ' 台'"></td>
@@ -897,6 +905,14 @@
 <script>
 const API = '/api/tenant-portal';
 
+function errorMessage(err, fallback) {
+  const d = err && err.detail;
+  if (typeof d === 'string') return d;
+  if (Array.isArray(d)) return d.map(e => (e && e.msg) || JSON.stringify(e)).join(', ');
+  if (d && typeof d === 'object') return JSON.stringify(d);
+  return fallback;
+}
+
 async function portalFetch(method, path, body = null) {
   const opts = { method, credentials: 'include', headers: {} };
   if (body && !(body instanceof FormData)) {
@@ -909,7 +925,7 @@ async function portalFetch(method, path, body = null) {
   if (resp.status === 401) { window.location.href = '/admin/tenant-login.html'; return; }
   if (!resp.ok) {
     const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-    throw new Error(err.detail || 'Request failed');
+    throw new Error(errorMessage(err, 'Request failed'));
   }
   if (resp.status === 204) return null;
   return resp.json();
@@ -983,7 +999,7 @@ function portalApp() {
     // トークン
     tokens: [], newTokenValue: '', creatingToken: false,
     showTokenForm: false,
-    tokenForm: { preset: '365', custom: '', max_devices: 100 },
+    tokenForm: { preset: '365', custom: '', devicesPreset: 'limited', max_devices: 100 },
     expandedToken: null, tokenDevices: [], tokenDevicesLoading: false,
     // アラート
     alertRules: [], sensorKeys: [], sensorKeySelect: '',
@@ -1061,16 +1077,17 @@ function portalApp() {
       const expires_days = this.tokenForm.preset === 'null' ? null
                          : this.tokenForm.preset === 'custom' ? this.tokenForm.custom
                          : parseInt(this.tokenForm.preset);
+      const max_devices = this.tokenForm.devicesPreset === 'unlimited' ? null : this.tokenForm.max_devices;
       try {
         const t = await portalFetch('POST', '/me/tokens', {
-          max_devices: this.tokenForm.max_devices,
+          max_devices,
           expires_days,
         });
         if (t) {
           this.newTokenValue = t.token;
           this.tokens = await portalFetch('GET', '/me/tokens') || [];
           this.showTokenForm = false;
-          this.tokenForm = { preset: '365', custom: '', max_devices: 100 };
+          this.tokenForm = { preset: '365', custom: '', devicesPreset: 'limited', max_devices: 100 };
         }
       } catch(e) { this.error = e.message; } finally { this.creatingToken = false; }
     },

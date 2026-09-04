@@ -3,7 +3,7 @@ import threading
 
 from fastapi import FastAPI
 from app.routers import health, auth, mfa, tenants, provisioning, emqx, provisioning_tokens, alert_rules, emqx_events, firmware, stats, tenant_auth, tenant_mfa, tenant_users, tenant_devices, tenant_grafana, tenant_portal, public_access, platform
-from app.database import migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs
+from app.database import migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs, migrate_provisioning_token_unlimited_devices
 from app.services.emqx_setup import ensure_emqx_rules
 from app.config import settings
 
@@ -23,7 +23,7 @@ def _run_emqx_setup():
 
 @app.on_event("startup")
 def on_startup():
-    for migrate in (migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs):
+    for migrate in (migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs, migrate_provisioning_token_unlimited_devices):
         try:
             migrate()
         except Exception as e:

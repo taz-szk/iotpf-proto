@@ -310,7 +310,7 @@ def reset_user_password(user_id: str, body: PasswordResetBody, payload: dict = D
 _UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 
 class TokenCreate(BaseModel):
-    max_devices: int = Field(default=100, gt=0, le=10000)
+    max_devices: Optional[int] = Field(default=100, gt=0, le=10000)
     expires_days: Optional[int] = Field(default=365, gt=0, le=1825)
 
 

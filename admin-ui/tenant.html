@@ -114,7 +114,7 @@
                     @click="toggleTokenDevices(t.id)">
                   <td class="px-4 py-3 text-gray-400 text-xs select-none"
                       x-text="expandedToken === t.id ? '▾' : '▸'"></td>
-                  <td class="px-4 py-3 text-sm" x-text="t.max_devices + ' 台'"></td>
+                  <td class="px-4 py-3 text-sm" x-text="t.max_devices ? (t.max_devices + ' 台') : '無制限'"></td>
                   <td class="px-4 py-3 text-sm font-medium text-gray-800" x-text="t.active_count + ' 台'"></td>
                   <td class="px-4 py-3 text-sm" :class="t.deleted_count > 0 ? 'text-red-500' : 'text-gray-300'"
                       x-text="t.deleted_count + ' 台'"></td>

@@ -27,14 +27,14 @@ def _parse_uuid(value: str, field_name: str) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid {field_name}")
 
 class TokenCreate(BaseModel):
-    max_devices: int = Field(default=100, gt=0, le=10000)
+    max_devices: Optional[int] = Field(default=100, gt=0, le=10000)
     expires_days: Optional[int] = Field(default=365, gt=0, le=1825)
 
 class TokenOut(BaseModel):
     id: str
     token: str
     tenant_id: str
-    max_devices: int
+    max_devices: Optional[int]
     registered_count: int
     active_count: int = 0
     deleted_count: int = 0
