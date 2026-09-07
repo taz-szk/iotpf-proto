@@ -3,6 +3,7 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
+from app.services.audit import log_audit
 from app.services.auth import verify_token, create_access_token, verify_password
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
@@ -87,6 +88,8 @@ def tenant_totp_activate(body: TotpCode, response: Response, payload: dict = Dep
             {"uid": user_id},
         )
         conn.commit()
+    log_audit("tenant", user_id, payload["email"], "totp_enabled",
+              tenant_id=tenant_id, resource_type="tenant_user", resource_id=payload["email"])
     # Grafana sync（non-fatal）
     try:
         with SessionLocal() as db:
