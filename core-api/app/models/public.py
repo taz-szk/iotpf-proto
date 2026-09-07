@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, func, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 from app.database import Base
 
@@ -53,3 +53,18 @@ class DashboardPanelConfig(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     __table_args__ = (UniqueConstraint("tenant_id", "sensor_key"),)
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+    id            = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    actor_type    = Column(String(20),  nullable=False)
+    actor_id      = Column(UUID(as_uuid=True), nullable=False)
+    actor_email   = Column(String(255), nullable=False)
+    tenant_id     = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True)
+    action        = Column(String(100), nullable=False)
+    resource_type = Column(String(50),  nullable=True)
+    resource_id   = Column(String(255), nullable=True)
+    detail        = Column(JSONB,       nullable=True)
+    ip_address    = Column(String(45),  nullable=True)
+    result        = Column(String(10),  nullable=False, default="success")
+    created_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

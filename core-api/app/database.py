@@ -241,3 +241,33 @@ def migrate_dashboard_panel_configs() -> None:
             )
         """))
         conn.commit()
+
+
+def migrate_create_audit_logs() -> None:
+    """audit_logs テーブルを作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                actor_type    VARCHAR(20)  NOT NULL,
+                actor_id      UUID         NOT NULL,
+                actor_email   VARCHAR(255) NOT NULL,
+                tenant_id     UUID         REFERENCES tenants(id) ON DELETE SET NULL,
+                action        VARCHAR(100) NOT NULL,
+                resource_type VARCHAR(50),
+                resource_id   VARCHAR(255),
+                detail        JSONB,
+                ip_address    VARCHAR(45),
+                result        VARCHAR(10)  NOT NULL DEFAULT 'success',
+                created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_audit_logs_tenant_created
+                ON audit_logs(tenant_id, created_at DESC)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_audit_logs_created
+                ON audit_logs(created_at DESC)
+        """))
+        conn.commit()

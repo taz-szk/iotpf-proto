@@ -3,7 +3,8 @@ import threading
 
 from fastapi import FastAPI
 from app.routers import health, auth, mfa, tenants, provisioning, emqx, provisioning_tokens, alert_rules, emqx_events, firmware, stats, tenant_auth, tenant_mfa, tenant_users, tenant_devices, tenant_grafana, tenant_portal, public_access, platform
-from app.database import migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs
+from app.database import migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs, migrate_create_audit_logs
+from app.services.audit import start_audit_purge_worker
 from app.services.emqx_setup import ensure_emqx_rules
 from app.config import settings
 
@@ -23,13 +24,13 @@ def _run_emqx_setup():
 
 @app.on_event("startup")
 def on_startup():
-    for migrate in (migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs):
+    for migrate in (migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs, migrate_create_audit_logs):
         try:
             migrate()
         except Exception as e:
             print(f"Migration warning: {e}")
-    # EMQX 接続イベントルールを保証 (バックグラウンドで実行)
     threading.Thread(target=_run_emqx_setup, daemon=True).start()
+    start_audit_purge_worker()
 
 app.include_router(health.router)
 app.include_router(auth.router)

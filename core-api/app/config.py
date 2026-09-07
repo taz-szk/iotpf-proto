@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     emqx_webhook_secret: str
     platform_domain: str = "localhost"
     grafana_session_expire_hours: int = 24
+    audit_log_retention_days: int = 365
+    # 環境変数 AUDIT_LOG_RETENTION_DAYS で上書き可
 
     class Config:
         env_file = ".env"
