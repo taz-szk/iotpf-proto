@@ -10,6 +10,7 @@ from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token, hash_password
 from app.services.grafana import ensure_grafana_user_in_org
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/tenants/{tenant_id}/users", tags=["tenant-users"])
 _bearer = HTTPBearer()
@@ -30,7 +31,7 @@ def _get_active_tenant(tenant_id: str):
     return tenant
 
 @router.post("", response_model=TenantUserOut, status_code=status.HTTP_201_CREATED)
-def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depends(_require_platform)):
+def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, payload: dict = Depends(_require_platform)):
     if body.role not in _ROLE_GRAFANA:
         raise HTTPException(status_code=400, detail=f"role must be one of {list(_ROLE_GRAFANA)}")
     tenant_id_str = str(tenant_id)
@@ -59,6 +60,8 @@ def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, _: dict = Depend
             print(f"[create_tenant_user] unexpected error: {e}")
             raise HTTPException(status_code=502, detail="Grafana sync failed; user not created")
 
+    log_audit("platform", payload["sub"], payload["email"], "create_tenant_user",
+              tenant_id=tenant_id_str, resource_type="tenant_user", resource_id=body.email)
     return TenantUserOut(
         id=user_id, email=body.email, role=body.role,
         is_active=True, created_at="",
@@ -116,7 +119,7 @@ def update_tenant_user(tenant_id: UUID, user_id: str, body: UserUpdateBody, _: d
 
 
 @router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tenant_user(tenant_id: UUID, user_id: str, _: dict = Depends(_require_platform)):
+def delete_tenant_user(tenant_id: UUID, user_id: str, payload: dict = Depends(_require_platform)):
     tenant_id_str = str(tenant_id)
     _get_active_tenant(tenant_id_str)
     schema = f"tenant_{tenant_id_str.replace('-', '_')}"
@@ -128,6 +131,8 @@ def delete_tenant_user(tenant_id: UUID, user_id: str, _: dict = Depends(_require
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    log_audit("platform", payload["sub"], payload["email"], "delete_tenant_user",
+              tenant_id=tenant_id_str, resource_type="tenant_user")
 
 
 @router.get("", response_model=list[TenantUserOut])

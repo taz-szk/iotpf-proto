@@ -21,6 +21,7 @@ from app.services.minio_client import (
     upload_firmware,
 )
 from app.config import settings
+from app.services.audit import write_audit_log, log_audit
 
 router = APIRouter()
 _bearer = HTTPBearer()
@@ -69,7 +70,7 @@ async def upload_firmware_release(
     target_model: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
     file: UploadFile = File(...),
-    _: dict = Depends(_require_platform),
+    payload: dict = Depends(_require_platform),
 ):
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     content = await file.read()
@@ -100,6 +101,9 @@ async def upload_firmware_release(
             "checksum": checksum,
             "description": description,
         })
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "upload_firmware", tenant_id=tenant_id,
+                        resource_type="firmware", resource_id=version)
         db.commit()
 
     return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": len(content)}
@@ -133,7 +137,7 @@ def list_firmware(tenant_id: str, _: dict = Depends(_require_platform)):
 
 
 @router.delete("/tenants/{tenant_id}/firmware/{firmware_id}", status_code=status.HTTP_204_NO_CONTENT)
-def deactivate_firmware(tenant_id: str, firmware_id: str, _: dict = Depends(_require_platform)):
+def deactivate_firmware(tenant_id: str, firmware_id: str, payload: dict = Depends(_require_platform)):
     _validate_uuid(firmware_id, "firmware_id")
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
     schema = f"tenant_{schema_suffix}"
@@ -146,6 +150,10 @@ def deactivate_firmware(tenant_id: str, firmware_id: str, _: dict = Depends(_req
         db.commit()
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firmware not found")
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "delete_firmware", tenant_id=tenant_id,
+                        resource_type="firmware", resource_id=firmware_id)
+        db.commit()
 
 
 @router.post("/tenants/{tenant_id}/devices/{device_id}/ota")
@@ -153,7 +161,7 @@ def dispatch_ota_command(
     tenant_id: str,
     device_id: str,
     body: OtaDispatchBody,
-    _: dict = Depends(_require_platform),
+    payload: dict = Depends(_require_platform),
 ):
     _validate_uuid(tenant_id, "tenant_id")
     device_id = _validate_device_id(device_id)
@@ -185,6 +193,10 @@ def dispatch_ota_command(
             INSERT INTO "{schema}".ota_events (firmware_id, device_id)
             VALUES (:firmware_id, :device_id)
         '''), {"firmware_id": firmware_id, "device_id": device_id})
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "ota_send", tenant_id=tenant_id,
+                        resource_type="device", resource_id=device_id,
+                        detail={"firmware_id": firmware_id, "version": row.version})
         db.commit()
 
     return {"status": "dispatched", "device_id": device_id, "firmware_id": firmware_id}

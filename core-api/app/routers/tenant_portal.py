@@ -17,6 +17,7 @@ from app.models.public import AuditLog, ProvisioningToken, Tenant
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
+from app.services.audit import write_audit_log, log_audit
 from app.services.tenant import teardown_tenant
 from app.services.emqx_publisher import publish_ota_command
 from app.services.minio_client import (
@@ -176,6 +177,8 @@ def delete_device(device_id: str, payload: dict = Depends(_require_admin_or_oper
         device_name = row.device_name or device_id
         conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
         conn.commit()
+    log_audit("tenant", payload["sub"], payload["email"], "delete_device",
+              tenant_id=tenant_id, resource_type="device", resource_id=device_id)
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if tenant and tenant.influxdb_org_id:
@@ -235,6 +238,8 @@ def create_user(body: UserCreate, payload: dict = Depends(_require_admin)):
             ensure_grafana_user_in_org(int(tenant.grafana_org_id), body.email, "Viewer", tenant_id)
         except Exception:
             pass
+    log_audit("tenant", payload["sub"], payload["email"], "create_tenant_user",
+              tenant_id=tenant_id, resource_type="tenant_user", resource_id=body.email)
     return {"id": user_id, "email": body.email, "role": body.role, "is_active": True}
 
 
@@ -284,6 +289,8 @@ def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    log_audit("tenant", payload["sub"], payload["email"], "delete_tenant_user",
+              tenant_id=tenant_id, resource_type="tenant_user")
 
 
 class PasswordResetBody(BaseModel):
@@ -358,6 +365,9 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
                        else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
         db.add(token)
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "create_provisioning_token", tenant_id=tenant_id,
+                        resource_type="provisioning_token", resource_id=str(token.id))
         db.commit()
         db.refresh(token)
         return {
@@ -406,6 +416,9 @@ def revoke_token(token_id: str, payload: dict = Depends(_require_admin_or_operat
         if not token:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Token not found")
         token.is_active = False
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "delete_provisioning_token", tenant_id=tenant_id,
+                        resource_type="provisioning_token", resource_id=token_id)
         db.commit()
 
 
@@ -728,6 +741,9 @@ async def upload_firmware_release(
             "minio_key": minio_key, "file_size": len(content),
             "checksum": checksum, "description": description,
         })
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "upload_firmware", tenant_id=tenant_id,
+                        resource_type="firmware", resource_id=version)
         db.commit()
     return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": len(content)}
 
@@ -743,6 +759,10 @@ def deactivate_firmware(firmware_id: str, payload: dict = Depends(_require_admin
         db.commit()
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firmware not found")
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "delete_firmware", tenant_id=tenant_id,
+                        resource_type="firmware", resource_id=firmware_id)
+        db.commit()
 
 
 class _OtaDispatchBody(BaseModel):
@@ -777,6 +797,10 @@ def dispatch_ota(device_id: str, body: _OtaDispatchBody, payload: dict = Depends
             INSERT INTO "{schema}".ota_events (firmware_id, device_id)
             VALUES (:firmware_id, :device_id)
         '''), {"firmware_id": firmware_id, "device_id": device_id})
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "ota_send", tenant_id=tenant_id,
+                        resource_type="device", resource_id=device_id,
+                        detail={"firmware_id": firmware_id, "version": row.version})
         db.commit()
     return {"status": "dispatched", "device_id": device_id, "firmware_id": firmware_id}
 

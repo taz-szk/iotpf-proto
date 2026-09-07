@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.models.public import ProvisioningToken, Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token
+from app.services.audit import write_audit_log
 import uuid, secrets
 
 _UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
@@ -42,7 +43,7 @@ class TokenOut(BaseModel):
     is_active: bool
 
 @router.post("/{tenant_id}/provisioning-tokens", response_model=TokenOut, status_code=201)
-def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depends(_require_platform)):
+def create_provisioning_token(tenant_id: str, body: TokenCreate, payload: dict = Depends(_require_platform)):
     tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
@@ -57,6 +58,9 @@ def create_provisioning_token(tenant_id: str, body: TokenCreate, _: dict = Depen
                        else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )
         db.add(token)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "create_provisioning_token", tenant_id=tenant_id,
+                        resource_type="provisioning_token", resource_id=str(token.id))
         db.commit()
         db.refresh(token)
         return TokenOut(
@@ -120,7 +124,7 @@ def list_token_devices(tenant_id: str, token_id: str, _: dict = Depends(_require
     ]
 
 @router.delete("/{tenant_id}/provisioning-tokens/{token_id}", status_code=204)
-def revoke_provisioning_token(tenant_id: str, token_id: str, _: dict = Depends(_require_platform)):
+def revoke_provisioning_token(tenant_id: str, token_id: str, payload: dict = Depends(_require_platform)):
     tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
     token_uuid = _parse_uuid(token_id, "token_id")
     with SessionLocal() as db:
@@ -131,5 +135,8 @@ def revoke_provisioning_token(tenant_id: str, token_id: str, _: dict = Depends(_
         if not token:
             raise HTTPException(status_code=404, detail="Token not found")
         token.is_active = False
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "delete_provisioning_token", tenant_id=tenant_id,
+                        resource_type="provisioning_token", resource_id=token_id)
         db.commit()
     return

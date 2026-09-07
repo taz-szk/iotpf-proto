@@ -8,6 +8,7 @@ from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token
 from app.services.grafana import retire_device_in_influxdb
+from app.services.audit import log_audit
 
 router = APIRouter(prefix="/tenants/{tenant_id}/devices", tags=["tenant-devices"])
 _bearer = HTTPBearer()
@@ -42,7 +43,7 @@ def _get_active_tenant(tenant_id_str: str):
 
 
 @router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_tenant_device(tenant_id: UUID, device_id: str, _: dict = Depends(_require_platform)):
+def delete_tenant_device(tenant_id: UUID, device_id: str, payload: dict = Depends(_require_platform)):
     tenant_id_str = str(tenant_id)
     tenant = _get_active_tenant(tenant_id_str)
     schema = f"tenant_{tenant_id_str.replace('-', '_')}"
@@ -56,6 +57,8 @@ def delete_tenant_device(tenant_id: UUID, device_id: str, _: dict = Depends(_req
         device_name = row.device_name or device_id
         conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
         conn.commit()
+    log_audit("platform", payload["sub"], payload["email"], "delete_device",
+              tenant_id=tenant_id_str, resource_type="device", resource_id=device_id)
     if tenant.influxdb_org_id:
         retire_device_in_influxdb(tenant.influxdb_org_id, device_name)
 

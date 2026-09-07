@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.services.auth import verify_token
 from app.services.tenant import setup_tenant, teardown_tenant
 from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
+from app.services.audit import write_audit_log
 import time
 import uuid
 
@@ -20,7 +21,7 @@ def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
     return payload
 
 @router.post("", response_model=TenantOut, status_code=status.HTTP_201_CREATED)
-def create_tenant(body: TenantCreate, _: dict = Depends(_require_platform)):
+def create_tenant(body: TenantCreate, payload: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         existing = db.query(Tenant).filter(Tenant.slug == body.slug).first()
         if existing:
@@ -33,6 +34,8 @@ def create_tenant(body: TenantCreate, _: dict = Depends(_require_platform)):
         tenant.influxdb_org_id = org_id
         tenant.influxdb_token = token
         tenant.grafana_org_id = str(grafana_org_id)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "create_tenant", resource_type="tenant", resource_id=body.name)
         db.commit()
         db.refresh(tenant)
         return tenant
@@ -56,7 +59,7 @@ class TenantUpdate(BaseModel):
 
 
 @router.patch("/{tenant_id}", response_model=TenantOut)
-def update_tenant(tenant_id: str, body: TenantUpdate, _: dict = Depends(_require_platform)):
+def update_tenant(tenant_id: str, body: TenantUpdate, payload: dict = Depends(_require_platform)):
     if not body.name.strip():
         raise HTTPException(status_code=400, detail="Name cannot be empty")
     with SessionLocal() as db:
@@ -64,6 +67,8 @@ def update_tenant(tenant_id: str, body: TenantUpdate, _: dict = Depends(_require
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         tenant.name = body.name.strip()
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_tenant", resource_type="tenant", resource_id=tenant.name)
         db.commit()
         db.refresh(tenant)
         return tenant
@@ -74,7 +79,7 @@ class TenantStatusUpdate(BaseModel):
 
 
 @router.delete("/{tenant_id}", status_code=status.HTTP_202_ACCEPTED)
-def delete_tenant(tenant_id: str, background_tasks: BackgroundTasks, _: dict = Depends(_require_platform)):
+def delete_tenant(tenant_id: str, background_tasks: BackgroundTasks, payload: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
@@ -83,15 +88,18 @@ def delete_tenant(tenant_id: str, background_tasks: BackgroundTasks, _: dict = D
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Already being deleted")
         influxdb_org_id = tenant.influxdb_org_id
         grafana_org_id = tenant.grafana_org_id
+        tenant_name = tenant.name
         tenant.status = "deleted"
         tenant.slug = f"{tenant.slug}_del{int(time.time())}"
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "delete_tenant", resource_type="tenant", resource_id=tenant_name)
         db.commit()
     background_tasks.add_task(teardown_tenant, tenant_id, influxdb_org_id, grafana_org_id)
     return {"status": "deletion_queued"}
 
 
 @router.patch("/{tenant_id}/status", response_model=TenantOut)
-def update_tenant_status(tenant_id: str, body: TenantStatusUpdate, _: dict = Depends(_require_platform)):
+def update_tenant_status(tenant_id: str, body: TenantStatusUpdate, payload: dict = Depends(_require_platform)):
     if body.status not in ("active", "suspended"):
         raise HTTPException(status_code=400, detail="status must be 'active' or 'suspended'")
     with SessionLocal() as db:
@@ -99,6 +107,9 @@ def update_tenant_status(tenant_id: str, body: TenantStatusUpdate, _: dict = Dep
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         tenant.status = body.status
+        action = "suspend_tenant" if body.status == "suspended" else "activate_tenant"
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        action, resource_type="tenant", resource_id=tenant.name)
         db.commit()
         db.refresh(tenant)
         return tenant
