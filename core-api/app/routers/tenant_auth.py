@@ -1,9 +1,11 @@
+import uuid as _audit_uuid
 from datetime import timedelta
 from fastapi import APIRouter, Cookie, HTTPException, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from app.schemas.tenant_auth import TenantLoginRequest, TenantLoginResponse
 import secrets as _secrets
+from app.services.audit import log_audit
 from app.services.auth import verify_password, create_access_token, hash_password, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
@@ -45,6 +47,8 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
     if not tenant:
         _equalize_timing(req.password)  # timing equalization
         record_failure(rate_key)
+        log_audit("tenant", str(_audit_uuid.UUID(int=0)), req.email, "login_failure",
+                  result="failure", ip_address=ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if tenant.grafana_org_id is None:
@@ -61,13 +65,19 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
     if not row:
         _equalize_timing(req.password)  # timing equalization
         record_failure(rate_key)
+        log_audit("tenant", str(_audit_uuid.UUID(int=0)), req.email, "login_failure",
+                  tenant_id=str(tenant.id), result="failure", ip_address=ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     if not verify_password(req.password, row.password_hash):
         record_failure(rate_key)
+        log_audit("tenant", str(row.id), row.email, "login_failure",
+                  tenant_id=str(tenant.id), result="failure", ip_address=ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     clear_failures(rate_key)
+    log_audit("tenant", str(row.id), row.email, "login_success",
+              tenant_id=str(tenant.id), ip_address=ip)
 
     # MFA 設定確認
     with SessionLocal() as db:
@@ -129,7 +139,12 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
 
 
 @router.post("/logout")
-def tenant_logout(response: Response):
+def tenant_logout(response: Response, iot_token: str | None = Cookie(default=None)):
+    if iot_token:
+        payload_data = verify_token(iot_token)
+        if payload_data and payload_data.get("type") == "tenant":
+            log_audit("tenant", payload_data["sub"], payload_data["email"], "logout",
+                      tenant_id=payload_data.get("tenant_id"))
     response.delete_cookie(key="iot_token", path="/")
     return {"ok": True}
 
@@ -219,3 +234,5 @@ def change_password(req: ChangePasswordRequest, iot_token: str = Cookie(default=
             {"hash": hash_password(req.new_password), "uid": user_id},
         )
         conn.commit()
+    log_audit("tenant", user_id, payload["email"], "change_password",
+              tenant_id=tenant_id, resource_type="tenant_user", resource_id=payload["email"])

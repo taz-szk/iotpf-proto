@@ -1,8 +1,10 @@
+import uuid as _audit_uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from app.schemas.auth import LoginRequest, TokenOut, LoginOut, RefreshRequest
+from app.services.audit import log_audit, write_audit_log
 from app.services.auth import verify_password, hash_password, create_access_token, create_refresh_token, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.token_blocklist import revoke_jti, is_revoked
@@ -35,8 +37,13 @@ def login(req: LoginRequest, request: Request, response: Response):
         user = db.query(PlatformUser).filter(PlatformUser.email == req.email).first()
     if not user or not user.is_active or not verify_password(req.password, user.password_hash):
         record_failure(rate_key)
+        actor_id = str(user.id) if (user and user.is_active) else str(_audit_uuid.UUID(int=0))
+        actor_email = user.email if (user and user.is_active) else req.email
+        log_audit("platform", actor_id, actor_email, "login_failure",
+                  ip_address=ip, result="failure")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     clear_failures(rate_key)
+    log_audit("platform", str(user.id), user.email, "login_success", ip_address=ip)
 
     # MFA 設定確認
     with SessionLocal() as db:
@@ -127,6 +134,7 @@ def logout(req: LogoutRequest, response: Response):
                 exp = payload.get("exp", 0)
                 ttl = max(0.0, exp - datetime.now(timezone.utc).timestamp())
                 revoke_jti(jti, ttl)
+            log_audit("platform", payload["sub"], payload["email"], "logout")
     response.delete_cookie(key="iot_token", path="/")
 
 
@@ -146,6 +154,8 @@ def change_password(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="現在のパスワードが正しくありません")
         user.password_hash = hash_password(req.new_password)
         user.token_version = user.token_version + 1
+        write_audit_log(db, "platform", str(user.id), user.email, "change_password",
+                        resource_type="platform_user", resource_id=user.email)
         db.commit()
 
 

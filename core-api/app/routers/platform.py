@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from app.models.public import MfaSettings
+from app.services.audit import write_audit_log
 from app.services.auth import verify_token
 from app.database import SessionLocal
 
@@ -31,7 +32,7 @@ def get_mfa_settings(_: dict = Depends(_require_platform)):
 
 
 @router.patch("/mfa-settings")
-def update_mfa_settings(body: MfaSettingsUpdate, _: dict = Depends(_require_platform)):
+def update_mfa_settings(body: MfaSettingsUpdate, payload: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         s = db.query(MfaSettings).filter(MfaSettings.id == 1).first()
         if not s:
@@ -40,6 +41,11 @@ def update_mfa_settings(body: MfaSettingsUpdate, _: dict = Depends(_require_plat
             s.platform_required = body.platform_required
         if body.tenant_required is not None:
             s.tenant_required = body.tenant_required
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "mfa_settings_updated",
+                        resource_type="mfa_settings",
+                        detail={"platform_required": s.platform_required,
+                                "tenant_required": s.tenant_required})
         db.commit()
         db.refresh(s)
         return {"platform_required": s.platform_required, "tenant_required": s.tenant_required}

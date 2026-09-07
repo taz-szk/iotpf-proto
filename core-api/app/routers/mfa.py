@@ -1,7 +1,9 @@
+import uuid as _audit_uuid
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
+from app.services.audit import write_audit_log
 from app.services.auth import verify_token, create_access_token, create_refresh_token, verify_password
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
@@ -67,6 +69,8 @@ def totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_r
             record_failure(rate_key)
             raise HTTPException(status_code=400, detail="Invalid TOTP code")
         user.totp_enabled = True
+        write_audit_log(db, "platform", str(user.id), user.email, "totp_enabled",
+                        resource_type="platform_user", resource_id=user.email)
         db.commit()
         db.refresh(user)
         full = _full_payload(user)
