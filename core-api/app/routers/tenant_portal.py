@@ -8,12 +8,13 @@ from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Optional, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
-from app.models.public import ProvisioningToken, Tenant
+from app.models.public import AuditLog, ProvisioningToken, Tenant
+from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.tenant import teardown_tenant
@@ -903,3 +904,89 @@ def get_sensor_keys(payload: dict = Depends(_require_tenant)):
         ).fetchall()
     device_names = [r.device_name for r in rows if r.device_name]
     return get_tenant_sensor_keys(tenant_row.influxdb_org_id, device_names)
+
+
+# ---------------------------------------------------------------------------
+# 監査ログ
+# ---------------------------------------------------------------------------
+
+@router.get("/audit-logs", response_model=AuditLogListOut)
+def get_tenant_audit_logs(
+    action:  str | None = Query(default=None),
+    from_dt: datetime | None = Query(default=None),
+    to_dt:   datetime | None = Query(default=None),
+    limit:   int = Query(default=50, ge=1, le=100),
+    offset:  int = Query(default=0, ge=0),
+    payload: dict = Depends(_require_admin),
+):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        q = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
+        if action:
+            q = q.filter(AuditLog.action == action)
+        if from_dt:
+            q = q.filter(AuditLog.created_at >= from_dt)
+        if to_dt:
+            q = q.filter(AuditLog.created_at <= to_dt)
+        total = q.count()
+        rows = q.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+        items = [
+            AuditLogOut(
+                id=str(r.id),
+                actor_type=r.actor_type,
+                actor_email=r.actor_email,
+                tenant_id=str(r.tenant_id) if r.tenant_id else None,
+                action=r.action,
+                resource_type=r.resource_type,
+                resource_id=r.resource_id,
+                detail=r.detail,
+                ip_address=r.ip_address,
+                result=r.result,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+    return AuditLogListOut(total=total, items=items)
+
+
+# ---------------------------------------------------------------------------
+# 監査ログ
+# ---------------------------------------------------------------------------
+
+@router.get("/audit-logs", response_model=AuditLogListOut)
+def get_tenant_audit_logs(
+    action:  str | None = Query(default=None),
+    from_dt: datetime | None = Query(default=None),
+    to_dt:   datetime | None = Query(default=None),
+    limit:   int = Query(default=50, ge=1, le=100),
+    offset:  int = Query(default=0, ge=0),
+    payload: dict = Depends(_require_admin),
+):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        q = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
+        if action:
+            q = q.filter(AuditLog.action == action)
+        if from_dt:
+            q = q.filter(AuditLog.created_at >= from_dt)
+        if to_dt:
+            q = q.filter(AuditLog.created_at <= to_dt)
+        total = q.count()
+        rows = q.order_by(AuditLog.created_at.desc()).offset(offset).limit(limit).all()
+        items = [
+            AuditLogOut(
+                id=str(r.id),
+                actor_type=r.actor_type,
+                actor_email=r.actor_email,
+                tenant_id=str(r.tenant_id) if r.tenant_id else None,
+                action=r.action,
+                resource_type=r.resource_type,
+                resource_id=r.resource_id,
+                detail=r.detail,
+                ip_address=r.ip_address,
+                result=r.result,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ]
+    return AuditLogListOut(total=total, items=items)
