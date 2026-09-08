@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, Literal
 from app.services.auth import verify_token
 from app.database import SessionLocal
@@ -18,8 +18,10 @@ def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     return payload
 
+_UUID_RE = r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
+
 def _schema(tenant_id: str) -> str:
-    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', tenant_id.lower()):
+    if not re.fullmatch(_UUID_RE, tenant_id.lower()):
         raise HTTPException(status_code=400, detail="Invalid tenant_id")
     return f"tenant_{tenant_id.replace('-', '_')}"
 
@@ -84,6 +86,13 @@ class AlertRuleCreate(BaseModel):
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
 
+    @field_validator("group_id")
+    @classmethod
+    def _validate_group_id_format(cls, v):
+        if v is not None and not re.fullmatch(_UUID_RE, v.lower()):
+            raise ValueError("group_id must be a valid UUID")
+        return v
+
     @model_validator(mode="after")
     def _validate_exclusive_target(self):
         if self.device_id and self.group_id:
@@ -101,6 +110,13 @@ class AlertRuleUpdate(BaseModel):
     duration_sec: Optional[int] = None
     severity: Optional[Literal["info", "warning", "critical"]] = None
     notify_emails: Optional[list[str]] = None
+
+    @field_validator("group_id")
+    @classmethod
+    def _validate_group_id_format(cls, v):
+        if v is not None and not re.fullmatch(_UUID_RE, v.lower()):
+            raise ValueError("group_id must be a valid UUID")
+        return v
 
     @model_validator(mode="after")
     def _validate_exclusive_target(self):

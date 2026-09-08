@@ -486,6 +486,13 @@ class AlertRuleCreate(BaseModel):
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
 
+    @field_validator("group_id")
+    @classmethod
+    def _validate_group_id_format(cls, v):
+        if v is not None and not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', v.lower()):
+            raise ValueError("group_id must be a valid UUID")
+        return v
+
     @model_validator(mode="after")
     def _validate_exclusive_target(self):
         if self.device_id and self.group_id:
@@ -503,6 +510,13 @@ class AlertRuleUpdate(BaseModel):
     duration_sec: Optional[int] = None
     severity: Optional[Literal["info", "warning", "critical"]] = None
     notify_emails: Optional[list[str]] = None
+
+    @field_validator("group_id")
+    @classmethod
+    def _validate_group_id_format(cls, v):
+        if v is not None and not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', v.lower()):
+            raise ValueError("group_id must be a valid UUID")
+        return v
 
     @model_validator(mode="after")
     def _validate_exclusive_target(self):
