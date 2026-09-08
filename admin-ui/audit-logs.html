@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>監査ログ - IoTAir-X</title>
+  <link rel="stylesheet" href="/admin/static/tailwind.css">
+  <script src="/admin/static/alpine.min.js" defer></script>
+  <script src="/admin/js/api.js?v=10"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- ナビゲーション -->
+  <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="h-8 w-auto">
+    <div class="flex items-center gap-4">
+      <a id="nav-grafana-link" href="#" target="_blank"
+         class="text-sm text-gray-500 hover:text-gray-700 hidden">Grafana</a>
+      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <a href="/admin/audit-logs.html" class="text-sm text-gray-500 hover:text-gray-700">監査ログ</a>
+      <a href="/admin/platform-settings.html" class="text-sm text-gray-500 hover:text-gray-700">設定</a>
+      <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
+    </div>
+  </nav>
+
+  <div x-data="auditLogsApp()" x-init="init()" class="max-w-7xl mx-auto px-6 py-8">
+    <h2 class="text-xl font-semibold text-gray-800 mb-6">監査ログ</h2>
+
+    <!-- フィルター -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">テナント</label>
+          <select x-model="filter.tenant_id"
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">すべて</option>
+            <template x-for="t in tenants" :key="t.id">
+              <option :value="t.id" x-text="t.name"></option>
+            </template>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">アクション</label>
+          <select x-model="filter.action"
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">すべて</option>
+            <option value="login_success">ログイン成功</option>
+            <option value="login_failure">ログイン失敗</option>
+            <option value="logout">ログアウト</option>
+            <option value="create_tenant">テナント作成</option>
+            <option value="delete_tenant">テナント削除</option>
+            <option value="create_device">デバイス作成</option>
+            <option value="delete_device">デバイス削除</option>
+            <option value="upload_firmware">FWアップロード</option>
+            <option value="delete_firmware">FW削除</option>
+            <option value="ota_send">OTA送信</option>
+            <option value="create_provisioning_token">トークン作成</option>
+            <option value="delete_provisioning_token">トークン削除</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">開始日</label>
+          <input type="date" x-model="filter.from_dt"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-gray-600 mb-1">終了日</label>
+          <input type="date" x-model="filter.to_dt"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+        </div>
+      </div>
+      <div class="mt-3 flex justify-end">
+        <button @click="search()"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded text-sm font-medium">
+          検索
+        </button>
+      </div>
+    </div>
+
+    <!-- エラー -->
+    <div x-show="error" class="bg-red-50 border border-red-200 text-red-600 text-sm rounded px-3 py-2 mb-4" x-text="error"></div>
+
+    <!-- テーブル -->
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div x-show="loading" class="text-center py-8 text-gray-400 text-sm">読み込み中...</div>
+      <div x-show="!loading" class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th class="text-left px-4 py-3 font-medium text-gray-600 whitespace-nowrap">日時</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">操作者</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">テナント</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">アクション</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">対象</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">結果</th>
+              <th class="text-left px-4 py-3 font-medium text-gray-600">IP</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100">
+            <template x-if="logs.length === 0">
+              <tr>
+                <td colspan="7" class="text-center py-8 text-gray-400">ログがありません</td>
+              </tr>
+            </template>
+            <template x-for="log in logs" :key="log.id">
+              <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3 whitespace-nowrap text-gray-600 text-xs" x-text="formatDate(log.created_at)"></td>
+                <td class="px-4 py-3 text-gray-700" x-text="log.actor_email"></td>
+                <td class="px-4 py-3 text-gray-600 text-xs" x-text="tenantName(log.tenant_id)"></td>
+                <td class="px-4 py-3">
+                  <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded" x-text="log.action"></span>
+                </td>
+                <td class="px-4 py-3 text-gray-600 text-xs" x-text="log.resource_id || '—'"></td>
+                <td class="px-4 py-3">
+                  <span :class="log.result === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'"
+                        class="text-xs px-2 py-0.5 rounded-full font-medium"
+                        x-text="log.result === 'success' ? '成功' : '失敗'"></span>
+                </td>
+                <td class="px-4 py-3 text-gray-500 text-xs" x-text="log.ip_address || '—'"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- ページネーション -->
+      <div x-show="!loading && total > 0"
+           class="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+        <span class="text-sm text-gray-500">
+          全 <span x-text="total"></span> 件中
+          <span x-text="offset + 1"></span>–<span x-text="Math.min(offset + limit, total)"></span> 件
+        </span>
+        <div class="flex gap-2">
+          <button @click="prevPage()" :disabled="offset === 0"
+                  class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">
+            前へ
+          </button>
+          <button @click="nextPage()" :disabled="offset + limit >= total"
+                  class="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">
+            次へ
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  function auditLogsApp() {
+    return {
+      logs: [],
+      total: 0,
+      loading: false,
+      error: '',
+      offset: 0,
+      limit: 50,
+      tenants: [],
+      filter: { tenant_id: '', action: '', from_dt: '', to_dt: '' },
+
+      async init() {
+        if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+        await this.loadTenants();
+        await this.search();
+        // Grafana ナビリンクを設定
+        api.platform.grafanaOrgId().then(r => {
+          const el = document.getElementById('nav-grafana-link');
+          if (el && r?.grafana_org_id) {
+            el.href = `/grafana/?orgId=${r.grafana_org_id}`;
+            el.classList.remove('hidden');
+          }
+        }).catch(() => {});
+      },
+
+      async loadTenants() {
+        try {
+          this.tenants = await api.get('/tenants');
+        } catch(e) {
+          // テナント一覧取得失敗は無視
+        }
+      },
+
+      tenantName(tenant_id) {
+        if (!tenant_id) return '（PF）';
+        const t = this.tenants.find(t => t.id === tenant_id);
+        return t ? t.name : tenant_id.slice(0, 8) + '…';
+      },
+
+      formatDate(iso) {
+        return new Date(iso).toLocaleString('ja-JP', { timeZoneName: 'short' });
+      },
+
+      async search() {
+        this.offset = 0;
+        await this.load();
+      },
+
+      async load() {
+        this.loading = true;
+        this.error = '';
+        try {
+          const params = new URLSearchParams({ limit: this.limit, offset: this.offset });
+          if (this.filter.tenant_id) params.set('tenant_id', this.filter.tenant_id);
+          if (this.filter.action)    params.set('action',    this.filter.action);
+          if (this.filter.from_dt)   params.set('from_dt',   this.filter.from_dt + 'T00:00:00Z');
+          if (this.filter.to_dt)     params.set('to_dt',     this.filter.to_dt   + 'T23:59:59Z');
+          const data = await api.get('/audit-logs?' + params.toString());
+          this.logs  = data.items;
+          this.total = data.total;
+        } catch(e) {
+          this.error = e.message || '読み込みに失敗しました';
+        } finally {
+          this.loading = false;
+        }
+      },
+
+      async prevPage() { this.offset = Math.max(0, this.offset - this.limit); await this.load(); },
+      async nextPage() { this.offset += this.limit; await this.load(); },
+    };
+  }
+  </script>
+</body>
+</html>
