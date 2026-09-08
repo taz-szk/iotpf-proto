@@ -9,7 +9,7 @@ from enum import Enum
 from typing import Optional, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, Query, UploadFile, status
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
@@ -476,6 +476,7 @@ def revoke_token(token_id: str, payload: dict = Depends(_require_admin_or_operat
 
 class AlertRuleCreate(BaseModel):
     device_id: Optional[str] = None
+    group_id: Optional[str] = None
     sensor_key: str
     condition: Literal["above", "below", "equal", "device_offline"]
     threshold: Optional[float] = None
@@ -485,8 +486,15 @@ class AlertRuleCreate(BaseModel):
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
 
+    @model_validator(mode="after")
+    def _validate_exclusive_target(self):
+        if self.device_id and self.group_id:
+            raise ValueError("device_id and group_id are mutually exclusive")
+        return self
+
 class AlertRuleUpdate(BaseModel):
     device_id: Optional[str] = None
+    group_id: Optional[str] = None
     sensor_key: Optional[str] = None
     condition: Optional[Literal["above", "below", "equal", "device_offline"]] = None
     threshold: Optional[float] = None
@@ -495,6 +503,12 @@ class AlertRuleUpdate(BaseModel):
     duration_sec: Optional[int] = None
     severity: Optional[Literal["info", "warning", "critical"]] = None
     notify_emails: Optional[list[str]] = None
+
+    @model_validator(mode="after")
+    def _validate_exclusive_target(self):
+        if self.device_id and self.group_id:
+            raise ValueError("device_id and group_id are mutually exclusive")
+        return self
 
 
 @router.get("/me/sensor-keys", response_model=list[str])
@@ -551,7 +565,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
     schema = _schema(tenant_id)
     with SessionLocal() as db:
         rows = db.execute(text(f'''
-            SELECT r.id, r.device_id, r.sensor_key, r.condition, r.threshold, r.trigger_mode,
+            SELECT r.id, r.device_id, r.group_id, r.sensor_key, r.condition, r.threshold, r.trigger_mode,
                    r.consecutive_count, r.duration_sec, r.severity, r.notify_emails, r.is_active,
                    MAX(e.triggered_at) AS last_triggered_at
             FROM "{schema}".alert_rules r
@@ -563,6 +577,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
         {
             "id": str(r.id),
             "device_id": r.device_id,
+            "group_id": str(r.group_id) if r.group_id else None,
             "sensor_key": r.sensor_key,
             "condition": r.condition,
             "threshold": float(r.threshold) if r.threshold is not None else None,
@@ -587,12 +602,12 @@ def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_ad
         db.execute(
             text(f'''
                 INSERT INTO "{schema}".alert_rules
-                  (id, device_id, sensor_key, condition, threshold, trigger_mode,
+                  (id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails)
-                VALUES (:id, :did, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
+                VALUES (:id, :did, :gid, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
             ''').bindparams(bindparam("emails", type_=ARRAY(SaString))),
             {
-                "id": rule_id, "did": body.device_id, "sk": body.sensor_key,
+                "id": rule_id, "did": body.device_id, "gid": body.group_id, "sk": body.sensor_key,
                 "cond": body.condition, "thr": body.threshold, "tm": body.trigger_mode,
                 "cc": body.consecutive_count, "ds": body.duration_sec,
                 "sev": body.severity, "emails": list(body.notify_emails),
@@ -610,13 +625,17 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
     _ALLOWED_ALERT_COLS = {"sensor_key", "condition", "threshold", "trigger_mode",
-                           "consecutive_count", "duration_sec", "severity", "device_id"}
+                           "consecutive_count", "duration_sec", "severity", "device_id", "group_id"}
     with SessionLocal() as db:
         row = db.execute(text(f'''
-            SELECT id FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
+            SELECT id, device_id, group_id FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
         '''), {"rid": rule_id}).fetchone()
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+        final_device_id = updates.get("device_id", row.device_id)
+        final_group_id = updates.get("group_id", row.group_id)
+        if final_device_id and final_group_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="device_id and group_id are mutually exclusive")
         set_clauses = ", ".join(
             f"{col} = :{col}" for col in updates if col != "notify_emails" and col in _ALLOWED_ALERT_COLS
         )
@@ -631,12 +650,13 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         db.execute(stmt, params)
         db.commit()
         updated = db.execute(text(f'''
-            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+            SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails, is_active
             FROM "{schema}".alert_rules WHERE id = :rid
         '''), {"rid": rule_id}).fetchone()
     return {
         "id": str(updated.id), "device_id": updated.device_id,
+        "group_id": str(updated.group_id) if updated.group_id else None,
         "sensor_key": updated.sensor_key, "condition": updated.condition,
         "threshold": float(updated.threshold) if updated.threshold is not None else None,
         "trigger_mode": updated.trigger_mode, "consecutive_count": updated.consecutive_count,

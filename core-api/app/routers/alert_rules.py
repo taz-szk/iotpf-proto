@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from typing import Optional, Literal
 from app.services.auth import verify_token
 from app.database import SessionLocal
@@ -74,6 +74,7 @@ def list_sensor_keys(tenant_id: str, _: dict = Depends(_require_platform)):
 
 class AlertRuleCreate(BaseModel):
     device_id: Optional[str] = None
+    group_id: Optional[str] = None
     sensor_key: str
     condition: Literal["above", "below", "equal", "device_offline"]
     threshold: Optional[float] = None
@@ -83,8 +84,15 @@ class AlertRuleCreate(BaseModel):
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
 
+    @model_validator(mode="after")
+    def _validate_exclusive_target(self):
+        if self.device_id and self.group_id:
+            raise ValueError("device_id and group_id are mutually exclusive")
+        return self
+
 class AlertRuleUpdate(BaseModel):
     device_id: Optional[str] = None
+    group_id: Optional[str] = None
     sensor_key: Optional[str] = None
     condition: Optional[Literal["above", "below", "equal", "device_offline"]] = None
     threshold: Optional[float] = None
@@ -94,9 +102,16 @@ class AlertRuleUpdate(BaseModel):
     severity: Optional[Literal["info", "warning", "critical"]] = None
     notify_emails: Optional[list[str]] = None
 
+    @model_validator(mode="after")
+    def _validate_exclusive_target(self):
+        if self.device_id and self.group_id:
+            raise ValueError("device_id and group_id are mutually exclusive")
+        return self
+
 class AlertRuleOut(BaseModel):
     id: str
     device_id: Optional[str]
+    group_id: Optional[str]
     sensor_key: str
     condition: str
     threshold: Optional[float]
@@ -115,12 +130,12 @@ def create_alert_rule(tenant_id: str, body: AlertRuleCreate, _: dict = Depends(_
         db.execute(
             text(f'''
                 INSERT INTO "{schema}".alert_rules
-                  (id, device_id, sensor_key, condition, threshold, trigger_mode,
+                  (id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails)
-                VALUES (:id, :did, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
+                VALUES (:id, :did, :gid, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
             ''').bindparams(bindparam("emails", type_=ARRAY(SaString))),
             {
-                "id": rule_id, "did": body.device_id, "sk": body.sensor_key,
+                "id": rule_id, "did": body.device_id, "gid": body.group_id, "sk": body.sensor_key,
                 "cond": body.condition, "thr": body.threshold, "tm": body.trigger_mode,
                 "cc": body.consecutive_count, "ds": body.duration_sec,
                 "sev": body.severity, "emails": list(body.notify_emails),
@@ -128,7 +143,7 @@ def create_alert_rule(tenant_id: str, body: AlertRuleCreate, _: dict = Depends(_
         )
         db.commit()
     return AlertRuleOut(
-        id=rule_id, device_id=body.device_id, sensor_key=body.sensor_key,
+        id=rule_id, device_id=body.device_id, group_id=body.group_id, sensor_key=body.sensor_key,
         condition=body.condition, threshold=body.threshold,
         trigger_mode=body.trigger_mode, consecutive_count=body.consecutive_count,
         duration_sec=body.duration_sec, severity=body.severity,
@@ -140,12 +155,13 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
     schema = _schema(tenant_id)
     with SessionLocal() as db:
         rows = db.execute(text(f'''
-            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+            SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails, is_active
             FROM "{schema}".alert_rules WHERE is_active = TRUE
         ''')).fetchall()
     return [AlertRuleOut(
-        id=str(r.id), device_id=r.device_id, sensor_key=r.sensor_key,
+        id=str(r.id), device_id=r.device_id, group_id=str(r.group_id) if r.group_id else None,
+        sensor_key=r.sensor_key,
         condition=r.condition, threshold=float(r.threshold) if r.threshold is not None else None,
         trigger_mode=r.trigger_mode, consecutive_count=r.consecutive_count,
         duration_sec=r.duration_sec, severity=r.severity,
@@ -161,12 +177,16 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
         raise HTTPException(status_code=400, detail="No fields to update")
     with SessionLocal() as db:
         row = db.execute(text(f'''
-            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+            SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails, is_active
             FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
         '''), {"rid": rule_id}).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Rule not found")
+        final_device_id = updates.get("device_id", row.device_id)
+        final_group_id = updates.get("group_id", row.group_id)
+        if final_device_id and final_group_id:
+            raise HTTPException(status_code=422, detail="device_id and group_id are mutually exclusive")
         set_clauses = ", ".join(
             f"{col} = :{col}" for col in updates if col != "notify_emails"
         )
@@ -181,12 +201,13 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
         db.execute(stmt, params)
         db.commit()
         updated = db.execute(text(f'''
-            SELECT id, device_id, sensor_key, condition, threshold, trigger_mode,
+            SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
                    consecutive_count, duration_sec, severity, notify_emails, is_active
             FROM "{schema}".alert_rules WHERE id = :rid
         '''), {"rid": rule_id}).fetchone()
     return AlertRuleOut(
-        id=str(updated.id), device_id=updated.device_id, sensor_key=updated.sensor_key,
+        id=str(updated.id), device_id=updated.device_id, group_id=str(updated.group_id) if updated.group_id else None,
+        sensor_key=updated.sensor_key,
         condition=updated.condition, threshold=float(updated.threshold) if updated.threshold is not None else None,
         trigger_mode=updated.trigger_mode, consecutive_count=updated.consecutive_count,
         duration_sec=updated.duration_sec, severity=updated.severity,
