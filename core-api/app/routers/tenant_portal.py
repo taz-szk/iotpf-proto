@@ -15,9 +15,19 @@ from sqlalchemy import text, bindparam, ARRAY, String as SaString
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
 from app.schemas.audit import AuditLogListOut, AuditLogOut
+from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import write_audit_log, log_audit
+from app.services.device_groups import (
+    GroupInUseError,
+    GroupNameConflictError,
+    GroupNotFoundError,
+    create_group,
+    delete_group,
+    list_groups,
+    update_group,
+)
 from app.services.tenant import teardown_tenant
 from app.services.emqx_publisher import publish_ota_command
 from app.services.minio_client import (
@@ -972,3 +982,53 @@ def get_tenant_audit_logs(
             for r in rows
         ]
     return AuditLogListOut(total=total, items=items)
+
+
+# ---------------------------------------------------------------------------
+# デバイスグループ管理
+# ---------------------------------------------------------------------------
+
+@router.get("/me/groups", response_model=list[GroupOut])
+def list_device_groups_portal(payload: dict = Depends(_require_tenant)):
+    return list_groups(_schema(payload["tenant_id"]))
+
+
+@router.post("/me/groups", response_model=GroupOut, status_code=status.HTTP_201_CREATED)
+def create_device_group_portal(body: GroupCreate, payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    try:
+        group = create_group(_schema(tenant_id), body.name, body.description)
+    except GroupNameConflictError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group name already exists")
+    log_audit("tenant", payload["sub"], payload["email"], "create_device_group",
+              tenant_id=tenant_id, resource_type="device_group", resource_id=group["id"],
+              detail={"name": group["name"]})
+    return group
+
+
+@router.patch("/me/groups/{group_id}", response_model=GroupOut)
+def update_device_group_portal(group_id: str, body: GroupUpdate, payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    try:
+        group = update_group(_schema(tenant_id), group_id, body.name, body.description)
+    except GroupNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    except GroupNameConflictError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group name already exists")
+    log_audit("tenant", payload["sub"], payload["email"], "update_device_group",
+              tenant_id=tenant_id, resource_type="device_group", resource_id=group_id,
+              detail=body.model_dump(exclude_none=True))
+    return group
+
+
+@router.delete("/me/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_device_group_portal(group_id: str, payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    try:
+        delete_group(_schema(tenant_id), group_id)
+    except GroupNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    except GroupInUseError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "group_in_use", "alert_rules": e.rules})
+    log_audit("tenant", payload["sub"], payload["email"], "delete_device_group",
+              tenant_id=tenant_id, resource_type="device_group", resource_id=group_id)
