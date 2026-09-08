@@ -841,6 +841,113 @@
             </div>
           </div>
 
+          <!-- ===== 監査ログ（管理者のみ） ===== -->
+          <div x-show="activeTab === 'audit' && isAdmin">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">監査ログ</h3>
+            </div>
+
+            <!-- フィルター -->
+            <div class="bg-white rounded border border-gray-200 p-3 mb-4">
+              <div class="grid grid-cols-3 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">アクション</label>
+                  <select x-model="auditFilter.action"
+                          class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    <option value="">すべて</option>
+                    <option value="login_success">ログイン成功</option>
+                    <option value="login_failure">ログイン失敗</option>
+                    <option value="logout">ログアウト</option>
+                    <option value="change_password">パスワード変更</option>
+                    <option value="totp_enabled">TOTP有効化</option>
+                    <option value="delete_device">デバイス削除</option>
+                    <option value="upload_firmware">FWアップロード</option>
+                    <option value="delete_firmware">FW削除</option>
+                    <option value="ota_send">OTA送信</option>
+                    <option value="create_tenant_user">ユーザー作成</option>
+                    <option value="delete_tenant_user">ユーザー削除</option>
+                    <option value="create_provisioning_token">トークン発行</option>
+                    <option value="delete_provisioning_token">トークン削除</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">開始日</label>
+                  <input type="date" x-model="auditFilter.from_dt"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">終了日</label>
+                  <input type="date" x-model="auditFilter.to_dt"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-amber-500">
+                </div>
+              </div>
+              <div class="mt-2 flex justify-end">
+                <button @click="auditSearch()"
+                        class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-xs font-medium">
+                  検索
+                </button>
+              </div>
+            </div>
+
+            <div x-show="auditError" class="bg-red-50 border border-red-200 text-red-600 text-xs rounded px-3 py-2 mb-3" x-text="auditError"></div>
+
+            <div class="bg-white rounded border border-gray-200 overflow-hidden">
+              <div x-show="auditLoading" class="text-center py-6 text-gray-400 text-sm">読み込み中...</div>
+              <div x-show="!auditLoading" class="overflow-x-auto">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs whitespace-nowrap">日時</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs">操作者</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs">アクション</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs">対象</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs">結果</th>
+                      <th class="text-left px-3 py-2 font-medium text-gray-600 text-xs">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-if="auditLogs.length === 0">
+                      <tr>
+                        <td colspan="6" class="text-center py-6 text-gray-400 text-sm">ログがありません</td>
+                      </tr>
+                    </template>
+                    <template x-for="log in auditLogs" :key="log.id">
+                      <tr class="hover:bg-gray-50">
+                        <td class="px-3 py-2 whitespace-nowrap text-gray-500 text-xs" x-text="formatDate(log.created_at)"></td>
+                        <td class="px-3 py-2 text-gray-700 text-xs" x-text="log.actor_email"></td>
+                        <td class="px-3 py-2">
+                          <span class="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded" x-text="log.action"></span>
+                        </td>
+                        <td class="px-3 py-2 text-gray-500 text-xs" x-text="log.resource_id || '—'"></td>
+                        <td class="px-3 py-2">
+                          <span :class="log.result === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'"
+                                class="text-xs px-1.5 py-0.5 rounded-full font-medium"
+                                x-text="log.result === 'success' ? '成功' : '失敗'"></span>
+                        </td>
+                        <td class="px-3 py-2 text-gray-400 text-xs" x-text="log.ip_address || '—'"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- ページネーション -->
+              <div x-show="!auditLoading && auditTotal > 0"
+                   class="flex items-center justify-between px-3 py-2 border-t border-gray-200">
+                <span class="text-xs text-gray-400">
+                  全 <span x-text="auditTotal"></span> 件中
+                  <span x-text="auditOffset + 1"></span>–<span x-text="Math.min(auditOffset + auditLimit, auditTotal)"></span> 件
+                </span>
+                <div class="flex gap-2">
+                  <button @click="auditPrev()" :disabled="auditOffset === 0"
+                          class="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">前へ</button>
+                  <button @click="auditNext()" :disabled="auditOffset + auditLimit >= auditTotal"
+                          class="px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-40">次へ</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <!-- ===== テナント削除（管理者のみ） ===== -->
           <div x-show="activeTab === 'danger' && isAdmin">
             <div class="bg-red-50 border border-red-200 rounded p-6">
@@ -935,6 +1042,7 @@ function portalApp() {
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
+        base.push({ id: 'audit', label: '監査ログ', icon: '📋' });
         base.push({ id: 'danger', label: 'テナント削除', icon: '⚠' });
       }
       return base;
@@ -1009,6 +1117,40 @@ function portalApp() {
     panelConfigSaving: false,
     panelConfigError: '',
     knownSensorKeys: [],
+    // ===== 監査ログ =====
+    auditLogs: [],
+    auditTotal: 0,
+    auditOffset: 0,
+    auditLimit: 50,
+    auditLoading: false,
+    auditError: '',
+    auditFilter: { action: '', from_dt: '', to_dt: '' },
+
+    formatDate(iso) {
+      return new Date(iso).toLocaleString('ja-JP', { timeZoneName: 'short' });
+    },
+
+    async loadAuditLogs() {
+      this.auditLoading = true;
+      this.auditError = '';
+      try {
+        const params = new URLSearchParams({ limit: this.auditLimit, offset: this.auditOffset });
+        if (this.auditFilter.action)  params.set('action',  this.auditFilter.action);
+        if (this.auditFilter.from_dt) params.set('from_dt', this.auditFilter.from_dt + 'T00:00:00Z');
+        if (this.auditFilter.to_dt)   params.set('to_dt',   this.auditFilter.to_dt   + 'T23:59:59Z');
+        const data = await portalFetch('GET', '/audit-logs?' + params.toString());
+        this.auditLogs  = data.items;
+        this.auditTotal = data.total;
+      } catch(e) {
+        this.auditError = e.message || '読み込みに失敗しました';
+      } finally {
+        this.auditLoading = false;
+      }
+    },
+
+    async auditSearch() { this.auditOffset = 0; await this.loadAuditLogs(); },
+    async auditPrev()   { this.auditOffset = Math.max(0, this.auditOffset - this.auditLimit); await this.loadAuditLogs(); },
+    async auditNext()   { this.auditOffset += this.auditLimit; await this.loadAuditLogs(); },
 
     async init() {
       try {
@@ -1037,6 +1179,7 @@ function portalApp() {
       this.error = '';
       if (tab === 'firmware') await this.loadFirmware();
       if (tab === 'users')    await this.loadUsers();
+      if (tab === 'audit')    await this.loadAuditLogs();
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
