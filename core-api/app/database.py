@@ -36,6 +36,15 @@ def create_tenant_schema(tenant_id: str) -> None:
             )
         '''))
         conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".device_groups (
+                id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                name        VARCHAR(100) NOT NULL,
+                description TEXT,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                UNIQUE (name)
+            )
+        '''))
+        conn.execute(text(f'''
             CREATE TABLE IF NOT EXISTS "{schema}".devices (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                 device_id VARCHAR(255) NOT NULL UNIQUE,
@@ -47,6 +56,7 @@ def create_tenant_schema(tenant_id: str) -> None:
                     CHECK (connection_status IN (\'online\', \'offline\', \'unknown\')),
                 last_seen_at TIMESTAMPTZ,
                 fw_version VARCHAR(100),
+                group_id UUID REFERENCES "{schema}".device_groups(id) ON DELETE SET NULL,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
         '''))
@@ -54,6 +64,7 @@ def create_tenant_schema(tenant_id: str) -> None:
             CREATE TABLE IF NOT EXISTS "{schema}".alert_rules (
                 id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
                 device_id VARCHAR(255),
+                group_id UUID,
                 sensor_key VARCHAR(255) NOT NULL,
                 condition VARCHAR(20) NOT NULL
                     CHECK (condition IN (\'above\', \'below\', \'equal\', \'device_offline\')),
@@ -83,6 +94,14 @@ def create_tenant_schema(tenant_id: str) -> None:
         conn.execute(text(f'''
             CREATE INDEX IF NOT EXISTS idx_alert_rules_device
             ON "{schema}".alert_rules(device_id) WHERE device_id IS NOT NULL
+        '''))
+        conn.execute(text(f'''
+            CREATE INDEX IF NOT EXISTS idx_devices_group
+            ON "{schema}".devices(group_id) WHERE group_id IS NOT NULL
+        '''))
+        conn.execute(text(f'''
+            CREATE INDEX IF NOT EXISTS idx_alert_rules_group
+            ON "{schema}".alert_rules(group_id) WHERE group_id IS NOT NULL
         '''))
         conn.execute(text(f'''
             CREATE INDEX IF NOT EXISTS idx_alert_events_rule
@@ -226,6 +245,42 @@ def migrate_totp_columns() -> None:
             conn.commit()
 
 
+def migrate_device_groups() -> None:
+    """既存テナントに device_groups テーブルと devices/alert_rules の group_id 列を追加する（べき等）。"""
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM tenants WHERE status != 'deleted'")).fetchall()
+    for row in rows:
+        schema = f"tenant_{str(row.id).replace('-', '_')}"
+        with engine.connect() as conn:
+            conn.execute(text(f'''
+                CREATE TABLE IF NOT EXISTS "{schema}".device_groups (
+                    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                    name        VARCHAR(100) NOT NULL,
+                    description TEXT,
+                    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE (name)
+                )
+            '''))
+            conn.execute(text(f'''
+                ALTER TABLE "{schema}".devices
+                ADD COLUMN IF NOT EXISTS group_id UUID
+                REFERENCES "{schema}".device_groups(id) ON DELETE SET NULL
+            '''))
+            conn.execute(text(f'''
+                ALTER TABLE "{schema}".alert_rules
+                ADD COLUMN IF NOT EXISTS group_id UUID
+            '''))
+            conn.execute(text(f'''
+                CREATE INDEX IF NOT EXISTS idx_devices_group
+                ON "{schema}".devices(group_id) WHERE group_id IS NOT NULL
+            '''))
+            conn.execute(text(f'''
+                CREATE INDEX IF NOT EXISTS idx_alert_rules_group
+                ON "{schema}".alert_rules(group_id) WHERE group_id IS NOT NULL
+            '''))
+            conn.commit()
+
+
 def migrate_dashboard_panel_configs() -> None:
     """dashboard_panel_configs テーブルを作成する（べき等）。"""
     with engine.connect() as conn:
@@ -239,6 +294,32 @@ def migrate_dashboard_panel_configs() -> None:
                 updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
                 UNIQUE (tenant_id, sensor_key)
             )
+        """))
+        conn.commit()
+
+
+def migrate_dashboard_panel_config_group_id() -> None:
+    """dashboard_panel_configs に group_id 列を追加し、UNIQUE制約を group_id 込みに張り替える（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE dashboard_panel_configs
+            ADD COLUMN IF NOT EXISTS group_id UUID
+        """))
+        conn.execute(text("""
+            ALTER TABLE dashboard_panel_configs
+            DROP CONSTRAINT IF EXISTS dashboard_panel_configs_tenant_id_sensor_key_key
+        """))
+        conn.execute(text("""
+            DO $$
+            BEGIN
+              IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint WHERE conname = 'dashboard_panel_configs_tenant_group_sensor_key_key'
+              ) THEN
+                ALTER TABLE dashboard_panel_configs
+                ADD CONSTRAINT dashboard_panel_configs_tenant_group_sensor_key_key
+                UNIQUE (tenant_id, group_id, sensor_key);
+              END IF;
+            END $$;
         """))
         conn.commit()
 
