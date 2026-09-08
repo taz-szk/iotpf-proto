@@ -20,9 +20,11 @@ from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import write_audit_log, log_audit
 from app.services.device_groups import (
+    DeviceNotFoundError,
     GroupInUseError,
     GroupNameConflictError,
     GroupNotFoundError,
+    assign_device_group,
     create_group,
     delete_group,
     list_groups,
@@ -153,7 +155,7 @@ def list_devices(payload: dict = Depends(_require_tenant)):
     with engine.connect() as conn:
         rows = conn.execute(text(f'''
             SELECT id, device_id, device_name, connection_status, last_seen_at,
-                   fw_version, cert_not_after, created_at
+                   fw_version, cert_not_after, created_at, group_id
             FROM "{schema}".devices
             ORDER BY created_at DESC
             LIMIT 1000
@@ -168,6 +170,7 @@ def list_devices(payload: dict = Depends(_require_tenant)):
             "fw_version": r.fw_version,
             "cert_not_after": r.cert_not_after.isoformat() if r.cert_not_after else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
+            "group_id": str(r.group_id) if r.group_id else None,
         }
         for r in rows
     ]
@@ -193,6 +196,40 @@ def delete_device(device_id: str, payload: dict = Depends(_require_admin_or_oper
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if tenant and tenant.influxdb_org_id:
         retire_device_in_influxdb(tenant.influxdb_org_id, device_name)
+
+
+class DeviceUpdateBody(BaseModel):
+    group_id: Optional[str] = None
+
+
+@router.patch("/me/devices/{device_id}")
+def update_device(device_id: str, body: DeviceUpdateBody, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    schema = _schema(tenant_id)
+    try:
+        old_group_id = assign_device_group(schema, device_id, body.group_id)
+    except DeviceNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+    except GroupNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+    log_audit("tenant", payload["sub"], payload["email"], "assign_device_group",
+              tenant_id=tenant_id, resource_type="device", resource_id=device_id,
+              detail={"old_group_id": old_group_id, "new_group_id": body.group_id})
+    with engine.connect() as conn:
+        row = conn.execute(text(f'''
+            SELECT id, device_id, device_name, connection_status, last_seen_at,
+                   fw_version, cert_not_after, created_at, group_id
+            FROM "{schema}".devices WHERE device_id = :did
+        '''), {"did": device_id}).fetchone()
+    return {
+        "id": str(row.id), "device_id": row.device_id, "device_name": row.device_name or row.device_id,
+        "connection_status": row.connection_status,
+        "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+        "fw_version": row.fw_version,
+        "cert_not_after": row.cert_not_after.isoformat() if row.cert_not_after else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "group_id": str(row.group_id) if row.group_id else None,
+    }
 
 
 # ---------------------------------------------------------------------------
