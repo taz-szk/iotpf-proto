@@ -6,7 +6,7 @@
   <title>監査ログ - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=10"></script>
+  <script src="/admin/js/api.js?v=11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -47,9 +47,16 @@
             <option value="login_success">ログイン成功</option>
             <option value="login_failure">ログイン失敗</option>
             <option value="logout">ログアウト</option>
+            <option value="change_password">パスワード変更</option>
+            <option value="totp_enabled">TOTP有効化</option>
+            <option value="mfa_settings_updated">MFA設定変更</option>
             <option value="create_tenant">テナント作成</option>
+            <option value="update_tenant">テナント更新</option>
             <option value="delete_tenant">テナント削除</option>
-            <option value="create_device">デバイス作成</option>
+            <option value="suspend_tenant">テナント停止</option>
+            <option value="activate_tenant">テナント有効化</option>
+            <option value="create_tenant_user">ユーザー作成</option>
+            <option value="delete_tenant_user">ユーザー削除</option>
             <option value="delete_device">デバイス削除</option>
             <option value="upload_firmware">FWアップロード</option>
             <option value="delete_firmware">FW削除</option>
@@ -172,7 +179,7 @@
 
       async loadTenants() {
         try {
-          this.tenants = await api.get('/tenants');
+          this.tenants = await api.tenants.list();
         } catch(e) {
           // テナント一覧取得失敗は無視
         }
@@ -202,7 +209,7 @@
           if (this.filter.action)    params.set('action',    this.filter.action);
           if (this.filter.from_dt)   params.set('from_dt',   this.filter.from_dt + 'T00:00:00Z');
           if (this.filter.to_dt)     params.set('to_dt',     this.filter.to_dt   + 'T23:59:59Z');
-          const data = await api.get('/audit-logs?' + params.toString());
+          const data = await api.request('GET', '/audit-logs?' + params.toString());
           this.logs  = data.items;
           this.total = data.total;
         } catch(e) {
