@@ -244,8 +244,26 @@ def migrate_dashboard_panel_configs() -> None:
 
 
 def migrate_create_audit_logs() -> None:
-    """audit_logs テーブルを作成する（べき等）。"""
+    """audit_logs テーブルを作成する（べき等）。
+
+    postgres/init/01_schema.sql が旧スキーマ（actor_email/detail/created_at 列が
+    存在しない非互換な audit_logs）を作成済みの DB では、CREATE TABLE IF NOT EXISTS
+    が無言でスキップされてしまうため、旧スキーマを検出したら先にDROPする。
+    """
     with engine.connect() as conn:
+        conn.execute(text("""
+            DO $$
+            BEGIN
+              IF EXISTS (SELECT 1 FROM information_schema.tables
+                         WHERE table_schema = 'public' AND table_name = 'audit_logs')
+                 AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+                                 WHERE table_schema = 'public' AND table_name = 'audit_logs'
+                                   AND column_name = 'actor_email')
+              THEN
+                DROP TABLE audit_logs CASCADE;
+              END IF;
+            END $$;
+        """))
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS audit_logs (
                 id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),

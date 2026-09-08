@@ -68,20 +68,9 @@ CREATE TABLE IF NOT EXISTS tenant_usage_daily (
     UNIQUE (tenant_id, date)
 );
 
--- 監査ログ
-CREATE TABLE IF NOT EXISTS audit_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    tenant_id UUID REFERENCES tenants(id) ON DELETE SET NULL,
-    actor_id UUID,
-    actor_type VARCHAR(20) NOT NULL CHECK (actor_type IN ('platform_user', 'tenant_user', 'device', 'system')),
-    action VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(100),
-    resource_id UUID,
-    result VARCHAR(20) NOT NULL CHECK (result IN ('success', 'denied', 'error')),
-    ip_address INET,
-    metadata JSONB,
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- 監査ログ（audit_logs テーブルは core-api の migrate_create_audit_logs() が
+-- app/models/public.py の AuditLog モデルに合わせて作成する。旧スキーマ定義は
+-- 実際のモデルと非互換だったため削除した）
 
 -- MFA グローバル設定（常に1行）
 CREATE TABLE IF NOT EXISTS mfa_settings (
@@ -96,5 +85,4 @@ ON CONFLICT (id) DO NOTHING;
 
 -- インデックス
 CREATE INDEX idx_provisioning_tokens_token ON provisioning_tokens(token) WHERE is_active = TRUE;
-CREATE INDEX idx_audit_logs_tenant_id ON audit_logs(tenant_id, occurred_at DESC);
 CREATE INDEX idx_tenant_usage_stats_tenant_period ON tenant_usage_stats(tenant_id, period);
