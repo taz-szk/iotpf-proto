@@ -1,9 +1,9 @@
 import uuid as _audit_uuid
 from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from app.services.audit import write_audit_log
+from app.services.audit import log_audit, write_audit_log
 from app.services.auth import verify_token, create_access_token, create_refresh_token, verify_password
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
@@ -93,7 +93,8 @@ def totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_r
 
 
 @router.post("/verify")
-def totp_verify(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_platform)):
+def totp_verify(body: TotpCode, response: Response, request: Request, payload: dict = Depends(_require_partial_platform)):
+    ip = request.client.host if request.client else "unknown"
     rate_key = f"totp:{payload['sub']}"
     if is_rate_limited(rate_key):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
@@ -104,9 +105,12 @@ def totp_verify(body: TotpCode, response: Response, payload: dict = Depends(_req
             raise HTTPException(status_code=400, detail="TOTP not configured")
         if not verify_totp_code(user.totp_secret, body.code):
             record_failure(rate_key)
+            log_audit("platform", payload["sub"], payload["email"], "login_failure",
+                      ip_address=ip, result="failure")
             raise HTTPException(status_code=400, detail="Invalid TOTP code")
         full = _full_payload(user)
     clear_failures(rate_key)
+    log_audit("platform", str(user.id), user.email, "login_success", ip_address=ip)
     from app.services.grafana import ensure_platform_admin_in_grafana
     try:
         ensure_platform_admin_in_grafana(user.email)
@@ -136,4 +140,6 @@ def totp_disable(body: DisableTotpRequest, creds: HTTPAuthorizationCredentials =
         user.totp_enabled = False
         user.totp_secret = None
         user.token_version = user.token_version + 1
+        write_audit_log(db, "platform", str(user.id), user.email, "totp_disabled",
+                        resource_type="platform_user", resource_id=user.email)
         db.commit()

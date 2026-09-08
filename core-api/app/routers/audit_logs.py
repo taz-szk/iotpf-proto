@@ -1,12 +1,14 @@
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import func
 
 from app.database import SessionLocal
-from app.models.public import AuditLog, Tenant
+from app.models.public import AuditLog
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.services.auth import verify_token
+
+_UUID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}')
 
 router = APIRouter(prefix="/audit-logs", tags=["audit-logs"])
 _bearer = HTTPBearer()
@@ -27,8 +29,10 @@ def list_audit_logs(
     to_dt:     datetime | None = Query(default=None),
     limit:     int = Query(default=50, ge=1, le=100),
     offset:    int = Query(default=0, ge=0),
-    _: dict = Depends(_require_platform),
+    payload: dict = Depends(_require_platform),
 ):
+    if tenant_id and not _UUID_RE.fullmatch(tenant_id.lower()):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid tenant_id")
     with SessionLocal() as db:
         q = db.query(AuditLog)
         if tenant_id:

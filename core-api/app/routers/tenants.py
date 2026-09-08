@@ -35,7 +35,7 @@ def create_tenant(body: TenantCreate, payload: dict = Depends(_require_platform)
         tenant.influxdb_token = token
         tenant.grafana_org_id = str(grafana_org_id)
         write_audit_log(db, "platform", payload["sub"], payload["email"],
-                        "create_tenant", resource_type="tenant", resource_id=body.name)
+                        "create_tenant", tenant_id=tenant_id, resource_type="tenant", resource_id=body.name)
         db.commit()
         db.refresh(tenant)
         return tenant
@@ -68,7 +68,7 @@ def update_tenant(tenant_id: str, body: TenantUpdate, payload: dict = Depends(_r
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         tenant.name = body.name.strip()
         write_audit_log(db, "platform", payload["sub"], payload["email"],
-                        "update_tenant", resource_type="tenant", resource_id=tenant.name)
+                        "update_tenant", tenant_id=tenant_id, resource_type="tenant", resource_id=tenant.name)
         db.commit()
         db.refresh(tenant)
         return tenant
@@ -92,7 +92,7 @@ def delete_tenant(tenant_id: str, background_tasks: BackgroundTasks, payload: di
         tenant.status = "deleted"
         tenant.slug = f"{tenant.slug}_del{int(time.time())}"
         write_audit_log(db, "platform", payload["sub"], payload["email"],
-                        "delete_tenant", resource_type="tenant", resource_id=tenant_name)
+                        "delete_tenant", tenant_id=tenant_id, resource_type="tenant", resource_id=tenant_name)
         db.commit()
     background_tasks.add_task(teardown_tenant, tenant_id, influxdb_org_id, grafana_org_id)
     return {"status": "deletion_queued"}
@@ -109,7 +109,7 @@ def update_tenant_status(tenant_id: str, body: TenantStatusUpdate, payload: dict
         tenant.status = body.status
         action = "suspend_tenant" if body.status == "suspended" else "activate_tenant"
         write_audit_log(db, "platform", payload["sub"], payload["email"],
-                        action, resource_type="tenant", resource_id=tenant.name)
+                        action, tenant_id=tenant_id, resource_type="tenant", resource_id=tenant.name)
         db.commit()
         db.refresh(tenant)
         return tenant

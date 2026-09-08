@@ -1,5 +1,5 @@
 from datetime import timedelta
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -121,7 +121,8 @@ def tenant_totp_activate(body: TotpCode, response: Response, payload: dict = Dep
 
 
 @router.post("/verify")
-def tenant_totp_verify(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_tenant)):
+def tenant_totp_verify(body: TotpCode, response: Response, request: Request, payload: dict = Depends(_require_partial_tenant)):
+    ip = request.client.host if request.client else "unknown"
     tenant_id = payload["tenant_id"]
     user_id = payload["sub"]
     schema = _schema(tenant_id)
@@ -133,6 +134,8 @@ def tenant_totp_verify(body: TotpCode, response: Response, payload: dict = Depen
     if not row or not row.totp_enabled or not row.totp_secret:
         raise HTTPException(status_code=400, detail="TOTP not configured")
     if not verify_totp_code(row.totp_secret, body.code):
+        log_audit("tenant", user_id, payload["email"], "login_failure",
+                  tenant_id=tenant_id, result="failure", ip_address=ip)
         raise HTTPException(status_code=400, detail="Invalid TOTP code")
 
     # Grafana sync（non-fatal）
@@ -155,6 +158,8 @@ def tenant_totp_verify(body: TotpCode, response: Response, payload: dict = Depen
         "role": payload["role"],
     }
     _set_tenant_cookie(response, full_payload)
+    log_audit("tenant", user_id, payload["email"], "login_success",
+              tenant_id=tenant_id, ip_address=ip)
     return {
         "status": "ok",
         "user_id": user_id,
@@ -188,3 +193,5 @@ def tenant_totp_disable(body: DisableTotpRequest, iot_token: str = Cookie(defaul
             {"uid": user_id},
         )
         conn.commit()
+    log_audit("tenant", user_id, payload["email"], "totp_disabled",
+              tenant_id=tenant_id, resource_type="tenant_user", resource_id=payload["email"])

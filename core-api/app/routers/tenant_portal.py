@@ -290,7 +290,7 @@ def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
     log_audit("tenant", payload["sub"], payload["email"], "delete_tenant_user",
-              tenant_id=tenant_id, resource_type="tenant_user")
+              tenant_id=tenant_id, resource_type="tenant_user", resource_id=user_id)
 
 
 class PasswordResetBody(BaseModel):

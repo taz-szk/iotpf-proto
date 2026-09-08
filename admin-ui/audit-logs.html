@@ -49,6 +49,7 @@
             <option value="logout">ログアウト</option>
             <option value="change_password">パスワード変更</option>
             <option value="totp_enabled">TOTP有効化</option>
+            <option value="totp_disabled">TOTP無効化</option>
             <option value="mfa_settings_updated">MFA設定変更</option>
             <option value="create_tenant">テナント作成</option>
             <option value="update_tenant">テナント更新</option>
@@ -207,8 +208,8 @@
           const params = new URLSearchParams({ limit: this.limit, offset: this.offset });
           if (this.filter.tenant_id) params.set('tenant_id', this.filter.tenant_id);
           if (this.filter.action)    params.set('action',    this.filter.action);
-          if (this.filter.from_dt)   params.set('from_dt',   this.filter.from_dt + 'T00:00:00Z');
-          if (this.filter.to_dt)     params.set('to_dt',     this.filter.to_dt   + 'T23:59:59Z');
+          if (this.filter.from_dt)   params.set('from_dt',   new Date(this.filter.from_dt + 'T00:00:00').toISOString());
+          if (this.filter.to_dt)     params.set('to_dt',     new Date(this.filter.to_dt   + 'T23:59:59.999').toISOString());
           const data = await api.request('GET', '/audit-logs?' + params.toString());
           this.logs  = data.items;
           this.total = data.total;

@@ -43,7 +43,6 @@ def login(req: LoginRequest, request: Request, response: Response):
                   ip_address=ip, result="failure")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     clear_failures(rate_key)
-    log_audit("platform", str(user.id), user.email, "login_success", ip_address=ip)
 
     # MFA 設定確認
     with SessionLocal() as db:
@@ -83,6 +82,7 @@ def login(req: LoginRequest, request: Request, response: Response):
         httponly=True, secure=True, samesite="lax",
         max_age=settings.grafana_session_expire_hours * 3600, path="/",
     )
+    log_audit("platform", str(user.id), user.email, "login_success", ip_address=ip)
     return LoginOut(
         status="ok",
         access_token=access,

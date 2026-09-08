@@ -860,6 +860,7 @@
                     <option value="logout">ログアウト</option>
                     <option value="change_password">パスワード変更</option>
                     <option value="totp_enabled">TOTP有効化</option>
+                    <option value="totp_disabled">TOTP無効化</option>
                     <option value="delete_device">デバイス削除</option>
                     <option value="upload_firmware">FWアップロード</option>
                     <option value="delete_firmware">FW削除</option>
@@ -1136,8 +1137,8 @@ function portalApp() {
       try {
         const params = new URLSearchParams({ limit: this.auditLimit, offset: this.auditOffset });
         if (this.auditFilter.action)  params.set('action',  this.auditFilter.action);
-        if (this.auditFilter.from_dt) params.set('from_dt', this.auditFilter.from_dt + 'T00:00:00Z');
-        if (this.auditFilter.to_dt)   params.set('to_dt',   this.auditFilter.to_dt   + 'T23:59:59Z');
+        if (this.auditFilter.from_dt) params.set('from_dt', new Date(this.auditFilter.from_dt + 'T00:00:00').toISOString());
+        if (this.auditFilter.to_dt)   params.set('to_dt',   new Date(this.auditFilter.to_dt   + 'T23:59:59.999').toISOString());
         const data = await portalFetch('GET', '/audit-logs?' + params.toString());
         this.auditLogs  = data.items;
         this.auditTotal = data.total;

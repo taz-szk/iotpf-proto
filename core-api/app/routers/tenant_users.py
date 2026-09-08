@@ -132,7 +132,7 @@ def delete_tenant_user(tenant_id: UUID, user_id: str, payload: dict = Depends(_r
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
     log_audit("platform", payload["sub"], payload["email"], "delete_tenant_user",
-              tenant_id=tenant_id_str, resource_type="tenant_user")
+              tenant_id=tenant_id_str, resource_type="tenant_user", resource_id=user_id)
 
 
 @router.get("", response_model=list[TenantUserOut])
