@@ -3,7 +3,7 @@ from unittest.mock import patch, MagicMock
 import io
 
 def _make_jwt_payload():
-    return {"sub": str(uuid.uuid4()), "type": "platform"}
+    return {"sub": str(uuid.uuid4()), "email": "admin@example.com", "type": "platform"}
 
 def test_upload_firmware_endpoint_returns_201(client):
     tenant_id = str(uuid.uuid4())

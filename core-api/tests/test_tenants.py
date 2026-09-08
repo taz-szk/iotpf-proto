@@ -17,7 +17,7 @@ def test_create_tenant_success(client):
 
     with patch("app.routers.tenants.SessionLocal") as mock_session, \
          patch("app.routers.tenants.setup_tenant", return_value=("influx-org-id-001", "influx-token-001", 42)), \
-         patch("app.routers.tenants.verify_token", return_value={"sub": str(uuid.uuid4()), "type": "platform"}):
+         patch("app.routers.tenants.verify_token", return_value={"sub": str(uuid.uuid4()), "email": "admin@example.com", "type": "platform"}):
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
