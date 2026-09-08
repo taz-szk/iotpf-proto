@@ -56,7 +56,8 @@ def totp_setup(payload: dict = Depends(_require_partial_platform)):
 
 
 @router.post("/activate")
-def totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_platform)):
+def totp_activate(body: TotpCode, response: Response, request: Request, payload: dict = Depends(_require_partial_platform)):
+    ip = request.client.host if request.client else "unknown"
     rate_key = f"totp:{payload['sub']}"
     if is_rate_limited(rate_key):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
@@ -89,6 +90,7 @@ def totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_r
         httponly=True, secure=True, samesite="lax",
         max_age=settings.grafana_session_expire_hours * 3600, path="/",
     )
+    log_audit("platform", str(user.id), user.email, "login_success", ip_address=ip)
     return {"access_token": create_access_token(full), "refresh_token": create_refresh_token(full), "token_type": "bearer"}
 
 

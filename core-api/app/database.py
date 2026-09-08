@@ -260,7 +260,7 @@ def migrate_create_audit_logs() -> None:
                                  WHERE table_schema = 'public' AND table_name = 'audit_logs'
                                    AND column_name = 'actor_email')
               THEN
-                DROP TABLE audit_logs CASCADE;
+                DROP TABLE public.audit_logs CASCADE;
               END IF;
             END $$;
         """))

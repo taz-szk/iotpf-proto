@@ -69,7 +69,8 @@ def tenant_totp_setup(payload: dict = Depends(_require_partial_tenant)):
 
 
 @router.post("/activate")
-def tenant_totp_activate(body: TotpCode, response: Response, payload: dict = Depends(_require_partial_tenant)):
+def tenant_totp_activate(body: TotpCode, response: Response, request: Request, payload: dict = Depends(_require_partial_tenant)):
+    ip = request.client.host if request.client else "unknown"
     tenant_id = payload["tenant_id"]
     user_id = payload["sub"]
     schema = _schema(tenant_id)
@@ -110,6 +111,8 @@ def tenant_totp_activate(body: TotpCode, response: Response, payload: dict = Dep
         "role": payload["role"],
     }
     _set_tenant_cookie(response, full_payload)
+    log_audit("tenant", user_id, payload["email"], "login_success",
+              tenant_id=tenant_id, ip_address=ip)
     return {
         "status": "ok",
         "user_id": user_id,

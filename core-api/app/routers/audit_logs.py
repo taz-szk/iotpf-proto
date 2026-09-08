@@ -29,7 +29,7 @@ def list_audit_logs(
     to_dt:     datetime | None = Query(default=None),
     limit:     int = Query(default=50, ge=1, le=100),
     offset:    int = Query(default=0, ge=0),
-    payload: dict = Depends(_require_platform),
+    _: dict = Depends(_require_platform),
 ):
     if tenant_id and not _UUID_RE.fullmatch(tenant_id.lower()):
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid tenant_id")
