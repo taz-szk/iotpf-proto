@@ -160,6 +160,7 @@ generate_env() {
 
   local influx_token; influx_token=$(openssl rand -hex 32)
   local jwt_secret;   jwt_secret=$(openssl rand -hex 32)
+  local webhook_secret; webhook_secret=$(openssl rand -hex 32)
   local pg_pass;      pg_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local emqx_pass;    emqx_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local emqx_cookie;  emqx_cookie=$(openssl rand -base64 24 | tr -d '+/=')
@@ -188,6 +189,7 @@ INFLUXDB_BUCKET=system
 # EMQX
 EMQX_DASHBOARD_PASSWORD=${emqx_pass}
 EMQX_NODE_COOKIE=${emqx_cookie}
+EMQX_WEBHOOK_SECRET=${webhook_secret}
 
 # MinIO
 MINIO_ROOT_USER=minioadmin
@@ -206,7 +208,7 @@ GRAFANA_ADMIN_PASSWORD=${grafana_pass}
 # Core API
 JWT_SECRET=${jwt_secret}
 
-# Platform Admin (initial login at /admin/)
+# Platform Admin (initial login at /iotairx-console/)
 PLATFORM_ADMIN_EMAIL=admin@${PLATFORM_DOMAIN}
 PLATFORM_ADMIN_PASSWORD=${admin_pass}
 
@@ -351,7 +353,7 @@ print_summary() {
   echo -e "${BOLD}${GREEN}║   IoT Platform セットアップ完了               ║${NC}"
   echo -e "${BOLD}${GREEN}╚══════════════════════════════════════════════╝${NC}"
   echo ""
-  echo -e "  ${BOLD}Admin UI${NC}          https://${PLATFORM_DOMAIN}/admin/"
+  echo -e "  ${BOLD}Admin UI${NC}          https://${PLATFORM_DOMAIN}/iotairx-console/"
   echo -e "                    ログイン: ${admin_email} (パスワードは .env の PLATFORM_ADMIN_PASSWORD)"
   echo -e "  ${BOLD}Grafana${NC}           https://${PLATFORM_DOMAIN}/grafana/ (Admin UI ログイン後)"
   echo -e "  ${BOLD}MailHog${NC}           http://localhost:8025"

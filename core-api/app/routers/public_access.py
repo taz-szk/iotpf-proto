@@ -46,6 +46,7 @@ def public_dashboard(token: str):
             "type": "tenant",
             "role": "viewer",
             "tenant_id": tenant_id,
+            "public": True,
         },
         expires_delta=timedelta(hours=_JWT_TTL_HOURS),
     )

@@ -392,9 +392,10 @@ echo -e "${CYAN}
   +---------------------------------------------------------+
   |  IoT Platform is running on AWS!                        |
   +---------------------------------------------------------+
-  Admin / Login  https://${PLATFORM_DOMAIN}/admin/
+  Admin / Login  https://${PLATFORM_DOMAIN}/iotairx-console/
                  ${PLATFORM_ADMIN_EMAIL:-admin@platform.local}
                  (password in .env → PLATFORM_ADMIN_PASSWORD)
+                 (このURLは推測されにくい非公開パスです。他人に共有しないこと)
   Grafana        https://${PLATFORM_DOMAIN}/grafana/
   MQTT (mTLS)    mqtts://${PLATFORM_DOMAIN}:8883
 
@@ -409,7 +410,7 @@ echo -e "${CYAN}
   +---------------------------------------------------------+
 
   Next steps:
-    1. Open https://${PLATFORM_DOMAIN}/admin/ and log in
+    1. Open https://${PLATFORM_DOMAIN}/iotairx-console/ and log in
     2. Create a tenant
     3. Provision your first device using the bootstrap token
 

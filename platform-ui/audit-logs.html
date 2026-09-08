@@ -12,20 +12,21 @@
 
   <!-- ナビゲーション -->
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
-    <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="h-8 w-auto">
+    <div class="flex items-center gap-3">
+      <a href="/iotairx-console/tenants.html" class="text-gray-400 hover:text-gray-600 text-sm">← テナント一覧</a>
+      <span class="text-gray-300">|</span>
+      <h1 class="text-lg font-bold text-gray-800">監査ログ</h1>
+    </div>
     <div class="flex items-center gap-4">
       <a id="nav-grafana-link" href="#" target="_blank"
          class="text-sm text-gray-500 hover:text-gray-700 hidden">Grafana</a>
-      <a href="/admin/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
-      <a href="/admin/audit-logs.html" class="text-sm text-gray-500 hover:text-gray-700">監査ログ</a>
-      <a href="/admin/platform-settings.html" class="text-sm text-gray-500 hover:text-gray-700">設定</a>
+      <a href="/iotairx-console/admin-change-password.html" class="text-sm text-gray-500 hover:text-gray-700">パスワード変更</a>
+      <a href="/iotairx-console/platform-settings.html" class="text-sm text-gray-500 hover:text-gray-700">設定</a>
       <button onclick="api.logout()" class="text-sm text-gray-500 hover:text-gray-700">ログアウト</button>
     </div>
   </nav>
 
   <div x-data="auditLogsApp()" x-init="init()" class="max-w-7xl mx-auto px-6 py-8">
-    <h2 class="text-xl font-semibold text-gray-800 mb-6">監査ログ</h2>
-
     <!-- フィルター -->
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mb-6">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -165,7 +166,7 @@
       filter: { tenant_id: '', action: '', from_dt: '', to_dt: '' },
 
       async init() {
-        if (!api.isLoggedIn()) { window.location.href = '/admin/'; return; }
+        if (!api.isLoggedIn()) { window.location.href = '/iotairx-console/'; return; }
         await this.loadTenants();
         await this.search();
         // Grafana ナビリンクを設定

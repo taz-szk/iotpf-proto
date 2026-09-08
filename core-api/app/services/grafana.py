@@ -2,6 +2,13 @@ import httpx
 import secrets
 from app.config import settings
 
+
+def _flux_string_escape(value: str) -> str:
+    """Flux 文字列リテラル ("...") に埋め込む値をエスケープする。
+    バックスラッシュ・ダブルクォートに加え、Flux の文字列補間構文 ${expr} が
+    評価されないよう $ もエスケープする(順序: バックスラッシュを最初に処理)。"""
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("$", "\\$")
+
 PANEL_DATA_MODE: dict[str, str] = {
     "timeseries":     "timeseries",
     "barchart":       "timeseries",
@@ -351,8 +358,8 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
     new_name = f"Del_{device_name}"
 
     # Flux 文字列リテラル用エスケープ
-    esc_old = device_name.replace("\\", "\\\\").replace('"', '\\"')
-    esc_new = new_name.replace("\\", "\\\\").replace('"', '\\"')
+    esc_old = _flux_string_escape(device_name)
+    esc_new = _flux_string_escape(new_name)
 
     # 1. 全データを新しい device_name でコピー（Flux to() 経由）
     copy_flux = (
@@ -397,7 +404,7 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
         print(f"[retire_device] write marker FAILED: {new_name} err={e}")
 
     # 3. 元の device_name のデータを削除
-    esc_pred = device_name.replace("\\", "\\\\").replace('"', '\\"')
+    esc_pred = _flux_string_escape(device_name)
     try:
         resp = httpx.post(
             f"{settings.influxdb_url}/api/v2/delete"

@@ -84,6 +84,12 @@ void iot_client_destroy(client);
 int iot_provision(client, bootstrap_token, device_id, cert_dir);  /* → 0 / IOT_ERR_* */
 int iot_load_credentials(client, cert_dir);
 
+/* TLS証明書検証は常に有効。api_url が自己署名/プライベートCA(例: ローカル
+ * step-ca環境)の証明書を提示する場合のみ、iot_provision() より前に呼んで
+ * そのCAのルート証明書(PEM)を指定すること。未呼び出し/NULLの場合はシステム
+ * デフォルトのCAバンドルで検証する(Let's Encrypt等の公開CAならこれでよい) */
+int iot_client_set_ca_cert_path(client, ca_cert_path);
+
 /* 接続 */
 int  iot_connect(client);    /* mTLS, subscribes commands topic, publishes "online" */
 void iot_disconnect(client); /* publishes "offline", then disconnects */
@@ -97,7 +103,7 @@ void iot_set_command_callback(client, cb, user_data);
 int  iot_loop(client, timeout_ms);  /* process one message, blocks up to timeout_ms */
 
 /* OTA */
-int iot_ota_download(download_url, output_path, "sha256:..."); /* → 0 / IOT_ERR_OTA */
+int iot_ota_download(download_url, output_path, "sha256:...", ca_cert_path); /* → 0 / IOT_ERR_OTA */
 ```
 
 ## MCU へのポーティング

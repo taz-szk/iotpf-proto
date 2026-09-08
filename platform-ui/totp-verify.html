@@ -22,12 +22,12 @@
       </button>
     </form>
     <p class="mt-4 text-center text-sm">
-      <a href="/admin/" class="text-gray-400 hover:text-gray-600">← ログイン画面に戻る</a>
+      <a href="/iotairx-console/" class="text-gray-400 hover:text-gray-600">← ログイン画面に戻る</a>
     </p>
   </div>
   <script>
     if (!sessionStorage.getItem('iot_partial_token')) {
-      window.location.href = '/admin/';
+      window.location.href = '/iotairx-console/';
     }
     document.getElementById('form').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -38,7 +38,7 @@
         const data = await api.totpPartial.verify(code);
         api.setTokens(data.access_token, data.refresh_token);
         clearPartialToken();
-        window.location.href = '/admin/tenants.html';
+        window.location.href = '/iotairx-console/tenants.html';
       } catch (err) {
         errEl.textContent = err.message || '認証に失敗しました';
         errEl.classList.remove('hidden');

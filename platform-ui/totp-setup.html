@@ -34,7 +34,7 @@
   </div>
   <script>
     if (!sessionStorage.getItem('iot_partial_token')) {
-      window.location.href = '/admin/';
+      window.location.href = '/iotairx-console/';
     }
     (async () => {
       try {
@@ -56,7 +56,7 @@
         const data = await api.totpPartial.activate(code);
         api.setTokens(data.access_token, data.refresh_token);
         clearPartialToken();
-        window.location.href = '/admin/tenants.html';
+        window.location.href = '/iotairx-console/tenants.html';
       } catch (err) {
         errEl.textContent = err.message || '設定に失敗しました';
         errEl.classList.remove('hidden');
