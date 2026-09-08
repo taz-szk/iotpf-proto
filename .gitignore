@@ -41,3 +41,6 @@ iot-platform-migration/
 
 # Admin runbooks (contain direct DB manipulation SQL)
 docs/totp-recovery.md
+
+# Local git worktrees
+.worktrees/
