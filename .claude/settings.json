@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run build:css)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)"
+    ]
+  }
+}
