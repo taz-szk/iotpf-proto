@@ -245,14 +245,15 @@ def dispatch_ota_to_group(
                     "checksum": row.checksum,
                     "file_size": row.file_size,
                 })
-                db.execute(text(f'''
-                    INSERT INTO "{schema}".ota_events (firmware_id, device_id)
-                    VALUES (:firmware_id, :device_id)
-                '''), {"firmware_id": firmware_id, "device_id": device_id})
-                write_audit_log(db, "platform", payload["sub"], payload["email"],
-                                "ota_send", tenant_id=tenant_id,
-                                resource_type="device", resource_id=device_id,
-                                detail={"firmware_id": firmware_id, "version": row.version, "group_id": group_id})
+                with db.begin_nested():
+                    db.execute(text(f'''
+                        INSERT INTO "{schema}".ota_events (firmware_id, device_id)
+                        VALUES (:firmware_id, :device_id)
+                    '''), {"firmware_id": firmware_id, "device_id": device_id})
+                    write_audit_log(db, "platform", payload["sub"], payload["email"],
+                                    "ota_send", tenant_id=tenant_id,
+                                    resource_type="device", resource_id=device_id,
+                                    detail={"firmware_id": firmware_id, "version": row.version, "group_id": group_id})
                 results.append({"device_id": device_id, "status": "dispatched"})
             except Exception as e:
                 results.append({"device_id": device_id, "status": "failed", "error": str(e)})
