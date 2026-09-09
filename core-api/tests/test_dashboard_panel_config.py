@@ -6,6 +6,7 @@ from app.services.auth import create_access_token
 client = TestClient(app)
 
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
+GROUP_ID = "22222222-2222-2222-2222-222222222222"
 
 def _tenant_token(role: str = "admin"):
     return create_access_token({
@@ -62,6 +63,27 @@ def test_get_panel_configs_returns_existing_configs():
 def test_get_panel_configs_requires_auth():
     resp = client.get("/tenant-portal/dashboard/panel-configs")
     assert resp.status_code == 401
+
+def test_get_panel_configs_filters_by_group_id():
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.query.return_value.filter.return_value.all.return_value = [
+            _make_config("temperature", "gauge"),
+        ]
+        resp = client.get(
+            f"/tenant-portal/dashboard/panel-configs?group_id={GROUP_ID}",
+            cookies={"iot_token": _tenant_token("viewer")},
+        )
+    assert resp.status_code == 200
+    filter_call = mock_db.query.return_value.filter.call_args[0]
+    assert any(GROUP_ID in str(cond) or getattr(cond, "right", None) is not None for cond in filter_call)
+
+def test_get_panel_configs_invalid_group_id_returns_422():
+    resp = client.get(
+        "/tenant-portal/dashboard/panel-configs?group_id=not-a-uuid",
+        cookies={"iot_token": _tenant_token("viewer")},
+    )
+    assert resp.status_code == 422
 
 # ─── PUT ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +150,28 @@ def test_put_panel_configs_duplicate_sensor_key():
             {"sensor_key": "temperature", "panel_type": "gauge"},
             {"sensor_key": "temperature", "panel_type": "timeseries"},
         ],
+        cookies={"iot_token": _tenant_token("admin")},
+    )
+    assert resp.status_code == 422
+
+def test_put_panel_configs_with_group_id_does_not_sync_grafana():
+    tenant = _make_tenant()
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl, \
+         patch("app.services.grafana.sync_tenant_dashboard_with_configs") as mock_sync:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        resp = client.put(
+            f"/tenant-portal/dashboard/panel-configs?group_id={GROUP_ID}",
+            json=[{"sensor_key": "temperature", "panel_type": "gauge"}],
+            cookies={"iot_token": _tenant_token("admin")},
+        )
+    assert resp.status_code == 204
+    mock_sync.assert_not_called()
+
+def test_put_panel_configs_invalid_group_id_returns_422():
+    resp = client.put(
+        "/tenant-portal/dashboard/panel-configs?group_id=not-a-uuid",
+        json=[{"sensor_key": "temperature", "panel_type": "gauge"}],
         cookies={"iot_token": _tenant_token("admin")},
     )
     assert resp.status_code == 422

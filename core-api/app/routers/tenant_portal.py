@@ -992,12 +992,15 @@ class PanelConfigItem(BaseModel):
 
 
 @router.get("/dashboard/panel-configs")
-def get_panel_configs(payload: dict = Depends(_require_tenant)):
+def get_panel_configs(group_id: Optional[str] = Query(default=None), payload: dict = Depends(_require_tenant)):
     from app.models.public import DashboardPanelConfig
     tenant_id = payload["tenant_id"]
+    if group_id is not None:
+        group_id = _validate_uuid(group_id, "group_id")
     with SessionLocal() as db:
         rows = db.query(DashboardPanelConfig).filter(
-            DashboardPanelConfig.tenant_id == tenant_id
+            DashboardPanelConfig.tenant_id == tenant_id,
+            DashboardPanelConfig.group_id == group_id,
         ).all()
     return [{"sensor_key": r.sensor_key, "panel_type": r.panel_type} for r in rows]
 
@@ -1005,11 +1008,15 @@ def get_panel_configs(payload: dict = Depends(_require_tenant)):
 @router.put("/dashboard/panel-configs", status_code=204)
 def put_panel_configs(
     items: list[PanelConfigItem],
+    group_id: Optional[str] = Query(default=None),
     payload: dict = Depends(_require_admin_or_operator),
 ):
     from app.models.public import DashboardPanelConfig, Tenant
     from app.services.grafana import sync_tenant_dashboard_with_configs
     tenant_id = payload["tenant_id"]
+
+    if group_id is not None:
+        group_id = _validate_uuid(group_id, "group_id")
 
     # Validate: no duplicate sensor_keys
     sensor_keys = [item.sensor_key for item in items]
@@ -1025,19 +1032,22 @@ def put_panel_configs(
         grafana_org_id = tenant.grafana_org_id
         tenant_name = tenant.name
 
-        # 全件置き換え
+        # 全件置き換え（テナント全体のデフォルト or 指定グループの設定のみ）
         db.query(DashboardPanelConfig).filter(
-            DashboardPanelConfig.tenant_id == tenant_id
+            DashboardPanelConfig.tenant_id == tenant_id,
+            DashboardPanelConfig.group_id == group_id,
         ).delete()
         for item in items:
             db.add(DashboardPanelConfig(
                 tenant_id=tenant_id,
+                group_id=group_id,
                 sensor_key=item.sensor_key,
                 panel_type=item.panel_type.value,
             ))
         db.commit()
 
-    if grafana_org_id:
+    # グループ別設定は Grafana ダッシュボード同期の対象外（テナント全体のデフォルトのみ同期）
+    if grafana_org_id and group_id is None:
         configs = [{"sensor_key": i.sensor_key, "panel_type": i.panel_type.value} for i in items]
         try:
             sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs)
