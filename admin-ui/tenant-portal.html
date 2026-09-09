@@ -373,6 +373,7 @@
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終通信</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">FWバージョン</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">グループ</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
                       <th class="px-4 py-3"></th>
@@ -390,6 +391,17 @@
                         </td>
                         <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.last_seen_at)"></td>
                         <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
+                        <td class="px-4 py-3">
+                          <select x-show="canEdit" :value="d.group_id || ''"
+                                  @change="assignDeviceGroup(d, $event.target.value || null)"
+                                  class="text-xs border border-gray-300 rounded px-1.5 py-1">
+                            <option value="">未所属</option>
+                            <template x-for="g in groups" :key="g.id">
+                              <option :value="g.id" x-text="g.name"></option>
+                            </template>
+                          </select>
+                          <span x-show="!canEdit" class="text-xs text-gray-500" x-text="groupName(d.group_id) || '未所属'"></span>
+                        </td>
                         <td class="px-4 py-3" :class="certClass(d.cert_not_after)"
                             x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
                         <td class="px-4 py-3 text-gray-400" x-text="d.created_at ? new Date(d.created_at).toLocaleDateString('ja-JP') : '-'"></td>
@@ -689,6 +701,64 @@
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ===== グループ管理 ===== -->
+          <div x-show="activeTab === 'groups'">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-medium text-gray-700">デバイスグループ</h3>
+              <button x-show="isAdmin" @click="openGroupForm()"
+                      class="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1.5 rounded text-sm">
+                + グループ追加
+              </button>
+            </div>
+            <div x-show="showGroupForm" class="bg-white rounded border border-gray-200 p-4 mb-4">
+              <p class="text-sm font-medium text-gray-700 mb-3" x-text="editingGroupId ? 'グループ編集' : 'グループ追加'"></p>
+              <div x-show="groupError" class="mb-3 text-sm text-red-600" x-text="groupError"></div>
+              <form @submit.prevent="saveGroup" class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">名前</label>
+                  <input type="text" x-model="groupForm.name" required maxlength="100"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">説明（任意）</label>
+                  <input type="text" x-model="groupForm.description"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div class="col-span-2 flex justify-end gap-2">
+                  <button type="button" @click="closeGroupForm()" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                  <button type="submit" class="bg-amber-500 text-white text-sm px-3 py-1.5 rounded"
+                          x-text="editingGroupId ? '更新' : '作成'"></button>
+                </div>
+              </form>
+            </div>
+            <div class="bg-white rounded shadow-sm border border-gray-200">
+              <div x-show="groups.length === 0" class="py-8 text-center text-gray-400 text-sm">グループがありません</div>
+              <table x-show="groups.length > 0" class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">名前</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">説明</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">作成日</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                  <template x-for="g in groups" :key="g.id">
+                    <tr>
+                      <td class="px-4 py-3 font-medium" x-text="g.name"></td>
+                      <td class="px-4 py-3 text-gray-500" x-text="g.description || '-'"></td>
+                      <td class="px-4 py-3 text-gray-400" x-text="g.created_at ? new Date(g.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                      <td class="px-4 py-3 text-right space-x-3">
+                        <button x-show="isAdmin" @click="editGroup(g)" class="text-amber-600 hover:text-amber-700 text-xs">編集</button>
+                        <button x-show="isAdmin" @click="deleteGroup(g)" class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
             </div>
           </div>
 
@@ -1090,6 +1160,7 @@ function portalApp() {
         { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
         { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
         { id: 'devices',          label: 'デバイス',                 icon: '📡' },
+        { id: 'groups',           label: 'グループ管理',             icon: '📁' },
         { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
         { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
         { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
@@ -1164,6 +1235,9 @@ function portalApp() {
     deletePortalUserId: null,
     // デバイス
     devices: [], devicesLoading: false, _devTimer: null,
+    // グループ管理
+    groups: [], showGroupForm: false, editingGroupId: null,
+    groupForm: { name: '', description: '' }, groupError: '',
     // ダッシュボード設定
     panelConfigs: [],
     newSensorKey: '',
@@ -1179,6 +1253,64 @@ function portalApp() {
     auditLoading: false,
     auditError: '',
     auditFilter: { action: '', from_dt: '', to_dt: '' },
+
+    groupName(id) {
+      const g = this.groups.find(g => g.id === id);
+      return g ? g.name : '';
+    },
+    async loadGroups() {
+      try { this.groups = await portalFetch('GET', '/me/groups') || []; }
+      catch(e) { this.error = e.message; }
+    },
+    openGroupForm() {
+      this.editingGroupId = null;
+      this.groupForm = { name: '', description: '' };
+      this.groupError = '';
+      this.showGroupForm = true;
+    },
+    editGroup(g) {
+      this.editingGroupId = g.id;
+      this.groupForm = { name: g.name, description: g.description || '' };
+      this.groupError = '';
+      this.showGroupForm = true;
+    },
+    closeGroupForm() {
+      this.showGroupForm = false;
+      this.editingGroupId = null;
+      this.groupError = '';
+    },
+    async saveGroup() {
+      this.groupError = '';
+      try {
+        if (this.editingGroupId) {
+          await portalFetch('PATCH', `/me/groups/${this.editingGroupId}`, this.groupForm);
+        } else {
+          await portalFetch('POST', '/me/groups', this.groupForm);
+        }
+        await this.loadGroups();
+        this.closeGroupForm();
+      } catch(e) {
+        this.groupError = e.message || '保存に失敗しました';
+      }
+    },
+    async deleteGroup(g) {
+      if (!confirm(`グループ "${g.name}" を削除しますか？`)) return;
+      try {
+        await portalFetch('DELETE', `/me/groups/${g.id}`);
+        await this.loadGroups();
+      } catch(e) {
+        this.error = 'このグループを削除できませんでした。使用中のアラートルールがある場合は、先にルールの対象を変更してください。';
+      }
+    },
+    async assignDeviceGroup(device, groupId) {
+      try {
+        const updated = await portalFetch('PATCH', `/me/devices/${device.device_id}`, { group_id: groupId });
+        device.group_id = updated.group_id;
+      } catch(e) {
+        this.error = e.message || 'グループ割当に失敗しました';
+        await this.loadDevices();
+      }
+    },
 
     formatDate(iso) {
       return new Date(iso).toLocaleString('ja-JP', { timeZoneName: 'short' });
@@ -1221,6 +1353,7 @@ function portalApp() {
         if (me.grafana_url) this.grafanaUrl = me.grafana_url;
         await this.loadPanelConfigs();
         this.loadSensorKeys();
+        this.loadGroups();
       } catch(e) {
         this.error = e.message;
       } finally {
