@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, Literal
 from app.services.auth import verify_token
+from app.services.device_groups import group_exists
 from app.database import SessionLocal
 from app.models.public import Tenant
 from app.config import settings
@@ -141,6 +142,8 @@ class AlertRuleOut(BaseModel):
 @router.post("/{tenant_id}/alert-rules", response_model=AlertRuleOut, status_code=201)
 def create_alert_rule(tenant_id: str, body: AlertRuleCreate, _: dict = Depends(_require_platform)):
     schema = _schema(tenant_id)
+    if body.group_id is not None and not group_exists(schema, body.group_id):
+        raise HTTPException(status_code=404, detail="Group not found")
     rule_id = str(uuid.uuid4())
     with SessionLocal() as db:
         db.execute(
@@ -188,7 +191,7 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
 @router.patch("/{tenant_id}/alert-rules/{rule_id}", response_model=AlertRuleOut)
 def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: dict = Depends(_require_platform)):
     schema = _schema(tenant_id)
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     with SessionLocal() as db:
@@ -203,6 +206,8 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
         final_group_id = updates.get("group_id", row.group_id)
         if final_device_id and final_group_id:
             raise HTTPException(status_code=422, detail="device_id and group_id are mutually exclusive")
+        if updates.get("group_id") is not None and not group_exists(schema, updates["group_id"]):
+            raise HTTPException(status_code=404, detail="Group not found")
         set_clauses = ", ".join(
             f"{col} = :{col}" for col in updates if col != "notify_emails"
         )

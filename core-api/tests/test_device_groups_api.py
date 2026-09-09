@@ -7,6 +7,7 @@ from app.services.auth import create_access_token
 client = TestClient(app)
 
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
+GROUP_ID = "22222222-2222-2222-2222-222222222222"
 
 
 def _platform_token():
@@ -69,15 +70,47 @@ def test_platform_create_group_duplicate_name_returns_409():
 
 def test_platform_delete_group_in_use_returns_409_with_rules():
     conn = _conn()
-    existing_row = MagicMock(id="g1")
+    existing_row = MagicMock(id=GROUP_ID)
     rule_row = MagicMock(id="r1", sensor_key="temperature", condition="above", severity="warning")
     conn.execute.return_value.fetchone.side_effect = [existing_row]
     conn.execute.return_value.fetchall.return_value = [rule_row]
     with patch("app.services.device_groups.engine") as mock_engine:
         mock_engine.connect.return_value = conn
-        resp = client.delete(f"/tenants/{TENANT_ID}/groups/g1", headers={"Authorization": f"Bearer {_platform_token()}"})
+        resp = client.delete(f"/tenants/{TENANT_ID}/groups/{GROUP_ID}", headers={"Authorization": f"Bearer {_platform_token()}"})
     assert resp.status_code == 409
     assert resp.json()["detail"]["alert_rules"][0]["sensor_key"] == "temperature"
+
+
+def test_platform_update_group_rejects_invalid_group_id_format():
+    resp = client.patch(
+        f"/tenants/{TENANT_ID}/groups/not-a-uuid", json={"name": "拠点B"},
+        headers={"Authorization": f"Bearer {_platform_token()}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_platform_delete_group_rejects_invalid_group_id_format():
+    resp = client.delete(
+        f"/tenants/{TENANT_ID}/groups/not-a-uuid",
+        headers={"Authorization": f"Bearer {_platform_token()}"},
+    )
+    assert resp.status_code == 422
+
+
+def test_portal_update_group_rejects_invalid_group_id_format():
+    resp = client.patch(
+        "/tenant-portal/me/groups/not-a-uuid", json={"name": "拠点B"},
+        cookies={"iot_token": _tenant_token("admin")},
+    )
+    assert resp.status_code == 422
+
+
+def test_portal_delete_group_rejects_invalid_group_id_format():
+    resp = client.delete(
+        "/tenant-portal/me/groups/not-a-uuid",
+        cookies={"iot_token": _tenant_token("admin")},
+    )
+    assert resp.status_code == 422
 
 
 def test_platform_groups_requires_auth():

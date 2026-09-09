@@ -157,6 +157,7 @@ def test_put_panel_configs_duplicate_sensor_key():
 def test_put_panel_configs_with_group_id_does_not_sync_grafana():
     tenant = _make_tenant()
     with patch("app.routers.tenant_portal.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_portal.group_exists", return_value=True), \
          patch("app.services.grafana.sync_tenant_dashboard_with_configs") as mock_sync:
         mock_db = mock_sl.return_value.__enter__.return_value
         mock_db.query.return_value.filter.return_value.first.return_value = tenant
@@ -175,3 +176,12 @@ def test_put_panel_configs_invalid_group_id_returns_422():
         cookies={"iot_token": _tenant_token("admin")},
     )
     assert resp.status_code == 422
+
+def test_put_panel_configs_with_nonexistent_group_id_returns_404():
+    with patch("app.routers.tenant_portal.group_exists", return_value=False):
+        resp = client.put(
+            f"/tenant-portal/dashboard/panel-configs?group_id={GROUP_ID}",
+            json=[{"sensor_key": "temperature", "panel_type": "gauge"}],
+            cookies={"iot_token": _tenant_token("admin")},
+        )
+    assert resp.status_code == 404

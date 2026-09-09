@@ -53,7 +53,7 @@ class DashboardPanelConfig(Base):
     panel_type = Column(String(20), nullable=False, default="timeseries")
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    __table_args__ = (UniqueConstraint("tenant_id", "group_id", "sensor_key"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "group_id", "sensor_key", postgresql_nulls_not_distinct=True),)
 
 class AuditLog(Base):
     __tablename__ = "audit_logs"

@@ -299,7 +299,8 @@ def migrate_dashboard_panel_configs() -> None:
 
 
 def migrate_dashboard_panel_config_group_id() -> None:
-    """dashboard_panel_configs に group_id 列を追加し、UNIQUE制約を group_id 込みに張り替える（べき等）。"""
+    """dashboard_panel_configs に group_id 列を追加し、UNIQUE制約を group_id 込みに張り替える（べき等）。
+    NULLS NOT DISTINCT により group_id IS NULL（テナント全体のデフォルト設定）の重複もDBレベルで防止する。"""
     with engine.connect() as conn:
         conn.execute(text("""
             ALTER TABLE dashboard_panel_configs
@@ -310,16 +311,13 @@ def migrate_dashboard_panel_config_group_id() -> None:
             DROP CONSTRAINT IF EXISTS dashboard_panel_configs_tenant_id_sensor_key_key
         """))
         conn.execute(text("""
-            DO $$
-            BEGIN
-              IF NOT EXISTS (
-                SELECT 1 FROM pg_constraint WHERE conname = 'dashboard_panel_configs_tenant_group_sensor_key_key'
-              ) THEN
-                ALTER TABLE dashboard_panel_configs
-                ADD CONSTRAINT dashboard_panel_configs_tenant_group_sensor_key_key
-                UNIQUE (tenant_id, group_id, sensor_key);
-              END IF;
-            END $$;
+            ALTER TABLE dashboard_panel_configs
+            DROP CONSTRAINT IF EXISTS dashboard_panel_configs_tenant_group_sensor_key_key
+        """))
+        conn.execute(text("""
+            ALTER TABLE dashboard_panel_configs
+            ADD CONSTRAINT dashboard_panel_configs_tenant_group_sensor_key_key
+            UNIQUE NULLS NOT DISTINCT (tenant_id, group_id, sensor_key)
         """))
         conn.commit()
 

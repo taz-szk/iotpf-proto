@@ -141,3 +141,11 @@ def list_group_device_ids(schema: str, group_id: str) -> list[str]:
             SELECT device_id FROM "{schema}".devices WHERE group_id = :gid
         '''), {"gid": group_id}).fetchall()
     return [r.device_id for r in rows]
+
+
+def group_exists(schema: str, group_id: str) -> bool:
+    with engine.connect() as conn:
+        row = conn.execute(text(f'''
+            SELECT 1 FROM "{schema}".device_groups WHERE id = :id
+        '''), {"id": group_id}).fetchone()
+    return row is not None

@@ -32,6 +32,12 @@ def _schema(tenant_id: str) -> str:
     return f"tenant_{tenant_id.replace('-', '_')}"
 
 
+def _validate_uuid(value: str, field: str = "id") -> str:
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value.lower()):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid {field}")
+    return value.lower()
+
+
 @router.get("", response_model=list[GroupOut])
 def list_device_groups(tenant_id: str, _: dict = Depends(_require_platform)):
     return list_groups(_schema(tenant_id))
@@ -52,6 +58,7 @@ def create_device_group(tenant_id: str, body: GroupCreate, payload: dict = Depen
 
 @router.patch("/{group_id}", response_model=GroupOut)
 def update_device_group(tenant_id: str, group_id: str, body: GroupUpdate, payload: dict = Depends(_require_platform)):
+    group_id = _validate_uuid(group_id, "group_id")
     schema = _schema(tenant_id)
     try:
         group = update_group(schema, group_id, body.name, body.description)
@@ -67,6 +74,7 @@ def update_device_group(tenant_id: str, group_id: str, body: GroupUpdate, payloa
 
 @router.delete("/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_device_group(tenant_id: str, group_id: str, payload: dict = Depends(_require_platform)):
+    group_id = _validate_uuid(group_id, "group_id")
     schema = _schema(tenant_id)
     try:
         delete_group(schema, group_id)

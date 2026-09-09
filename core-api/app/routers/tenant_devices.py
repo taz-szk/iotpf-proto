@@ -1,3 +1,4 @@
+import re
 from uuid import UUID
 from typing import Optional
 from fastapi import APIRouter, HTTPException, status, Depends
@@ -13,6 +14,12 @@ from app.services.device_groups import DeviceNotFoundError, GroupNotFoundError, 
 
 router = APIRouter(prefix="/tenants/{tenant_id}/devices", tags=["tenant-devices"])
 _bearer = HTTPBearer()
+
+
+def _validate_uuid(value: str, field: str = "id") -> str:
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value.lower()):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid {field}")
+    return value.lower()
 
 
 class DeviceOut(BaseModel):
@@ -105,6 +112,8 @@ def update_tenant_device(tenant_id: UUID, device_id: str, body: DeviceUpdateBody
     tenant_id_str = str(tenant_id)
     _get_active_tenant(tenant_id_str)
     schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+    if body.group_id is not None:
+        body.group_id = _validate_uuid(body.group_id, "group_id")
     try:
         old_group_id = assign_device_group(schema, device_id, body.group_id)
     except DeviceNotFoundError:

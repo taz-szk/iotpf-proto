@@ -27,6 +27,7 @@ from app.services.device_groups import (
     assign_device_group,
     create_group,
     delete_group,
+    group_exists,
     list_group_device_ids,
     list_groups,
     update_group,
@@ -207,6 +208,8 @@ class DeviceUpdateBody(BaseModel):
 def update_device(device_id: str, body: DeviceUpdateBody, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
+    if body.group_id is not None:
+        body.group_id = _validate_uuid(body.group_id, "group_id")
     try:
         old_group_id = assign_device_group(schema, device_id, body.group_id)
     except DeviceNotFoundError:
@@ -612,6 +615,8 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
 def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
+    if body.group_id is not None and not group_exists(schema, body.group_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
     rule_id = str(uuid_lib.uuid4())
     with SessionLocal() as db:
         db.execute(
@@ -636,7 +641,7 @@ def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_ad
 def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
-    updates = {k: v for k, v in body.model_dump().items() if v is not None}
+    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
     _ALLOWED_ALERT_COLS = {"sensor_key", "condition", "threshold", "trigger_mode",
@@ -651,6 +656,8 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         final_group_id = updates.get("group_id", row.group_id)
         if final_device_id and final_group_id:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="device_id and group_id are mutually exclusive")
+        if updates.get("group_id") is not None and not group_exists(schema, updates["group_id"]):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
         set_clauses = ", ".join(
             f"{col} = :{col}" for col in updates if col != "notify_emails" and col in _ALLOWED_ALERT_COLS
         )
@@ -1017,6 +1024,8 @@ def put_panel_configs(
 
     if group_id is not None:
         group_id = _validate_uuid(group_id, "group_id")
+        if not group_exists(_schema(tenant_id), group_id):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
 
     # Validate: no duplicate sensor_keys
     sensor_keys = [item.sensor_key for item in items]
@@ -1143,6 +1152,7 @@ def create_device_group_portal(body: GroupCreate, payload: dict = Depends(_requi
 
 @router.patch("/me/groups/{group_id}", response_model=GroupOut)
 def update_device_group_portal(group_id: str, body: GroupUpdate, payload: dict = Depends(_require_admin)):
+    group_id = _validate_uuid(group_id, "group_id")
     tenant_id = payload["tenant_id"]
     try:
         group = update_group(_schema(tenant_id), group_id, body.name, body.description)
@@ -1158,6 +1168,7 @@ def update_device_group_portal(group_id: str, body: GroupUpdate, payload: dict =
 
 @router.delete("/me/groups/{group_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_device_group_portal(group_id: str, payload: dict = Depends(_require_admin)):
+    group_id = _validate_uuid(group_id, "group_id")
     tenant_id = payload["tenant_id"]
     try:
         delete_group(_schema(tenant_id), group_id)

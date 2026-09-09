@@ -6,6 +6,7 @@ from app.services.auth import create_access_token
 client = TestClient(app)
 
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
+GROUP_ID = "22222222-2222-2222-2222-222222222222"
 
 
 def _platform_token():
@@ -53,26 +54,37 @@ def test_platform_assign_device_group_success():
         svc_conn.__exit__ = MagicMock(return_value=False)
         svc_conn.execute.return_value.fetchone.side_effect = [
             MagicMock(group_id=None),          # assign_device_group: 現在のgroup_id取得
-            MagicMock(id="g1"),                # assign_device_group: グループ存在確認
+            MagicMock(id=GROUP_ID),            # assign_device_group: グループ存在確認
         ]
         mock_svc_engine.connect.return_value = svc_conn
 
         router_conn = MagicMock()
         router_conn.__enter__ = lambda s: router_conn
         router_conn.__exit__ = MagicMock(return_value=False)
-        router_conn.execute.return_value.fetchone.return_value = _device_row(group_id="g1")
+        router_conn.execute.return_value.fetchone.return_value = _device_row(group_id=GROUP_ID)
         mock_engine.connect.return_value = router_conn
 
         resp = client.patch(
             f"/tenants/{TENANT_ID}/devices/device-001",
-            json={"group_id": "g1"},
+            json={"group_id": GROUP_ID},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 200
-    assert resp.json()["group_id"] == "g1"
+    assert resp.json()["group_id"] == GROUP_ID
     mock_log.assert_called_once()
     _, kwargs = mock_log.call_args
-    assert kwargs["detail"] == {"old_group_id": None, "new_group_id": "g1"}
+    assert kwargs["detail"] == {"old_group_id": None, "new_group_id": GROUP_ID}
+
+
+def test_platform_assign_device_group_rejects_invalid_group_id_format():
+    with patch("app.routers.tenant_devices.SessionLocal") as mock_sl:
+        mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = _make_tenant()
+        resp = client.patch(
+            f"/tenants/{TENANT_ID}/devices/device-001",
+            json={"group_id": "not-a-uuid"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
 
 
 def test_platform_assign_device_group_device_not_found():
@@ -87,10 +99,19 @@ def test_platform_assign_device_group_device_not_found():
 
         resp = client.patch(
             f"/tenants/{TENANT_ID}/devices/missing-device",
-            json={"group_id": "g1"},
+            json={"group_id": GROUP_ID},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 404
+
+
+def test_portal_assign_device_group_rejects_invalid_group_id_format():
+    resp = client.patch(
+        "/tenant-portal/me/devices/device-001",
+        json={"group_id": "not-a-uuid"},
+        cookies={"iot_token": _tenant_token("admin")},
+    )
+    assert resp.status_code == 422
 
 
 def test_portal_assign_device_group_requires_operator_or_admin():
