@@ -191,7 +191,11 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
 @router.patch("/{tenant_id}/alert-rules/{rule_id}", response_model=AlertRuleOut)
 def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: dict = Depends(_require_platform)):
     schema = _schema(tenant_id)
-    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    _NULLABLE_ALERT_FIELDS = {"device_id", "group_id", "threshold"}
+    updates = {
+        k: v for k, v in body.model_dump(exclude_unset=True).items()
+        if v is not None or k in _NULLABLE_ALERT_FIELDS
+    }
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
     with SessionLocal() as db:

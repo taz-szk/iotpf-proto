@@ -641,7 +641,11 @@ def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_ad
 def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
-    updates = {k: v for k, v in body.model_dump(exclude_unset=True).items()}
+    _NULLABLE_ALERT_FIELDS = {"device_id", "group_id", "threshold"}
+    updates = {
+        k: v for k, v in body.model_dump(exclude_unset=True).items()
+        if v is not None or k in _NULLABLE_ALERT_FIELDS
+    }
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
     _ALLOWED_ALERT_COLS = {"sensor_key", "condition", "threshold", "trigger_mode",

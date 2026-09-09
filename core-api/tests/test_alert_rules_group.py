@@ -98,6 +98,30 @@ def test_platform_update_alert_rule_with_nonexistent_group_id_returns_404():
     assert resp.status_code == 404
 
 
+def test_platform_update_alert_rule_ignores_explicit_null_on_not_null_field():
+    # sensor_key is NOT NULL in the DB; explicitly sending null for it must not
+    # be forwarded to the UPDATE statement (would raise NotNullViolation / 500).
+    # It should simply be dropped, same as the pre-exclude_unset behavior.
+    row = MagicMock(id="r1", device_id="dev-1", group_id=None)
+    with patch("app.routers.alert_rules.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.execute.return_value.fetchone.side_effect = [
+            row,
+            MagicMock(id="r1", device_id="dev-1", group_id=None, sensor_key="temperature",
+                       condition="above", threshold=35, trigger_mode="consecutive",
+                       consecutive_count=3, duration_sec=60, severity="warning",
+                       notify_emails=[], is_active=True),
+        ]
+        resp = client.patch(
+            f"/tenants/{TENANT_ID}/alert-rules/r1",
+            json={"sensor_key": None, "threshold": 35},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    update_call = mock_db.execute.call_args_list[0]
+    assert "sensor_key" not in update_call.args[1]
+
+
 def test_platform_update_alert_rule_switches_from_device_to_group():
     row = MagicMock(id="r1", device_id="dev-1", group_id=None)
     with patch("app.routers.alert_rules.SessionLocal") as mock_sl, \
@@ -167,6 +191,27 @@ def test_portal_update_alert_rule_rejects_invalid_group_id_format():
         cookies={"iot_token": _tenant_token()},
     )
     assert resp.status_code == 422
+
+
+def test_portal_update_alert_rule_ignores_explicit_null_on_not_null_field():
+    row = MagicMock(id="r1", device_id="dev-1", group_id=None)
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.execute.return_value.fetchone.side_effect = [
+            row,
+            MagicMock(id="r1", device_id="dev-1", group_id=None, sensor_key="temperature",
+                       condition="above", threshold=35, trigger_mode="consecutive",
+                       consecutive_count=3, duration_sec=60, severity="warning",
+                       notify_emails=[], is_active=True),
+        ]
+        resp = client.patch(
+            "/tenant-portal/me/alert-rules/r1",
+            json={"sensor_key": None, "threshold": 35},
+            cookies={"iot_token": _tenant_token()},
+        )
+    assert resp.status_code == 200
+    update_call = mock_db.execute.call_args_list[0]
+    assert "sensor_key" not in update_call.args[1]
 
 
 def test_portal_update_alert_rule_with_nonexistent_group_id_returns_404():
