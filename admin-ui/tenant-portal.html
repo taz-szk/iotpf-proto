@@ -392,12 +392,12 @@
                         <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.last_seen_at)"></td>
                         <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
                         <td class="px-4 py-3">
-                          <select x-show="canEdit" :value="d.group_id || ''"
+                          <select x-show="canEdit"
                                   @change="assignDeviceGroup(d, $event.target.value || null)"
                                   class="text-xs border border-gray-300 rounded px-1.5 py-1">
-                            <option value="">未所属</option>
+                            <option value="" :selected="!d.group_id">未所属</option>
                             <template x-for="g in groups" :key="g.id">
-                              <option :value="g.id" x-text="g.name"></option>
+                              <option :value="g.id" :selected="d.group_id === g.id" x-text="g.name"></option>
                             </template>
                           </select>
                           <span x-show="!canEdit" class="text-xs text-gray-500" x-text="groupName(d.group_id) || '未所属'"></span>
@@ -488,7 +488,7 @@
                   <select x-show="targetType === 'group'" x-model="newRule.group_id"
                           :required="targetType === 'group'"
                           class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
-                    <option :value="null">-- 選択してください --</option>
+                    <option value="">-- 選択してください --</option>
                     <template x-for="g in groups" :key="g.id">
                       <option :value="g.id" x-text="g.name"></option>
                     </template>
@@ -856,6 +856,7 @@
               </select>
             </div>
 
+            <div x-show="panelConfigSavedMessage" class="text-sm text-green-600 mb-2" x-text="panelConfigSavedMessage"></div>
             <div x-show="panelConfigError" class="mb-4 bg-red-50 border border-red-200 text-red-600 text-sm px-4 py-2 rounded" x-text="panelConfigError"></div>
 
             <!-- 設定一覧 -->
@@ -961,7 +962,7 @@
               <button @click="savePanelConfigs()"
                       :disabled="panelConfigSaving"
                       class="bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white px-4 py-2 rounded text-sm font-medium">
-                <span x-text="panelConfigSaving ? '反映中...' : 'ダッシュボードに反映'"></span>
+                <span x-text="panelConfigSaving ? '反映中...' : (dashboardConfigGroupId ? '保存' : 'ダッシュボードに反映')"></span>
               </button>
             </div>
           </div>
@@ -1282,6 +1283,7 @@ function portalApp() {
     newSensorKey: '',
     newPanelType: 'timeseries',
     panelConfigSaving: false,
+    panelConfigSavedMessage: '',
     panelConfigError: '',
     knownSensorKeys: [],
     // ===== 監査ログ =====
@@ -1552,6 +1554,7 @@ function portalApp() {
         return;
       }
       const rule = { ...this.newRule };
+      rule.group_id = rule.group_id || null;   // 空文字列や不正値を送らない
       rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
       if (rule.condition === 'device_offline') rule.threshold = null;
       try {
@@ -1771,6 +1774,9 @@ function portalApp() {
             const iframe = document.querySelector('iframe');
             if (iframe) iframe.src = iframe.src;
           });
+        } else {
+          this.panelConfigSavedMessage = '保存しました（このグループの設定はGrafanaダッシュボードには反映されません）';
+          setTimeout(() => { this.panelConfigSavedMessage = ''; }, 4000);
         }
       } catch(e) {
         this.panelConfigError = 'ダッシュボードの更新に失敗しました: ' + (e.message || e);

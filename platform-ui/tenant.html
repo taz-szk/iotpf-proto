@@ -236,8 +236,9 @@
                 </div>
               </div>
               <select x-show="targetType === 'group'" x-model="newRule.group_id"
+                      :required="targetType === 'group'"
                       class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
-                <option :value="null">-- 選択してください --</option>
+                <option value="">-- 選択してください --</option>
                 <template x-for="g in groups" :key="g.id">
                   <option :value="g.id" x-text="g.name"></option>
                 </template>
@@ -530,12 +531,11 @@
                       x-text="timeAgo(d.last_seen_at)"></td>
                   <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
                   <td class="px-4 py-3">
-                    <select :value="d.group_id || ''"
-                            @change="assignDeviceGroup(d, $event.target.value || null)"
+                    <select @change="assignDeviceGroup(d, $event.target.value || null)"
                             class="text-xs border border-gray-300 rounded px-1.5 py-1">
-                      <option value="">未所属</option>
+                      <option value="" :selected="!d.group_id">未所属</option>
                       <template x-for="g in groups" :key="g.id">
-                        <option :value="g.id" x-text="g.name"></option>
+                        <option :value="g.id" :selected="d.group_id === g.id" x-text="g.name"></option>
                       </template>
                     </select>
                   </td>
@@ -700,6 +700,8 @@
                   <option :value="g.id" x-text="g.name"></option>
                 </template>
               </select>
+              <span class="text-xs text-gray-400" x-show="otaGroupId"
+                    x-text="devices.filter(d => d.group_id === otaGroupId).length + ' 台に送信します'"></span>
             </div>
             <div class="mb-4">
               <label class="block text-sm font-medium text-gray-600 mb-1">または個別デバイスID</label>
@@ -939,6 +941,7 @@
         },
 
         async saveAlertRule() {
+          this.error = '';
           if (this.targetType === 'device' && !this.newRule.device_id) {
             this.error = '対象デバイスを選択してください';
             return;
@@ -948,6 +951,7 @@
             return;
           }
           const rule = { ...this.newRule };
+          rule.group_id = rule.group_id || null;   // 空文字列や不正値を送らない
           rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
           if (rule.condition === 'device_offline') rule.threshold = null;
           try {
@@ -1268,6 +1272,8 @@
           if (!this.otaTargetFirmware) return;
           this.otaResults = [];
           if (this.otaGroupId) {
+            const count = this.devices.filter(d => d.group_id === this.otaGroupId).length;
+            if (!confirm(`${count}台のデバイスにファームウェアを送信します。よろしいですか？`)) return;
             this.otaSubmitting = true;
             try {
               const resp = await api.request('POST', `/tenants/${tenantId}/groups/${this.otaGroupId}/ota`,
