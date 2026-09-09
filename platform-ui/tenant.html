@@ -1261,11 +1261,12 @@
           }
         },
 
-        sendOta(firmwareId, version) {
+        async sendOta(firmwareId, version) {
           this.otaTargetFirmware = { id: firmwareId, version };
           this.otaDeviceId = '';
           this.otaGroupId = '';
           this.otaResults = [];
+          if (!this.devices.length) await this.loadDevices();
         },
 
         async submitOta() {
