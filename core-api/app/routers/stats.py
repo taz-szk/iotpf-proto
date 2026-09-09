@@ -1,4 +1,5 @@
 import re
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import text
@@ -38,10 +39,16 @@ def _parse_influx_csv_scalar(csv_text: str) -> int:
     return 0
 
 
+def _month_start_rfc3339() -> str:
+    now = datetime.now(timezone.utc)
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    return start.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 def _count_influxdb_points(influxdb_org_id: str, token: str) -> int:
     query = (
         'from(bucket: "telemetry")\n'
-        '  |> range(start: -30d)\n'
+        f'  |> range(start: {_month_start_rfc3339()})\n'
         '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
         '  |> group()\n'
         '  |> count()\n'
@@ -82,8 +89,8 @@ def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
             text(f"SELECT COUNT(*) FROM \"{schema}\".devices WHERE connection_status = 'online'")
         ).scalar() or 0
 
-        alert_events_30d = db.execute(
-            text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= NOW() - INTERVAL '30 days'")
+        alert_events_this_month = db.execute(
+            text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= date_trunc('month', NOW())")
         ).scalar() or 0
 
         try:
@@ -93,13 +100,13 @@ def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
         except Exception:
             firmware_releases = 0
 
-    data_points_30d = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
+    data_points_this_month = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
 
     return {
         "tenant_id": tenant_id,
         "total_devices": total_devices,
         "online_devices": online_devices,
-        "data_points_30d": data_points_30d,
-        "alert_events_30d": alert_events_30d,
+        "data_points_this_month": data_points_this_month,
+        "alert_events_this_month": alert_events_this_month,
         "firmware_releases": firmware_releases,
     }

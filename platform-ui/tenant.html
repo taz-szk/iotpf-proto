@@ -354,12 +354,12 @@
             <p class="text-3xl font-bold text-green-600" x-text="stats?.online_devices ?? '-'"></p>
           </div>
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 mb-1">データポイント（30日）</p>
-            <p class="text-3xl font-bold text-blue-600" x-text="(stats?.data_points_30d ?? 0).toLocaleString()"></p>
+            <p class="text-xs font-medium text-gray-500 mb-1">データポイント（今月）</p>
+            <p class="text-3xl font-bold text-blue-600" x-text="(stats?.data_points_this_month ?? 0).toLocaleString()"></p>
           </div>
           <div class="bg-white rounded-xl border border-gray-200 p-5">
-            <p class="text-xs font-medium text-gray-500 mb-1">アラートイベント（30日）</p>
-            <p class="text-3xl font-bold text-yellow-600" x-text="stats?.alert_events_30d ?? '-'"></p>
+            <p class="text-xs font-medium text-gray-500 mb-1">アラートイベント（今月）</p>
+            <p class="text-3xl font-bold text-yellow-600" x-text="stats?.alert_events_this_month ?? '-'"></p>
           </div>
           <div class="bg-white rounded-xl border border-gray-200 p-5">
             <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
