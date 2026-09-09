@@ -12,19 +12,28 @@ def _safe_id(value: str) -> bool:
 def _flux_values_by_device(
     org_id: str,
     token: str,
-    device_id: str | None,
+    device_ids: list[str] | None,
     sensor_key: str,
     window_sec: int,
 ) -> dict[str, list[float]]:
-    """Return {device_id: [value_newest_first, ...]} for matching telemetry."""
+    """Return {device_id: [value_newest_first, ...]} for matching telemetry.
+
+    device_ids が None なら全デバイス対象。リストが渡された場合はそのデバイス群のみに絞る
+    （単一デバイス指定のルール、またはグループ対象ルールのグループ内デバイス一覧）。
+    """
     if not _safe_id(sensor_key):
         return {}
 
     device_filter = ""
-    if device_id:
-        if not _safe_id(device_id):
+    if device_ids:
+        safe_ids = [d for d in device_ids if _safe_id(d)]
+        if not safe_ids:
             return {}
-        device_filter = f'|> filter(fn: (r) => r.device_id == "{device_id}")'
+        if len(safe_ids) == 1:
+            device_filter = f'|> filter(fn: (r) => r.device_id == "{safe_ids[0]}")'
+        else:
+            ids_pattern = "|".join(re.escape(d) for d in safe_ids)
+            device_filter = f'|> filter(fn: (r) => r.device_id =~ /^({ids_pattern})$/)'
 
     client = InfluxDBClient(
         url=settings.influxdb_url,
@@ -106,11 +115,22 @@ def _check_trigger(
     return False, None
 
 
-def evaluate_rule(rule: dict, org_id: str, token: str) -> tuple[bool, float | None]:
+def evaluate_rule(rule: dict, org_id: str, token: str, group_device_ids: list[str] | None = None) -> tuple[bool, float | None]:
     if rule["condition"] == "device_offline":
         return False, None
 
-    device_id: str | None = rule.get("device_id") or None  # None = all devices
+    device_id: str | None = rule.get("device_id") or None
+    group_id: str | None = rule.get("group_id") or None
+
+    if device_id:
+        device_ids: list[str] | None = [device_id]
+    elif group_id:
+        device_ids = group_device_ids or []
+        if not device_ids:
+            return False, None
+    else:
+        device_ids = None  # 全デバイス対象
+
     sensor_key = rule["sensor_key"]
     threshold = float(rule["threshold"]) if rule["threshold"] is not None else None
     trigger_mode = rule["trigger_mode"]
@@ -118,7 +138,7 @@ def evaluate_rule(rule: dict, org_id: str, token: str) -> tuple[bool, float | No
     duration_sec = rule["duration_sec"]
 
     window_sec = max(duration_sec + 60, consecutive_count * 60 + 60)
-    by_device = _flux_values_by_device(org_id, token, device_id, sensor_key, window_sec)
+    by_device = _flux_values_by_device(org_id, token, device_ids, sensor_key, window_sec)
 
     if not by_device:
         return False, None

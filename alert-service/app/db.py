@@ -22,7 +22,7 @@ def get_active_alert_rules(tenant_id: str) -> list[dict]:
     try:
         with conn.cursor() as cur:
             cur.execute(f'''
-                SELECT id::text, device_id, sensor_key, condition, threshold,
+                SELECT id::text, device_id, group_id::text, sensor_key, condition, threshold,
                        trigger_mode, consecutive_count, duration_sec,
                        severity, notify_emails
                 FROM "{schema}".alert_rules WHERE is_active = TRUE
@@ -86,6 +86,18 @@ def mark_event_notified(tenant_id: str, event_id: str) -> None:
                 UPDATE "{schema}".alert_events SET notified_at = %s WHERE id = %s
             ''', (datetime.now(timezone.utc), event_id))
         conn.commit()
+    finally:
+        conn.close()
+
+def get_group_device_ids(tenant_id: str, group_id: str) -> list[str]:
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(f'''
+                SELECT device_id FROM "{schema}".devices WHERE group_id = %s
+            ''', (group_id,))
+            return [row["device_id"] for row in cur.fetchall()]
     finally:
         conn.close()
 

@@ -1,6 +1,6 @@
 from app.config import settings
 from app.db import (
-    get_all_tenants, get_active_alert_rules,
+    get_all_tenants, get_active_alert_rules, get_group_device_ids,
     get_unresolved_event, create_alert_event, resolve_alert_event, mark_event_notified,
     get_offline_devices, mark_device_offline,
 )
@@ -25,15 +25,32 @@ def evaluate_all_tenants() -> None:
         except Exception as e:
             print(f"Error processing tenant {tenant_id}: {e}")
 
+def _make_group_device_resolver(tenant_id: str):
+    cache: dict[str, list[str]] = {}
+
+    def resolve(group_id: str) -> list[str]:
+        if group_id not in cache:
+            try:
+                cache[group_id] = get_group_device_ids(tenant_id, group_id)
+            except Exception as e:
+                print(f"Failed to resolve group {group_id} devices: {e}")
+                cache[group_id] = []
+        return cache[group_id]
+
+    return resolve
+
 def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
     rules = get_active_alert_rules(tenant_id)
+    resolve_group = _make_group_device_resolver(tenant_id)
     for rule in rules:
         rule_id = rule["id"]
         device_id = rule.get("device_id")
+        group_id = rule.get("group_id")
         if rule["condition"] == "device_offline":
             continue
         try:
-            should_alert, last_value = evaluate_rule(rule, org_id, token)
+            group_device_ids = resolve_group(group_id) if group_id else None
+            should_alert, last_value = evaluate_rule(rule, org_id, token, group_device_ids)
         except Exception as e:
             print(f"Eval error rule {rule_id}: {e}")
             continue
@@ -65,6 +82,7 @@ def _check_dead_devices(tenant_id: str) -> None:
     if not offline_devices:
         return
     rules = get_active_alert_rules(tenant_id)
+    resolve_group = _make_group_device_resolver(tenant_id)
     for row in offline_devices:
         device_id = row["device_id"]
         mark_device_offline(tenant_id, device_id)
@@ -72,6 +90,8 @@ def _check_dead_devices(tenant_id: str) -> None:
             if rule["condition"] != "device_offline":
                 continue
             if rule.get("device_id") and rule["device_id"] != device_id:
+                continue
+            if rule.get("group_id") and device_id not in resolve_group(rule["group_id"]):
                 continue
             existing = get_unresolved_event(tenant_id, rule["id"], device_id)
             if existing:
