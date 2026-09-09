@@ -12,6 +12,7 @@ from sqlalchemy import text
 from app.database import SessionLocal, add_firmware_tables_to_tenant_schema
 from app.models.public import Tenant
 from app.services.auth import verify_token
+from app.services.device_groups import GroupNotFoundError, list_group_device_ids
 from app.services.emqx_publisher import publish_ota_command
 from app.services.minio_client import (
     create_firmware_download_token,
@@ -28,6 +29,10 @@ _bearer = HTTPBearer()
 
 
 class OtaDispatchBody(BaseModel):
+    firmware_id: str
+
+
+class GroupOtaDispatchBody(BaseModel):
     firmware_id: str
 
 
@@ -200,6 +205,60 @@ def dispatch_ota_command(
         db.commit()
 
     return {"status": "dispatched", "device_id": device_id, "firmware_id": firmware_id}
+
+
+@router.post("/tenants/{tenant_id}/groups/{group_id}/ota")
+def dispatch_ota_to_group(
+    tenant_id: str,
+    group_id: str,
+    body: GroupOtaDispatchBody,
+    payload: dict = Depends(_require_platform),
+):
+    _validate_uuid(tenant_id, "tenant_id")
+    group_id = _validate_uuid(group_id, "group_id")
+    firmware_id = _validate_uuid(body.firmware_id, "firmware_id")
+    tenant_name, schema_suffix = _validate_tenant(tenant_id)
+    schema = f"tenant_{schema_suffix}"
+    try:
+        device_ids = list_group_device_ids(schema, group_id)
+    except GroupNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    with SessionLocal() as db:
+        row = db.execute(text(f'''
+            SELECT minio_key, version, checksum, file_size
+            FROM "{schema}".firmware_releases
+            WHERE id = :id AND is_active = TRUE
+        '''), {"id": firmware_id}).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firmware not found or inactive")
+
+        results = []
+        for device_id in device_ids:
+            try:
+                token = create_firmware_download_token(firmware_id, tenant_id, row.minio_key)
+                download_url = f"https://{settings.platform_domain}/api/firmware-download?token={token}"
+                publish_ota_command(tenant_id, device_id, {
+                    "firmware_id": firmware_id,
+                    "version": row.version,
+                    "download_url": download_url,
+                    "checksum": row.checksum,
+                    "file_size": row.file_size,
+                })
+                db.execute(text(f'''
+                    INSERT INTO "{schema}".ota_events (firmware_id, device_id)
+                    VALUES (:firmware_id, :device_id)
+                '''), {"firmware_id": firmware_id, "device_id": device_id})
+                write_audit_log(db, "platform", payload["sub"], payload["email"],
+                                "ota_send", tenant_id=tenant_id,
+                                resource_type="device", resource_id=device_id,
+                                detail={"firmware_id": firmware_id, "version": row.version, "group_id": group_id})
+                results.append({"device_id": device_id, "status": "dispatched"})
+            except Exception as e:
+                results.append({"device_id": device_id, "status": "failed", "error": str(e)})
+        db.commit()
+
+    return {"firmware_id": firmware_id, "group_id": group_id, "results": results}
 
 
 @router.get("/firmware-download")

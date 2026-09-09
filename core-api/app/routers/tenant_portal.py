@@ -27,6 +27,7 @@ from app.services.device_groups import (
     assign_device_group,
     create_group,
     delete_group,
+    list_group_device_ids,
     list_groups,
     update_group,
 )
@@ -885,6 +886,58 @@ def dispatch_ota(device_id: str, body: _OtaDispatchBody, payload: dict = Depends
                         detail={"firmware_id": firmware_id, "version": row.version})
         db.commit()
     return {"status": "dispatched", "device_id": device_id, "firmware_id": firmware_id}
+
+
+class _GroupOtaDispatchBody(BaseModel):
+    firmware_id: str
+
+
+@router.post("/me/groups/{group_id}/ota")
+def dispatch_ota_to_group(group_id: str, body: _GroupOtaDispatchBody, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    schema = _schema(tenant_id)
+    group_id = _validate_uuid(group_id, "group_id")
+    firmware_id = _validate_uuid(body.firmware_id, "firmware_id")
+    try:
+        device_ids = list_group_device_ids(schema, group_id)
+    except GroupNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    with SessionLocal() as db:
+        row = db.execute(text(f'''
+            SELECT minio_key, version, checksum, file_size
+            FROM "{schema}".firmware_releases
+            WHERE id = :id AND is_active = TRUE
+        '''), {"id": firmware_id}).fetchone()
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Firmware not found or inactive")
+
+        results = []
+        for device_id in device_ids:
+            try:
+                token = create_firmware_download_token(firmware_id, tenant_id, row.minio_key)
+                download_url = f"https://{settings.platform_domain}/api/firmware-download?token={token}"
+                publish_ota_command(tenant_id, device_id, {
+                    "firmware_id": firmware_id,
+                    "version": row.version,
+                    "download_url": download_url,
+                    "checksum": row.checksum,
+                    "file_size": row.file_size,
+                })
+                db.execute(text(f'''
+                    INSERT INTO "{schema}".ota_events (firmware_id, device_id)
+                    VALUES (:firmware_id, :device_id)
+                '''), {"firmware_id": firmware_id, "device_id": device_id})
+                write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                                "ota_send", tenant_id=tenant_id,
+                                resource_type="device", resource_id=device_id,
+                                detail={"firmware_id": firmware_id, "version": row.version, "group_id": group_id})
+                results.append({"device_id": device_id, "status": "dispatched"})
+            except Exception as e:
+                results.append({"device_id": device_id, "status": "failed", "error": str(e)})
+        db.commit()
+
+    return {"firmware_id": firmware_id, "group_id": group_id, "results": results}
 
 
 # ---------------------------------------------------------------------------
