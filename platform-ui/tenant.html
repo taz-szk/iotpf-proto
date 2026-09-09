@@ -199,23 +199,30 @@
                      :class="{'mt-1': sensorKeySelect === '__other__'}"
                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
             </div>
-            <div>
-              <label class="block text-xs font-medium text-gray-600 mb-1">デバイス（空=全デバイス）</label>
-              <div class="relative">
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1">対象</label>
+              <div class="flex gap-4 mb-2">
+                <label class="flex items-center gap-1.5 text-sm">
+                  <input type="radio" value="all" x-model="targetType" @change="setTargetType('all')"> 全テナント
+                </label>
+                <label class="flex items-center gap-1.5 text-sm">
+                  <input type="radio" value="device" x-model="targetType" @change="setTargetType('device')"> デバイス
+                </label>
+                <label class="flex items-center gap-1.5 text-sm">
+                  <input type="radio" value="group" x-model="targetType" @change="setTargetType('group')"> グループ
+                </label>
+              </div>
+              <div x-show="targetType === 'device'" class="relative">
                 <input type="text" x-model="deviceSearch" autocomplete="off"
                        @focus="showDeviceDropdown = true"
                        @blur="onDeviceBlur()"
-                       placeholder="全デバイス対象（名前/IDで検索）"
+                       placeholder="デバイス名/IDで検索"
                        class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm pr-6">
                 <button type="button" x-show="deviceSearch"
                         @click="clearDevice()"
                         class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs leading-none">✕</button>
                 <div x-show="showDeviceDropdown"
                      class="absolute z-20 w-full bg-white border border-gray-200 rounded shadow-lg mt-0.5 max-h-48 overflow-y-auto">
-                  <button type="button" @mousedown.prevent @click="clearDevice()"
-                          class="w-full text-left px-3 py-2 text-sm text-gray-400 italic hover:bg-gray-50 border-b border-gray-100">
-                    全デバイス対象
-                  </button>
                   <template x-for="d in filteredDevices()" :key="d.device_id">
                     <button type="button" @mousedown.prevent @click="selectDevice(d)"
                             :class="d.device_id === newRule.device_id ? 'bg-blue-50' : 'hover:bg-blue-50'"
@@ -228,6 +235,13 @@
                        class="px-3 py-2 text-sm text-gray-400 text-center">一致するデバイスがありません</div>
                 </div>
               </div>
+              <select x-show="targetType === 'group'" x-model="newRule.group_id"
+                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                <option :value="null">-- 選択してください --</option>
+                <template x-for="g in groups" :key="g.id">
+                  <option :value="g.id" x-text="g.name"></option>
+                </template>
+              </select>
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-600 mb-1">条件</label>
@@ -302,7 +316,7 @@
             <tbody class="divide-y divide-gray-100">
               <template x-for="r in alertRules" :key="r.id">
                 <tr>
-                  <td class="px-4 py-3 text-sm font-medium" x-text="r.sensor_key + (r.device_id ? ' / ' + r.device_id : '')"></td>
+                  <td class="px-4 py-3 text-sm font-medium" x-text="r.sensor_key + (r.device_id ? ' / ' + r.device_id : (r.group_id ? ' / [グループ] ' + groupName(r.group_id) : ''))"></td>
                   <td class="px-4 py-3 text-sm" x-text="r.condition + (r.threshold != null ? ' ' + r.threshold : '')"></td>
                   <td class="px-4 py-3">
                     <span class="text-xs px-2 py-0.5 rounded font-medium"
@@ -677,16 +691,37 @@
         <div x-show="otaTargetFirmware" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
           <div class="bg-white rounded-xl p-6 w-full max-w-sm shadow-xl">
             <h3 class="font-medium text-gray-800 mb-4" x-text="'OTA送信: v' + otaTargetFirmware?.version"></h3>
+            <div class="mb-3">
+              <label class="block text-sm font-medium text-gray-600 mb-1">グループへ一括送信（任意）</label>
+              <select x-model="otaGroupId" :disabled="!!otaDeviceId"
+                      class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                <option value="">-- グループを選択しない --</option>
+                <template x-for="g in groups" :key="g.id">
+                  <option :value="g.id" x-text="g.name"></option>
+                </template>
+              </select>
+            </div>
             <div class="mb-4">
-              <label class="block text-sm font-medium text-gray-600 mb-1">デバイスID</label>
-              <input type="text" x-model="otaDeviceId" placeholder="device-001"
+              <label class="block text-sm font-medium text-gray-600 mb-1">または個別デバイスID</label>
+              <input type="text" x-model="otaDeviceId" placeholder="device-001" :disabled="!!otaGroupId"
                      class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
             </div>
+            <div x-show="otaResults.length > 0" class="mb-4 max-h-40 overflow-y-auto space-y-1">
+              <template x-for="r in otaResults" :key="r.device_id">
+                <div class="text-xs px-2 py-1 rounded"
+                     :class="r.status === 'dispatched' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                     x-text="r.device_id + ': ' + (r.status === 'dispatched' ? '送信完了' : '送信失敗')"></div>
+              </template>
+            </div>
             <div class="flex justify-end gap-2">
-              <button @click="otaTargetFirmware = null; otaDeviceId = ''"
+              <button @click="otaTargetFirmware = null; otaDeviceId = ''; otaGroupId = ''; otaResults = []"
+                      :disabled="otaSubmitting"
                       class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
-              <button @click="submitOta()" :disabled="!otaDeviceId"
-                      class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">送信</button>
+              <button @click="submitOta()" :disabled="(!otaDeviceId && !otaGroupId) || otaSubmitting"
+                      class="bg-blue-600 disabled:bg-blue-300 text-white text-sm px-3 py-1.5 rounded">
+                <span x-show="!otaSubmitting">送信</span>
+                <span x-show="otaSubmitting">送信中...</span>
+              </button>
             </div>
           </div>
         </div>
@@ -720,10 +755,11 @@
         editingRuleId: null,
         emailsInput: '',
         newRule: {
-          sensor_key: '', device_id: '', condition: 'above', threshold: null,
+          sensor_key: '', device_id: '', group_id: null, condition: 'above', threshold: null,
           trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
           severity: 'warning', notify_emails: [],
         },
+        targetType: 'all', // 'device' | 'group' | 'all'
 
         grafanaUrl() {
           return `/grafana/?orgId=${this.tenant?.grafana_org_id}`;
@@ -818,6 +854,12 @@
           this.showDeviceDropdown = false;
         },
 
+        setTargetType(type) {
+          this.targetType = type;
+          if (type !== 'device') { this.newRule.device_id = ''; this.deviceSearch = ''; }
+          if (type !== 'group')  { this.newRule.group_id = null; }
+        },
+
         onDeviceBlur() {
           setTimeout(() => {
             this.showDeviceDropdown = false;
@@ -834,8 +876,9 @@
           this.editingRuleId = null;
           this.sensorKeySelect = '';
           this.deviceSearch = '';
+          this.targetType = 'all';
           this.newRule = {
-            sensor_key: '', device_id: '', condition: 'above', threshold: null,
+            sensor_key: '', device_id: '', group_id: null, condition: 'above', threshold: null,
             trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
             severity: 'warning', notify_emails: [],
           };
@@ -864,9 +907,11 @@
           this.editingRuleId = rule.id;
           this.sensorKeySelect = '__other__';
           this.deviceSearch = rule.device_id || '';
+          this.targetType = rule.device_id ? 'device' : (rule.group_id ? 'group' : 'all');
           this.newRule = {
             sensor_key: rule.sensor_key,
             device_id: rule.device_id || '',
+            group_id: rule.group_id || null,
             condition: rule.condition,
             threshold: rule.threshold,
             trigger_mode: rule.trigger_mode,
@@ -894,6 +939,14 @@
         },
 
         async saveAlertRule() {
+          if (this.targetType === 'device' && !this.newRule.device_id) {
+            this.error = '対象デバイスを選択してください';
+            return;
+          }
+          if (this.targetType === 'group' && !this.newRule.group_id) {
+            this.error = '対象グループを選択してください';
+            return;
+          }
           const rule = { ...this.newRule };
           rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
           if (rule.condition === 'device_offline') rule.threshold = null;
@@ -943,6 +996,9 @@
         uploading: false,
         otaTargetFirmware: null,
         otaDeviceId: '',
+        otaGroupId: '',
+        otaSubmitting: false,
+        otaResults: [],
 
         // テナント名編集
         editingName: false,
@@ -1204,15 +1260,32 @@
         sendOta(firmwareId, version) {
           this.otaTargetFirmware = { id: firmwareId, version };
           this.otaDeviceId = '';
+          this.otaGroupId = '';
+          this.otaResults = [];
         },
 
         async submitOta() {
-          if (!this.otaDeviceId || !this.otaTargetFirmware) return;
+          if (!this.otaTargetFirmware) return;
+          this.otaResults = [];
+          if (this.otaGroupId) {
+            this.otaSubmitting = true;
+            try {
+              const resp = await api.request('POST', `/tenants/${tenantId}/groups/${this.otaGroupId}/ota`,
+                { firmware_id: this.otaTargetFirmware.id });
+              this.otaResults = resp.results || [];
+            } catch(e) {
+              this.error = e.message;
+            } finally {
+              this.otaSubmitting = false;
+            }
+            return;
+          }
+          if (!this.otaDeviceId) return;
           try {
             await api.request('POST', `/tenants/${tenantId}/devices/${this.otaDeviceId}/ota`,
               { firmware_id: this.otaTargetFirmware.id });
-            this.otaTargetFirmware = null;
             this.otaDeviceId = '';
+            this.otaTargetFirmware = null;
           } catch(e) {
             this.error = e.message;
           }
