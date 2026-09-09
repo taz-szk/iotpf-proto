@@ -486,6 +486,7 @@
                     </div>
                   </div>
                   <select x-show="targetType === 'group'" x-model="newRule.group_id"
+                          :required="targetType === 'group'"
                           class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                     <option :value="null">-- 選択してください --</option>
                     <template x-for="g in groups" :key="g.id">
@@ -1541,6 +1542,15 @@ function portalApp() {
       } catch(_) {}
     },
     async saveAlertRule() {
+      this.error = '';
+      if (this.targetType === 'device' && !this.newRule.device_id) {
+        this.error = 'デバイスを選択してください';
+        return;
+      }
+      if (this.targetType === 'group' && !this.newRule.group_id) {
+        this.error = 'グループを選択してください';
+        return;
+      }
       const rule = { ...this.newRule };
       rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
       if (rule.condition === 'device_offline') rule.threshold = null;
