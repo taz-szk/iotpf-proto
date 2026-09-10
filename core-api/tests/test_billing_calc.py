@@ -58,3 +58,17 @@ def test_calculate_invoice_line_item_preserves_quantity_and_unit_price():
     assert item["quantity"] == 7
     assert item["unit_price"] == Decimal("50")
     assert item["amount"] == 350
+
+
+def test_calculate_invoice_floors_each_line_before_summing_not_after():
+    # Regression test: verify that lines are floored individually before summing,
+    # not summed first and then floored once (which would be incorrect).
+    # Each line: 1 × 0.6 = 0.6 yen → floors to 0 yen.
+    # Correct implementation (floor per line, then sum): 0 + 0 = 0 yen subtotal
+    # Buggy implementation (sum raw, then floor): 0.6 + 0.6 = 1.2 → floors to 1 yen (WRONG)
+    usage = {"data_points": 1, "device_count": 1}
+    unit_prices = {"data_points": Decimal("0.6"), "device_count": Decimal("0.6")}
+    result = calculate_invoice(usage, unit_prices)
+    assert result["line_items"][0]["amount"] == 0
+    assert result["line_items"][1]["amount"] == 0
+    assert result["subtotal"] == 0  # Must be 0 if floored per-line; would be 1 if sum-then-floor bug
