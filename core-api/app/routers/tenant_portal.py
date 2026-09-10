@@ -14,6 +14,7 @@ from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
+from app.models.billing import BillingInvoice, BillingLineItem
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
@@ -749,6 +750,59 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         "provisionable_devices": provisionable_devices,
         "has_unlimited_token": has_unlimited_token,
     }
+
+
+# ---------------------------------------------------------------------------
+# 請求
+# ---------------------------------------------------------------------------
+
+@router.get("/me/billing/invoices")
+def list_my_invoices(payload: dict = Depends(_require_tenant)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        rows = (
+            db.query(BillingInvoice)
+            .filter(BillingInvoice.tenant_id == tenant_id)
+            .order_by(BillingInvoice.target_year_month.desc())
+            .all()
+        )
+        return [
+            {
+                "target_year_month": r.target_year_month,
+                "status": r.status,
+                "subtotal": r.subtotal,
+                "tax_amount": r.tax_amount,
+                "total_amount": r.total_amount,
+            }
+            for r in rows
+        ]
+
+
+@router.get("/me/billing/invoices/{target_year_month}")
+def get_my_invoice(target_year_month: str, payload: dict = Depends(_require_tenant)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        invoice = db.query(BillingInvoice).filter(
+            BillingInvoice.tenant_id == tenant_id,
+            BillingInvoice.target_year_month == target_year_month,
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        line_items = db.query(BillingLineItem).filter(BillingLineItem.invoice_id == invoice.id).all()
+        return {
+            "target_year_month": invoice.target_year_month,
+            "status": invoice.status,
+            "subtotal": invoice.subtotal,
+            "tax_amount": invoice.tax_amount,
+            "total_amount": invoice.total_amount,
+            "line_items": [
+                {
+                    "item_key": li.item_key, "quantity": li.quantity,
+                    "unit_price": str(li.unit_price), "amount": li.amount,
+                }
+                for li in line_items
+            ],
+        }
 
 
 # ---------------------------------------------------------------------------
