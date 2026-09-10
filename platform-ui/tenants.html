@@ -104,8 +104,8 @@
             <th class="px-6 py-3"></th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
-          <template x-for="tenant in filteredTenants()" :key="tenant.id">
+        <template x-for="tenant in filteredTenants()" :key="tenant.id">
+          <tbody class="divide-y divide-gray-100">
             <tr class="hover:bg-gray-50" :class="tenant.status !== 'active' ? 'opacity-60' : ''">
               <td class="px-6 py-4 font-medium text-gray-800" x-text="tenant.name"></td>
               <td class="px-6 py-4 text-sm text-gray-500" x-text="tenant.slug"></td>
@@ -170,8 +170,8 @@
                      class="text-sm text-red-600 py-2" x-text="statsError[tenant.id]"></div>
               </td>
             </tr>
-          </template>
-        </tbody>
+          </tbody>
+        </template>
       </table>
     </div>
   </div>
