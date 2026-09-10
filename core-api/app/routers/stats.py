@@ -6,9 +6,11 @@ from sqlalchemy import text
 import httpx
 
 from app.database import SessionLocal
-from app.models.public import Tenant
+from app.models.public import Tenant, ProvisioningToken
 from app.services.auth import verify_token
 from app.config import settings
+
+_UNLIMITED_DEVICES = 2_000_000_000
 
 router = APIRouter(prefix="/tenants")
 _bearer = HTTPBearer()
@@ -71,6 +73,31 @@ def _count_influxdb_points(influxdb_org_id: str, token: str) -> int:
         return 0
 
 
+def _calc_provisionable_devices(db, tenant_id: str, schema: str) -> tuple[int, bool]:
+    """有効かつ未失効のブートストラップトークンについて、残り登録可能台数の合計を返す。
+    無制限(_UNLIMITED_DEVICES)のトークンが1件でもあれば has_unlimited=True とし、
+    そのトークンは合計から除外する（合計は「有限トークンの残り」のみを表す）。"""
+    now = datetime.now(timezone.utc)
+    tokens = db.query(ProvisioningToken).filter(
+        ProvisioningToken.tenant_id == tenant_id,
+        ProvisioningToken.is_active == True,
+        ProvisioningToken.expires_at >= now,
+    ).all()
+
+    remaining = 0
+    has_unlimited = False
+    for t in tokens:
+        if t.max_devices >= _UNLIMITED_DEVICES:
+            has_unlimited = True
+            continue
+        active_count = db.execute(text(f'''
+            SELECT COUNT(*) FROM "{schema}".devices WHERE provisioning_token_id = :tid
+        '''), {"tid": str(t.id)}).scalar() or 0
+        remaining += max(0, t.max_devices - int(active_count))
+
+    return remaining, has_unlimited
+
+
 @router.get("/{tenant_id}/stats")
 def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
     _validate_uuid(tenant_id)
@@ -100,12 +127,16 @@ def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
         except Exception:
             firmware_releases = 0
 
+        provisionable_devices, has_unlimited_token = _calc_provisionable_devices(db, tenant_id, schema)
+
     data_points_this_month = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
 
     return {
         "tenant_id": tenant_id,
         "total_devices": total_devices,
         "online_devices": online_devices,
+        "provisionable_devices": provisionable_devices,
+        "has_unlimited_token": has_unlimited_token,
         "data_points_this_month": data_points_this_month,
         "alert_events_this_month": alert_events_this_month,
         "firmware_releases": firmware_releases,

@@ -22,7 +22,8 @@ def _tenant_jwt(role="viewer"):
 
 def test_get_stats_returns_expected_shape():
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
-         patch("app.routers.tenant_portal._count_influxdb_points", return_value=42000):
+         patch("app.routers.tenant_portal._count_influxdb_points", return_value=42000), \
+         patch("app.routers.tenant_portal._calc_provisionable_devices", return_value=(150, False)):
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
@@ -54,11 +55,14 @@ def test_get_stats_returns_expected_shape():
     assert data["data_points_this_month"] == 42000
     assert "alert_events_this_month" in data
     assert "firmware_releases" in data
+    assert data["provisionable_devices"] == 150
+    assert data["has_unlimited_token"] is False
 
 
 def test_get_stats_uses_calendar_month_for_alert_events():
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
-         patch("app.routers.tenant_portal._count_influxdb_points", return_value=0):
+         patch("app.routers.tenant_portal._count_influxdb_points", return_value=0), \
+         patch("app.routers.tenant_portal._calc_provisionable_devices", return_value=(0, False)):
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db

@@ -19,7 +19,7 @@ from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import write_audit_log, log_audit
-from app.routers.stats import _count_influxdb_points
+from app.routers.stats import _count_influxdb_points, _calc_provisionable_devices
 from app.services.device_groups import (
     DeviceNotFoundError,
     GroupInUseError,
@@ -735,6 +735,8 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         except Exception:
             firmware_releases = 0
 
+        provisionable_devices, has_unlimited_token = _calc_provisionable_devices(db, tenant_id, schema)
+
     data_points_this_month = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
 
     return {
@@ -743,6 +745,8 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         "data_points_this_month": data_points_this_month,
         "alert_events_this_month": alert_events_this_month,
         "firmware_releases": firmware_releases,
+        "provisionable_devices": provisionable_devices,
+        "has_unlimited_token": has_unlimited_token,
     }
 
 

@@ -366,6 +366,10 @@
             <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
             <p class="text-3xl font-bold text-gray-700" x-text="stats?.firmware_releases ?? '-'"></p>
           </div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <p class="text-xs font-medium text-gray-500 mb-1">プロビジョニング可能数</p>
+            <p class="text-3xl font-bold text-indigo-600" x-text="provisionableLabel(stats)"></p>
+          </div>
         </div>
       </div>
 
@@ -989,6 +993,13 @@
           } finally {
             this.statsLoading = false;
           }
+        },
+
+        provisionableLabel(s) {
+          if (!s) return '-';
+          const n = s.provisionable_devices ?? 0;
+          if (s.has_unlimited_token) return n > 0 ? (n.toLocaleString() + ' + 無制限') : '無制限';
+          return n.toLocaleString();
         },
 
         // Firmware

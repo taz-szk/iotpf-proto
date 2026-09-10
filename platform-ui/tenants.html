@@ -144,7 +144,7 @@
               <td colspan="5" class="px-6 py-4">
                 <div x-show="statsLoading[tenant.id]" class="text-sm text-gray-400 py-2">統計を取得中...</div>
                 <div x-show="!statsLoading[tenant.id] && tenantStats[tenant.id]"
-                     class="grid grid-cols-2 gap-3 md:grid-cols-5">
+                     class="grid grid-cols-2 gap-3 md:grid-cols-3">
                   <div class="bg-white rounded-lg border border-gray-200 p-3">
                     <p class="text-xs font-medium text-gray-500 mb-1">総デバイス数</p>
                     <p class="text-xl font-bold text-gray-800" x-text="tenantStats[tenant.id]?.total_devices ?? '-'"></p>
@@ -164,6 +164,10 @@
                   <div class="bg-white rounded-lg border border-gray-200 p-3">
                     <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
                     <p class="text-xl font-bold text-gray-700" x-text="tenantStats[tenant.id]?.firmware_releases ?? '-'"></p>
+                  </div>
+                  <div class="bg-white rounded-lg border border-gray-200 p-3">
+                    <p class="text-xs font-medium text-gray-500 mb-1">プロビジョニング可能数</p>
+                    <p class="text-xl font-bold text-indigo-600" x-text="provisionableLabel(tenantStats[tenant.id])"></p>
                   </div>
                 </div>
                 <div x-show="!statsLoading[tenant.id] && statsError[tenant.id]"
@@ -318,6 +322,13 @@
           Alpine.store('deleteModal').show(tenant, (id) => {
             this.tenants = this.tenants.filter(t => t.id !== id);
           });
+        },
+
+        provisionableLabel(s) {
+          if (!s) return '-';
+          const n = s.provisionable_devices ?? 0;
+          if (s.has_unlimited_token) return n > 0 ? (n.toLocaleString() + ' + 無制限') : '無制限';
+          return n.toLocaleString();
         },
 
         async toggleStats(tenant) {
