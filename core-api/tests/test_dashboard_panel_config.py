@@ -90,6 +90,7 @@ def test_get_panel_configs_invalid_group_id_returns_422():
 def test_put_panel_configs_success_operator():
     tenant = _make_tenant()
     with patch("app.routers.tenant_portal.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_portal.list_groups_with_devices", return_value=[]), \
          patch("app.services.grafana.sync_tenant_dashboard_with_configs") as mock_sync:
         mock_db = mock_sl.return_value.__enter__.return_value
         mock_db.query.return_value.filter.return_value.first.return_value = tenant
@@ -99,7 +100,7 @@ def test_put_panel_configs_success_operator():
             cookies={"iot_token": _tenant_token("operator")},
         )
     assert resp.status_code == 204
-    mock_sync.assert_called_once_with(5, "test-tenant", [{"sensor_key": "temperature", "panel_type": "gauge"}])
+    mock_sync.assert_called_once_with(5, "test-tenant", [{"sensor_key": "temperature", "panel_type": "gauge"}], [])
 
 def test_put_panel_configs_viewer_is_forbidden():
     resp = client.put(
@@ -128,6 +129,7 @@ def test_put_panel_configs_invalid_panel_type():
 def test_put_panel_configs_empty_list_clears_configs():
     tenant = _make_tenant()
     with patch("app.routers.tenant_portal.SessionLocal") as mock_sl, \
+         patch("app.routers.tenant_portal.list_groups_with_devices", return_value=[]), \
          patch("app.services.grafana.sync_tenant_dashboard_with_configs") as mock_sync:
         mock_db = mock_sl.return_value.__enter__.return_value
         mock_db.query.return_value.filter.return_value.first.return_value = tenant
@@ -137,7 +139,7 @@ def test_put_panel_configs_empty_list_clears_configs():
             cookies={"iot_token": _tenant_token("admin")},
         )
     assert resp.status_code == 204
-    mock_sync.assert_called_once_with(5, "test-tenant", [])
+    mock_sync.assert_called_once_with(5, "test-tenant", [], [])
 
 def test_put_panel_configs_requires_auth():
     resp = client.put("/tenant-portal/dashboard/panel-configs", json=[])

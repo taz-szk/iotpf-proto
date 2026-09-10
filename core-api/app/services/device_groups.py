@@ -169,20 +169,21 @@ def group_exists(schema: str, group_id: str) -> bool:
 
 def resync_grafana_groups(tenant_id: str, schema: str) -> None:
     """グループ構成またはデバイスの所属変更後、Grafanaダッシュボードのグループ変数を再生成する。
-    パネル構成には影響しない。Grafana未連携（org未作成）のテナントは何もしない。"""
+    パネル構成には影響しない。Grafana未連携（org未作成）のテナントは何もしない。
+    ベストエフォートの同期処理であり、失敗してもグループ操作自体は成功させる。"""
     from app.database import SessionLocal
     from app.models.public import Tenant
     from app.services.grafana import sync_tenant_dashboard_groups
 
-    with SessionLocal() as db:
-        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
-        if not tenant or not tenant.grafana_org_id:
-            return
-        org_id = tenant.grafana_org_id
-        tenant_name = tenant.name
-
-    groups = list_groups_with_devices(schema)
     try:
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+            if not tenant or not tenant.grafana_org_id:
+                return
+            org_id = tenant.grafana_org_id
+            tenant_name = tenant.name
+
+        groups = list_groups_with_devices(schema)
         sync_tenant_dashboard_groups(int(org_id), tenant_name, groups)
     except Exception as e:
         print(f"[device_groups] Grafana group sync failed: {e}")
