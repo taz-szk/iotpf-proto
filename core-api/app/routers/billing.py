@@ -7,7 +7,8 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import SessionLocal
 from app.models.public import Tenant
-from app.schemas.billing import UnitPriceOut, UnitPriceSet
+from app.models.billing import BillingInvoice
+from app.schemas.billing import InvoiceOut, UnitPriceOut, UnitPriceSet
 from app.services.auth import verify_token
 from app.services.audit import log_audit
 from app.services.billing import (
@@ -86,3 +87,25 @@ def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_re
               detail={"item_key": body.item_key, "unit_price": body.unit_price,
                       "effective_from": body.effective_from.isoformat()})
     return result
+
+
+@router.get("/invoices", response_model=list[InvoiceOut])
+def list_tenant_invoices(tenant_id: str, _: dict = Depends(_require_platform)):
+    tenant_id = _validate_uuid(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        rows = (
+            db.query(BillingInvoice)
+            .filter(BillingInvoice.tenant_id == tenant_id)
+            .order_by(BillingInvoice.target_year_month.desc())
+            .all()
+        )
+        return [
+            InvoiceOut(
+                target_year_month=r.target_year_month, status=r.status,
+                subtotal=r.subtotal, tax_amount=r.tax_amount, total_amount=r.total_amount,
+            )
+            for r in rows
+        ]

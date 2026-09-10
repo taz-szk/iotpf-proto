@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.services.auth import create_access_token
 from app.services.billing import InvalidEffectiveDateError
+from app.models.billing import BillingInvoice
 
 client = TestClient(app)
 
@@ -181,3 +182,51 @@ def test_create_price_requires_platform_auth():
         json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"},
     )
     assert resp.status_code == 401
+
+
+def _invoice_row(target_year_month, status_, subtotal, tax_amount, total_amount):
+    row = MagicMock(spec=BillingInvoice)
+    row.target_year_month = target_year_month
+    row.status = status_
+    row.subtotal = subtotal
+    row.tax_amount = tax_amount
+    row.total_amount = total_amount
+    return row
+
+
+def test_list_tenant_invoices_requires_platform_auth():
+    resp = client.get(f"/tenants/{TENANT_ID}/billing/invoices")
+    assert resp.status_code == 401
+
+
+def test_list_tenant_invoices_returns_invoices_newest_first():
+    rows = [
+        _invoice_row("2026-09", "draft", 5000, 500, 5500),
+        _invoice_row("2026-08", "finalized", 4000, 400, 4400),
+    ]
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()  # tenant exists
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = rows
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/invoices",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    assert body[0]["target_year_month"] == "2026-09"
+    assert body[0]["total_amount"] == 5500
+
+
+def test_list_tenant_invoices_tenant_not_found():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/invoices",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404

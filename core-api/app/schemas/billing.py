@@ -15,3 +15,11 @@ class UnitPriceOut(BaseModel):
     item_key: str
     unit_price: str
     effective_from: date
+
+
+class InvoiceOut(BaseModel):
+    target_year_month: str
+    status: str
+    subtotal: int
+    tax_amount: int
+    total_amount: int
