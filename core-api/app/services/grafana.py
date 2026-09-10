@@ -1,3 +1,4 @@
+import re
 import httpx
 import secrets
 from app.config import settings
@@ -40,6 +41,67 @@ _FLUX_DEVICE_VAR = (
     '  |> map(fn: (r) => ({_value: r.device_name}))'
 )
 
+# テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む
+_FLUX_DEVICE_VAR_TENANT = (
+    'from(bucket: "telemetry")\n'
+    '  |> range(start: -30d)\n'
+    '  |> filter(fn: (r) => r._measurement == "device_status")\n'
+    '  |> filter(fn: (r) => r._field == "online")\n'
+    '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
+    '  |> group(columns: ["device_name"])\n'
+    '  |> last()\n'
+    '  |> map(fn: (r) => ({_value: r.device_name}))'
+)
+
+
+def build_group_variable(groups: list[dict]) -> dict:
+    """デバイスグループ一覧からGrafanaのグループ絞り込み変数(Custom型)を生成する。
+    groups: [{"name": str, "device_names": list[str]}]
+    各グループの値はdevice_nameの正規表現(空グループは何にもマッチしない ^$ )。"""
+    options = [{"text": "全デバイス", "value": ".*", "selected": True}]
+    for g in groups:
+        if g["device_names"]:
+            pattern = "^(" + "|".join(re.escape(n) for n in g["device_names"]) + ")$"
+        else:
+            pattern = "^$"
+        options.append({"text": g["name"], "value": pattern, "selected": False})
+
+    return {
+        "name": "group",
+        "label": "グループ",
+        "type": "custom",
+        "multi": False,
+        "includeAll": False,
+        "query": ",".join(f'{o["text"]} : {o["value"]}' for o in options),
+        "options": options,
+        "current": {"selected": True, "text": "全デバイス", "value": ".*"},
+        "refresh": 0,
+        "hide": 0,
+    }
+
+
+def build_templating(groups: list[dict]) -> list[dict]:
+    """テナントダッシュボードのtemplating.listを構築する(group変数 → device_name変数の順)。"""
+    return [
+        build_group_variable(groups),
+        {
+            "name": "device_name",
+            "label": "デバイス",
+            "type": "query",
+            "multi": True,
+            "includeAll": True,
+            "allValue": ".*",
+            "current": {"selected": True, "text": "All", "value": "$__all"},
+            "query": {
+                "query": _FLUX_DEVICE_VAR_TENANT,
+                "refId": "StandardVariableQuery",
+            },
+            "datasource": {"type": "influxdb"},
+            "refresh": 2,
+            "sort": 1,
+        },
+    ]
+
 _FLUX_DELETED = (
     'from(bucket: "telemetry")\n'
     '  |> range(start: 0)\n'
@@ -61,24 +123,7 @@ _DEFAULT_DASHBOARD = {
     "dashboard": {
         "title": "テレメトリ監視",
         "templating": {
-            "list": [
-                {
-                    "name": "device_name",
-                    "label": "デバイス",
-                    "type": "query",
-                    "multi": True,
-                    "includeAll": True,
-                    "allValue": ".*",
-                    "current": {"selected": True, "text": "All", "value": "$__all"},
-                    "query": {
-                        "query": _FLUX_DEVICE_VAR,
-                        "refId": "StandardVariableQuery",
-                    },
-                    "datasource": {"type": "influxdb"},
-                    "refresh": 2,
-                    "sort": 1,
-                }
-            ]
+            "list": build_templating([])
         },
         "panels": [
             # Row — device_name でリピート。この行より後にあるパネルが一緒にリピートされる
@@ -477,11 +522,13 @@ def _get_influxdb_org_name(org_id: str) -> str | None:
         pass
     return None
 
-def create_default_dashboard(org_id: int, tenant_name: str) -> str:
+def create_default_dashboard(org_id: int, tenant_name: str, groups: list[dict] | None = None) -> str:
     """ダッシュボードを作成し、org のホームに設定する。ダッシュボード UID を返す。"""
     dashboard = dict(_DEFAULT_DASHBOARD)
     dashboard["dashboard"] = dict(dashboard["dashboard"])
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
+    if groups is not None:
+        dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
     resp = httpx.post(
         f"{settings.grafana_url}/api/dashboards/db",
         auth=_admin_auth(),
@@ -834,7 +881,7 @@ def add_tenant_datasource_to_platform_org(platform_org_id: int, tenant_name: str
         httpx.post(f"{settings.grafana_url}/api/user/using/1", auth=auth, timeout=5.0)
 
 
-def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
+def sync_tenant_dashboard(org_id: int, tenant_name: str, groups: list[dict] | None = None) -> None:
     """テナントのホームダッシュボードを最新パネル定義に更新する。"""
     import copy
     auth = _admin_auth()
@@ -849,7 +896,7 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
     uid = prefs.json().get("homeDashboardUID")
 
     if not uid:
-        create_default_dashboard(org_id, tenant_name)
+        create_default_dashboard(org_id, tenant_name, groups)
         return
 
     dash_resp = httpx.get(
@@ -866,6 +913,8 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
+    if groups is not None:
+        dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
 
     httpx.post(
         f"{settings.grafana_url}/api/dashboards/db",
@@ -876,7 +925,8 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str) -> None:
     ).raise_for_status()
 
 
-def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: list[dict]) -> None:
+def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: list[dict],
+                                       groups: list[dict] | None = None) -> None:
     """パネル設定付きでテナントダッシュボードを再生成する。PUT API から呼び出す。"""
     import copy
     auth = _admin_auth()
@@ -892,7 +942,7 @@ def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: l
 
     if not uid:
         # ダッシュボード未作成の場合は新規作成
-        create_default_dashboard(org_id, tenant_name)
+        create_default_dashboard(org_id, tenant_name, groups)
         return
 
     dash_resp = httpx.get(
@@ -910,12 +960,50 @@ def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: l
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
     dashboard["dashboard"]["panels"] = build_dashboard_panels(configs)
+    if groups is not None:
+        dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
 
     httpx.post(
         f"{settings.grafana_url}/api/dashboards/db",
         auth=auth,
         headers={"X-Grafana-Org-Id": str(org_id)},
         json=dashboard,
+        timeout=10.0,
+    ).raise_for_status()
+
+
+def sync_tenant_dashboard_groups(org_id: int, tenant_name: str, groups: list[dict]) -> None:
+    """グループ変更時にダッシュボードのgroup変数のみを再生成する。パネル構成は変更しない。"""
+    auth = _admin_auth()
+
+    prefs = httpx.get(
+        f"{settings.grafana_url}/api/org/preferences",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    prefs.raise_for_status()
+    uid = prefs.json().get("homeDashboardUID")
+    if not uid:
+        # ダッシュボード未作成なら何もしない（初回作成時にgroupsが反映される）
+        return
+
+    dash_resp = httpx.get(
+        f"{settings.grafana_url}/api/dashboards/uid/{uid}",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        timeout=10.0,
+    )
+    if dash_resp.status_code != 200:
+        return
+    dashboard_json = dash_resp.json()["dashboard"]
+    dashboard_json["templating"] = {"list": build_templating(groups)}
+
+    httpx.post(
+        f"{settings.grafana_url}/api/dashboards/db",
+        auth=auth,
+        headers={"X-Grafana-Org-Id": str(org_id)},
+        json={"dashboard": dashboard_json, "overwrite": True},
         timeout=10.0,
     ).raise_for_status()
 

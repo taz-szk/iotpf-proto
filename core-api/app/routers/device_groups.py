@@ -12,6 +12,7 @@ from app.services.device_groups import (
     create_group,
     delete_group,
     list_groups,
+    resync_grafana_groups,
     update_group,
 )
 
@@ -53,6 +54,7 @@ def create_device_group(tenant_id: str, body: GroupCreate, payload: dict = Depen
     log_audit("platform", payload["sub"], payload["email"], "create_device_group",
               tenant_id=tenant_id, resource_type="device_group", resource_id=group["id"],
               detail={"name": group["name"]})
+    resync_grafana_groups(tenant_id, schema)
     return group
 
 
@@ -69,6 +71,7 @@ def update_device_group(tenant_id: str, group_id: str, body: GroupUpdate, payloa
     log_audit("platform", payload["sub"], payload["email"], "update_device_group",
               tenant_id=tenant_id, resource_type="device_group", resource_id=group_id,
               detail=body.model_dump(exclude_none=True))
+    resync_grafana_groups(tenant_id, schema)
     return group
 
 
@@ -84,3 +87,4 @@ def delete_device_group(tenant_id: str, group_id: str, payload: dict = Depends(_
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "group_in_use", "alert_rules": e.rules})
     log_audit("platform", payload["sub"], payload["email"], "delete_device_group",
               tenant_id=tenant_id, resource_type="device_group", resource_id=group_id)
+    resync_grafana_groups(tenant_id, schema)

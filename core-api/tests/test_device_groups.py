@@ -8,6 +8,8 @@ from app.services.device_groups import (
     create_group,
     delete_group,
     list_groups,
+    list_groups_with_devices,
+    resync_grafana_groups,
     update_group,
 )
 
@@ -30,6 +32,63 @@ def test_list_groups_returns_rows():
         mock_engine.connect.return_value = conn
         result = list_groups(SCHEMA)
     assert result == [{"id": "g1", "name": "拠点A", "description": "説明", "created_at": None}]
+
+
+def test_list_groups_with_devices_returns_names():
+    group_row = MagicMock(id="g1")
+    group_row.name = "拠点A"
+    device_row1 = MagicMock()
+    device_row1.device_name = "device-1"
+    device_row2 = MagicMock()
+    device_row2.device_name = "device-2"
+    conn = _conn()
+    conn.execute.return_value.fetchall.side_effect = [[group_row], [device_row1, device_row2]]
+    with patch("app.services.device_groups.engine") as mock_engine:
+        mock_engine.connect.return_value = conn
+        result = list_groups_with_devices(SCHEMA)
+    assert result == [{"id": "g1", "name": "拠点A", "device_names": ["device-1", "device-2"]}]
+
+
+def test_list_groups_with_devices_empty_group():
+    group_row = MagicMock(id="g1")
+    group_row.name = "拠点A"
+    conn = _conn()
+    conn.execute.return_value.fetchall.side_effect = [[group_row], []]
+    with patch("app.services.device_groups.engine") as mock_engine:
+        mock_engine.connect.return_value = conn
+        result = list_groups_with_devices(SCHEMA)
+    assert result == [{"id": "g1", "name": "拠点A", "device_names": []}]
+
+
+def test_resync_grafana_groups_calls_sync_with_org_and_groups():
+    tenant = MagicMock(grafana_org_id="42")
+    tenant.name = "acme"
+    mock_db = MagicMock()
+    mock_db.__enter__ = lambda s: mock_db
+    mock_db.__exit__ = MagicMock(return_value=False)
+    mock_db.query.return_value.filter.return_value.first.return_value = tenant
+
+    with patch("app.database.SessionLocal", return_value=mock_db), \
+         patch("app.services.device_groups.list_groups_with_devices",
+               return_value=[{"name": "拠点A", "device_names": []}]), \
+         patch("app.services.grafana.sync_tenant_dashboard_groups") as mock_sync:
+        resync_grafana_groups("tenant-1", SCHEMA)
+
+    mock_sync.assert_called_once_with(42, "acme", [{"name": "拠点A", "device_names": []}])
+
+
+def test_resync_grafana_groups_skips_when_no_grafana_org():
+    tenant = MagicMock(grafana_org_id=None)
+    mock_db = MagicMock()
+    mock_db.__enter__ = lambda s: mock_db
+    mock_db.__exit__ = MagicMock(return_value=False)
+    mock_db.query.return_value.filter.return_value.first.return_value = tenant
+
+    with patch("app.database.SessionLocal", return_value=mock_db), \
+         patch("app.services.grafana.sync_tenant_dashboard_groups") as mock_sync:
+        resync_grafana_groups("tenant-1", SCHEMA)
+
+    mock_sync.assert_not_called()
 
 
 def test_create_group_returns_new_group():

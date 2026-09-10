@@ -7,6 +7,7 @@ from app.database import SessionLocal
 from app.services.auth import verify_token
 from app.services.tenant import setup_tenant, teardown_tenant
 from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
+from app.services.device_groups import list_groups_with_devices
 from app.services.audit import write_audit_log
 import time
 import uuid
@@ -156,7 +157,9 @@ def sync_all_dashboards(_: dict = Depends(_require_platform)):
         ).all()
     for t in tenants:
         try:
-            sync_tenant_dashboard(t.grafana_org_id, t.name)
+            schema = f"tenant_{str(t.id).replace('-', '_')}"
+            groups = list_groups_with_devices(schema)
+            sync_tenant_dashboard(t.grafana_org_id, t.name, groups)
             results.append({"tenant": t.name, "status": "ok"})
         except Exception as e:
             results.append({"tenant": t.name, "status": "error", "detail": str(e)})

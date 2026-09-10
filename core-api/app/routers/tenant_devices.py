@@ -10,7 +10,7 @@ from app.database import SessionLocal, engine
 from app.services.auth import verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import log_audit
-from app.services.device_groups import DeviceNotFoundError, GroupNotFoundError, assign_device_group
+from app.services.device_groups import DeviceNotFoundError, GroupNotFoundError, assign_device_group, resync_grafana_groups
 
 router = APIRouter(prefix="/tenants/{tenant_id}/devices", tags=["tenant-devices"])
 _bearer = HTTPBearer()
@@ -123,6 +123,7 @@ def update_tenant_device(tenant_id: UUID, device_id: str, body: DeviceUpdateBody
     log_audit("platform", payload["sub"], payload["email"], "assign_device_group",
               tenant_id=tenant_id_str, resource_type="device", resource_id=device_id,
               detail={"old_group_id": old_group_id, "new_group_id": body.group_id})
+    resync_grafana_groups(tenant_id_str, schema)
     with engine.connect() as conn:
         row = conn.execute(text(f'''
             SELECT id, device_id, device_name, connection_status, last_seen_at,

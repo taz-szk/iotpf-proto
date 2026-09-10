@@ -143,9 +143,46 @@ def list_group_device_ids(schema: str, group_id: str) -> list[str]:
     return [r.device_id for r in rows]
 
 
+def list_groups_with_devices(schema: str) -> list[dict]:
+    """各グループとその所属デバイスの device_name 一覧を返す。
+    Grafanaダッシュボードのグループ絞り込み変数の生成に使う。"""
+    with engine.connect() as conn:
+        groups = conn.execute(text(f'''
+            SELECT id, name FROM "{schema}".device_groups ORDER BY created_at DESC
+        ''')).fetchall()
+        result = []
+        for g in groups:
+            devices = conn.execute(text(f'''
+                SELECT device_name FROM "{schema}".devices WHERE group_id = :gid
+            '''), {"gid": str(g.id)}).fetchall()
+            result.append({"id": str(g.id), "name": g.name, "device_names": [d.device_name for d in devices]})
+    return result
+
+
 def group_exists(schema: str, group_id: str) -> bool:
     with engine.connect() as conn:
         row = conn.execute(text(f'''
             SELECT 1 FROM "{schema}".device_groups WHERE id = :id
         '''), {"id": group_id}).fetchone()
     return row is not None
+
+
+def resync_grafana_groups(tenant_id: str, schema: str) -> None:
+    """グループ構成またはデバイスの所属変更後、Grafanaダッシュボードのグループ変数を再生成する。
+    パネル構成には影響しない。Grafana未連携（org未作成）のテナントは何もしない。"""
+    from app.database import SessionLocal
+    from app.models.public import Tenant
+    from app.services.grafana import sync_tenant_dashboard_groups
+
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant or not tenant.grafana_org_id:
+            return
+        org_id = tenant.grafana_org_id
+        tenant_name = tenant.name
+
+    groups = list_groups_with_devices(schema)
+    try:
+        sync_tenant_dashboard_groups(int(org_id), tenant_name, groups)
+    except Exception as e:
+        print(f"[device_groups] Grafana group sync failed: {e}")

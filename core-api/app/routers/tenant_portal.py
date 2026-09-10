@@ -31,6 +31,7 @@ from app.services.device_groups import (
     group_exists,
     list_group_device_ids,
     list_groups,
+    list_groups_with_devices,
     update_group,
 )
 from app.services.tenant import teardown_tenant
@@ -1035,8 +1036,9 @@ def put_panel_configs(
     # グループ別設定は Grafana ダッシュボード同期の対象外（テナント全体のデフォルトのみ同期）
     if grafana_org_id and group_id is None:
         configs = [{"sensor_key": i.sensor_key, "panel_type": i.panel_type.value} for i in items]
+        groups = list_groups_with_devices(_schema(tenant_id))
         try:
-            sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs)
+            sync_tenant_dashboard_with_configs(int(grafana_org_id), tenant_name, configs, groups)
         except Exception as e:
             print(f"[panel_configs] Grafana sync failed: {e}")
 

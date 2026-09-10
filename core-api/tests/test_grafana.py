@@ -3,6 +3,7 @@ from app.services.grafana import (
     create_grafana_org, setup_grafana_datasource, create_default_dashboard,
     build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
     _flux_string_escape, retire_device_in_influxdb,
+    build_group_variable, build_templating, sync_tenant_dashboard_groups,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -103,6 +104,67 @@ def test_flux_string_escape_handles_backslash_before_dollar_and_quote():
     # バックスラッシュが二重エスケープされないこと
     esc = _flux_string_escape('a\\b$c"d')
     assert esc == 'a\\\\b\\$c\\"d'
+
+def test_build_group_variable_default_and_groups():
+    groups = [
+        {"name": "拠点A", "device_names": ["dev-1", "dev-2"]},
+        {"name": "拠点B", "device_names": []},
+    ]
+    var = build_group_variable(groups)
+    assert var["name"] == "group"
+    assert var["type"] == "custom"
+    values = {opt["text"]: opt["value"] for opt in var["options"]}
+    assert values["全デバイス"] == ".*"
+    assert values["拠点A"] == "^(dev\\-1|dev\\-2)$"
+    assert values["拠点B"] == "^$"  # 空グループはどのdevice_nameにもマッチしない
+    assert var["current"]["value"] == ".*"
+
+def test_build_group_variable_escapes_regex_special_chars():
+    groups = [{"name": "拠点C", "device_names": ["dev.1", "dev+2"]}]
+    var = build_group_variable(groups)
+    values = {opt["text"]: opt["value"] for opt in var["options"]}
+    assert values["拠点C"] == "^(dev\\.1|dev\\+2)$"
+
+def test_build_group_variable_no_groups_has_only_default():
+    var = build_group_variable([])
+    assert len(var["options"]) == 1
+    assert var["options"][0]["value"] == ".*"
+
+def test_build_templating_has_group_before_device_name():
+    templating = build_templating([{"name": "拠点A", "device_names": ["dev-1"]}])
+    names = [v["name"] for v in templating]
+    assert names == ["group", "device_name"]
+    device_var = next(v for v in templating if v["name"] == "device_name")
+    assert "${group}" in device_var["query"]["query"]
+
+def test_sync_tenant_dashboard_groups_replaces_templating_only():
+    existing_dashboard = {
+        "panels": [{"id": 1}, {"id": 2}],
+        "templating": {"list": []},
+        "version": 3,
+        "uid": "uid1",
+        "title": "テレメトリ監視 - acme",
+    }
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.side_effect = [
+            _mock_resp(200, {"homeDashboardUID": "uid1"}),
+            _mock_resp(200, {"dashboard": existing_dashboard}),
+        ]
+        mock_httpx.post.return_value = _mock_resp(200, {"uid": "uid1"})
+        sync_tenant_dashboard_groups(
+            org_id=42, tenant_name="acme",
+            groups=[{"name": "拠点A", "device_names": ["dev-1"]}],
+        )
+    posted = mock_httpx.post.call_args.kwargs["json"]
+    assert posted["dashboard"]["panels"] == [{"id": 1}, {"id": 2}]
+    var_names = [v["name"] for v in posted["dashboard"]["templating"]["list"]]
+    assert "group" in var_names
+
+def test_sync_tenant_dashboard_groups_skips_when_no_dashboard_yet():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.return_value = _mock_resp(200, {"homeDashboardUID": None})
+        sync_tenant_dashboard_groups(org_id=42, tenant_name="acme", groups=[])
+    mock_httpx.post.assert_not_called()
 
 def test_retire_device_in_influxdb_escapes_dollar_in_flux_query():
     with patch("app.services.grafana.httpx") as mock_httpx:
