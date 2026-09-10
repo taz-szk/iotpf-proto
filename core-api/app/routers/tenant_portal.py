@@ -372,7 +372,7 @@ _UNLIMITED_EXPIRES = datetime(2099, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
 _UNLIMITED_DEVICES = 2_000_000_000
 
 class TokenCreate(BaseModel):
-    max_devices: Optional[int] = Field(default=100, gt=0, le=10000)
+    max_devices: int = Field(default=100, gt=0, le=10000)
     expires_days: Optional[int] = Field(default=365, gt=0, le=1825)
 
 
@@ -414,7 +414,7 @@ def create_token(body: TokenCreate, payload: dict = Depends(_require_admin_or_op
             id=uuid_lib.uuid4(),
             token=secrets.token_urlsafe(32),
             tenant_id=tenant_uuid,
-            max_devices=_UNLIMITED_DEVICES if body.max_devices is None else body.max_devices,
+            max_devices=body.max_devices,
             expires_at=_UNLIMITED_EXPIRES if body.expires_days is None
                        else datetime.now(timezone.utc) + timedelta(days=body.expires_days),
         )

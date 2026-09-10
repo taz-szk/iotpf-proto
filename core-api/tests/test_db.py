@@ -69,3 +69,18 @@ def test_migrate_dashboard_panel_config_group_id_executes():
     sql_calls = _sql_text(mock_conn.execute.call_args_list)
     assert "ADD COLUMN IF NOT EXISTS group_id" in sql_calls
     assert "dashboard_panel_configs_tenant_group_sensor_key_key" in sql_calls
+
+
+def test_migrate_create_billing_tables_executes():
+    from app.database import migrate_create_billing_tables
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        migrate_create_billing_tables()
+    sql_calls = _sql_text(mock_conn.execute.call_args_list)
+    assert "billing_unit_prices" in sql_calls
+    assert "billing_invoices" in sql_calls
+    assert "billing_line_items" in sql_calls
+    assert "UNIQUE (tenant_id, item_key, effective_from)" in sql_calls
