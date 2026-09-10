@@ -2,14 +2,18 @@ import os
 import requests
 
 
-def provision(api_url: str, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True) -> tuple:
+def provision(api_url: str, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True,
+              group_id: str = None) -> tuple:
     os.makedirs(cert_dir, exist_ok=True)
     if not verify:
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    body = {"bootstrap_token": bootstrap_token, "device_id": device_id}
+    if group_id:
+        body["group_id"] = group_id
     resp = requests.post(
         f"{api_url}/provision",
-        json={"bootstrap_token": bootstrap_token, "device_id": device_id},
+        json=body,
         timeout=30,
         verify=verify,
     )
@@ -23,6 +27,20 @@ def provision(api_url: str, bootstrap_token: str, device_id: str, cert_dir: str,
     _write(cert_dir, "device_id", data["device_id"])
 
     return data["tenant_id"], data["device_id"]
+
+
+def list_groups(api_url: str, bootstrap_token: str, verify: bool = True) -> list:
+    if not verify:
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    resp = requests.post(
+        f"{api_url}/provision/groups",
+        json={"bootstrap_token": bootstrap_token},
+        timeout=30,
+        verify=verify,
+    )
+    resp.raise_for_status()
+    return resp.json()
 
 
 def load_credentials(cert_dir: str) -> tuple:

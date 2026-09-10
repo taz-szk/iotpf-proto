@@ -11,7 +11,8 @@ from sqlalchemy import text
 from app.config import settings
 from app.database import SessionLocal
 from app.models.public import ProvisioningToken
-from app.schemas.device import ProvisionRequest, ProvisionOut
+from app.schemas.device import ProvisionRequest, ProvisionOut, ProvisionGroupsRequest
+from app.schemas.device_group import GroupOut
 from app.services.provisioning import issue_device_cert_for_tenant
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,14 @@ def provision(req: ProvisionRequest):
         tenant_id = str(token.tenant_id)
         schema = f"tenant_{tenant_id.replace('-', '_')}"
 
+        if req.group_id is not None:
+            group_row = db.execute(
+                text(f'SELECT id FROM "{schema}".device_groups WHERE id = :gid'),
+                {"gid": req.group_id}
+            ).first()
+            if not group_row:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid group_id")
+
         existing = db.execute(
             text(f'SELECT id FROM "{schema}".devices WHERE device_id = :did'),
             {"did": req.device_id}
@@ -72,10 +81,10 @@ def provision(req: ProvisionRequest):
         device_name = req.device_name.strip() or req.device_id
         db.execute(
             text(f'''INSERT INTO "{schema}".devices
-                         (id, device_id, device_name, provisioning_token_id, connection_status, fw_version, cert_not_after)
-                     VALUES (:id, :did, :dname, :tok_id, 'offline', '1.0.0', :cert_not_after)'''),
+                         (id, device_id, device_name, provisioning_token_id, connection_status, fw_version, cert_not_after, group_id)
+                     VALUES (:id, :did, :dname, :tok_id, 'offline', '1.0.0', :cert_not_after, :group_id)'''),
             {"id": str(uuid.uuid4()), "did": req.device_id, "dname": device_name,
-             "tok_id": str(token.id), "cert_not_after": cert_not_after}
+             "tok_id": str(token.id), "cert_not_after": cert_not_after, "group_id": req.group_id}
         )
         db.commit()
 
@@ -92,3 +101,32 @@ def provision(req: ProvisionRequest):
         private_key=key_pem,
         ca_certificate=ca_cert,
     )
+
+@router.post("/provision/groups", response_model=list[GroupOut])
+def provision_groups(req: ProvisionGroupsRequest):
+    with SessionLocal() as db:
+        token = db.query(ProvisioningToken).filter(
+            ProvisioningToken.token == req.bootstrap_token,
+            ProvisioningToken.is_active == True,
+        ).first()
+
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+        now = datetime.now(timezone.utc)
+        expires_at = token.expires_at if token.expires_at.tzinfo else token.expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < _UNLIMITED_EXPIRES and expires_at < now:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token expired")
+
+        tenant_id = str(token.tenant_id)
+        schema = f"tenant_{tenant_id.replace('-', '_')}"
+        rows = db.execute(text(f'''
+            SELECT id, name, description, created_at
+            FROM "{schema}".device_groups ORDER BY created_at DESC
+        ''')).fetchall()
+
+    return [
+        GroupOut(id=str(r.id), name=r.name, description=r.description,
+                 created_at=r.created_at.isoformat() if r.created_at else None)
+        for r in rows
+    ]

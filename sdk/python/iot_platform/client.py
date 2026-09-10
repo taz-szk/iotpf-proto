@@ -4,7 +4,7 @@ import ssl
 import threading
 from typing import Callable, Optional
 import paho.mqtt.client as mqtt
-from .provisioning import provision as _do_provision, load_credentials
+from .provisioning import provision as _do_provision, load_credentials, list_groups as _list_groups
 from .ota import OtaHandler  # re-exported for convenience
 
 
@@ -26,11 +26,16 @@ class IotClient:
         """予期しない切断（rc != 0）を通知するコールバックを登録する。"""
         self._disconnect_callback = callback
 
-    def provision(self, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True) -> None:
-        tenant_id, dev_id = _do_provision(self._api_url, bootstrap_token, device_id, cert_dir, verify=verify)
+    def provision(self, bootstrap_token: str, device_id: str, cert_dir: str, verify: bool = True,
+                  group_id: str = None) -> None:
+        tenant_id, dev_id = _do_provision(self._api_url, bootstrap_token, device_id, cert_dir, verify=verify,
+                                           group_id=group_id)
         self._tenant_id = tenant_id
         self._device_id = dev_id
         self._cert_dir = cert_dir
+
+    def list_groups(self, bootstrap_token: str, verify: bool = True) -> list:
+        return _list_groups(self._api_url, bootstrap_token, verify=verify)
 
     def load_credentials(self, cert_dir: str) -> None:
         tenant_id, _, _, _ = load_credentials(cert_dir)

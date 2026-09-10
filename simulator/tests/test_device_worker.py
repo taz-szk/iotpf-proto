@@ -36,7 +36,22 @@ class TestDeviceWorkerProvisioning(unittest.TestCase):
             time.sleep(0.4)
             worker.stop()
             worker.join(timeout=2)
-        MockClient.return_value.provision.assert_called_once_with("tok", "test-001", cert_dir, verify=True)
+        MockClient.return_value.provision.assert_called_once_with(
+            "tok", "test-001", cert_dir, verify=True, group_id=None)
+
+    @patch("device_worker.IotClient")
+    def test_provisions_with_group_id(self, MockClient):
+        """group_id を渡した場合 provision() に group_id が渡される"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "test-001")
+            q = queue.Queue()
+            worker = _make_worker(cert_dir, q, group_id="group-abc")
+            worker.start()
+            time.sleep(0.4)
+            worker.stop()
+            worker.join(timeout=2)
+        MockClient.return_value.provision.assert_called_once_with(
+            "tok", "test-001", cert_dir, verify=True, group_id="group-abc")
 
     @patch("device_worker.IotClient")
     def test_loads_creds_when_cert_exists(self, MockClient):

@@ -590,6 +590,9 @@ class SimulatorApp(tk.Tk):
         device_id_var   = tk.StringVar(value=self._next_device_id())
         tenant_var      = tk.StringVar(value=self._tenants[0]["name"])
         token_label_var = tk.StringVar()
+        group_var       = tk.StringVar()
+        group_map: dict[str, str] = {}
+        NO_GROUP = "(未選択)"
 
         f = ttk.Frame(dlg, padding=14)
         f.pack(fill=tk.BOTH, expand=True)
@@ -606,6 +609,40 @@ class SimulatorApp(tk.Tk):
         token_lbl.grid(row=2, column=0, sticky=tk.W, pady=4, padx=(0, 8))
         token_combo.grid(row=2, column=1, sticky=tk.W)
 
+        group_lbl   = ttk.Label(f, text="グループ:")
+        group_combo = ttk.Combobox(f, textvariable=group_var, state="readonly", width=27)
+        group_lbl.grid(row=3, column=0, sticky=tk.W, pady=4, padx=(0, 8))
+        group_combo.grid(row=3, column=1, sticky=tk.W)
+
+        def _current_token() -> Optional[dict]:
+            t = next((t for t in self._tenants if t["name"] == tenant_var.get()), None)
+            if not t:
+                return None
+            tokens = t.get("bootstrap_tokens", [])
+            selected_label = token_label_var.get()
+            return next((tok for tok in tokens if tok["label"] == selected_label), None) or (tokens[0] if tokens else None)
+
+        def refresh_groups(*_: object) -> None:
+            t = next((t for t in self._tenants if t["name"] == tenant_var.get()), None)
+            token_obj = _current_token()
+            groups: list[dict] = []
+            if t and token_obj:
+                try:
+                    from iot_platform.provisioning import list_groups
+                    groups = list_groups(t["api_url"], token_obj["token"], verify=t["ssl_verify"])
+                except Exception:
+                    groups = []
+            group_map.clear()
+            group_map.update({g["name"]: g["id"] for g in groups})
+            group_combo["values"] = [NO_GROUP] + [g["name"] for g in groups]
+            group_var.set(NO_GROUP)
+            if not groups:
+                group_lbl.grid_remove()
+                group_combo.grid_remove()
+            else:
+                group_lbl.grid()
+                group_combo.grid()
+
         def refresh_tokens(*_: object) -> None:
             t = next((t for t in self._tenants if t["name"] == tenant_var.get()), None)
             tokens = t.get("bootstrap_tokens", []) if t else []
@@ -619,8 +656,10 @@ class SimulatorApp(tk.Tk):
             else:
                 token_lbl.grid()
                 token_combo.grid()
+            refresh_groups()
 
         tenant_combo.bind("<<ComboboxSelected>>", refresh_tokens)
+        token_combo.bind("<<ComboboxSelected>>", refresh_groups)
         refresh_tokens()
 
         def ok() -> None:
@@ -645,17 +684,19 @@ class SimulatorApp(tk.Tk):
             if not token_obj:
                 messagebox.showwarning("エラー", "有効なBootstrap Tokenがありません", parent=dlg)
                 return
+            group_id = group_map.get(group_var.get())
             dlg.destroy()
-            self._add_device(dev_id, tenant, token_obj["token"], token_obj["label"])
+            self._add_device(dev_id, tenant, token_obj["token"], token_obj["label"], group_id)
 
         bf = ttk.Frame(f)
-        bf.grid(row=3, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
+        bf.grid(row=4, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
         ttk.Button(bf, text="OK",       command=ok,          width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="キャンセル", command=dlg.destroy, width=8).pack(side=tk.LEFT)
         _center_on_parent(dlg, self)
         dlg.wait_window()
 
-    def _add_device(self, device_id: str, tenant: dict, bootstrap_token: str = "", token_label: str = "") -> None:
+    def _add_device(self, device_id: str, tenant: dict, bootstrap_token: str = "", token_label: str = "",
+                     group_id: Optional[str] = None) -> None:
         wid = self._next_wid
         self._next_wid += 1
         cert_dir = os.path.join(CERT_BASE, tenant["name"], device_id)
@@ -669,6 +710,7 @@ class SimulatorApp(tk.Tk):
             cert_dir=cert_dir,
             event_queue=self._event_queue,
             ssl_verify=tenant["ssl_verify"],
+            group_id=group_id,
         )
         self._workers[wid] = worker
         self._device_tenants[wid] = tenant["name"]
