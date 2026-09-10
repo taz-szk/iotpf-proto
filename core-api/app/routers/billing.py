@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import SessionLocal
+from app.models.public import Tenant
 from app.schemas.billing import UnitPriceOut, UnitPriceSet
 from app.services.auth import verify_token
 from app.services.audit import log_audit
@@ -39,6 +40,9 @@ def list_current_prices(tenant_id: str, _: dict = Depends(_require_platform)):
     tenant_id = _validate_uuid(tenant_id)
     now = datetime.now(timezone.utc)
     with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         prices = get_effective_unit_prices(db, tenant_id, now.year, now.month)
     month_start = date(now.year, now.month, 1)
     return [
@@ -58,8 +62,15 @@ def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_re
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must be a finite decimal number")
     if unit_price < 0:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must not be negative")
+    if unit_price > Decimal("99999999.9999"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price exceeds the maximum (99999999.9999)")
+    if unit_price.as_tuple().exponent < -4:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price supports at most 4 decimal places")
 
     with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         try:
             row = set_unit_price(db, tenant_id, body.item_key, unit_price, body.effective_from)
         except InvalidEffectiveDateError as e:

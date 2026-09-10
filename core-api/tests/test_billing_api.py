@@ -124,6 +124,57 @@ def test_create_price_rejects_infinity_unit_price():
     assert resp.status_code == 422
 
 
+def test_create_price_rejects_unit_price_exceeding_maximum():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "100000000", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_unit_price_with_too_many_decimal_places():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "0.00005", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_list_current_prices_returns_404_for_nonexistent_tenant():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_create_price_returns_404_for_nonexistent_tenant():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
 def test_create_price_requires_platform_auth():
     resp = client.post(
         f"/tenants/{TENANT_ID}/billing/prices",
