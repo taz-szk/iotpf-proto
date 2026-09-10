@@ -19,6 +19,7 @@ from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import write_audit_log, log_audit
+from app.routers.stats import _count_influxdb_points
 from app.services.device_groups import (
     DeviceNotFoundError,
     GroupInUseError,
@@ -712,7 +713,6 @@ def delete_alert_rule(rule_id: str, payload: dict = Depends(_require_admin_or_op
 
 @router.get("/me/stats")
 def get_stats(payload: dict = Depends(_require_tenant)):
-    import httpx
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
 
@@ -725,8 +725,8 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         online_devices = db.execute(
             text(f"SELECT COUNT(*) FROM \"{schema}\".devices WHERE connection_status = 'online'")
         ).scalar() or 0
-        alert_events_30d = db.execute(
-            text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= NOW() - INTERVAL '30 days'")
+        alert_events_this_month = db.execute(
+            text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= date_trunc('month', NOW())")
         ).scalar() or 0
         try:
             firmware_releases = db.execute(
@@ -735,44 +735,13 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         except Exception:
             firmware_releases = 0
 
-    # InfluxDB データポイント数
-    data_points_30d = 0
-    if tenant.influxdb_org_id and tenant.influxdb_token:
-        query = (
-            'from(bucket: "telemetry")\n'
-            '  |> range(start: -30d)\n'
-            '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
-            '  |> group()\n'
-            '  |> count()\n'
-            '  |> sum()\n'
-        )
-        try:
-            resp = httpx.post(
-                f"{settings.influxdb_url}/api/v2/query?orgID={tenant.influxdb_org_id}",
-                headers={
-                    "Authorization": f"Token {tenant.influxdb_token}",
-                    "Content-Type": "application/json",
-                },
-                json={"query": query, "type": "flux"},
-                timeout=15.0,
-            )
-            if resp.status_code == 200:
-                for line in resp.text.strip().splitlines():
-                    if line.startswith("#") or not line.strip() or ",result," in line:
-                        continue
-                    for part in reversed(line.split(",")):
-                        part = part.strip()
-                        if part.lstrip("-").isdigit():
-                            data_points_30d = int(part)
-                            break
-        except Exception:
-            pass
+    data_points_this_month = _count_influxdb_points(tenant.influxdb_org_id, tenant.influxdb_token or "")
 
     return {
         "total_devices": total_devices,
         "online_devices": online_devices,
-        "data_points_30d": data_points_30d,
-        "alert_events_30d": alert_events_30d,
+        "data_points_this_month": data_points_this_month,
+        "alert_events_this_month": alert_events_this_month,
         "firmware_releases": firmware_releases,
     }
 

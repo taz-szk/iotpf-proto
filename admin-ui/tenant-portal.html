@@ -839,6 +839,33 @@
             </div>
           </div>
 
+          <!-- ===== 統計 ===== -->
+          <div x-show="activeTab === 'stats'">
+            <div x-show="statsLoading" class="py-8 text-center text-gray-400">統計を取得中...</div>
+            <div x-show="!statsLoading && stats" class="grid grid-cols-2 gap-4 md:grid-cols-3">
+              <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">総デバイス数</p>
+                <p class="text-3xl font-bold text-gray-800" x-text="stats?.total_devices ?? '-'"></p>
+              </div>
+              <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">オンライン</p>
+                <p class="text-3xl font-bold text-green-600" x-text="stats?.online_devices ?? '-'"></p>
+              </div>
+              <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">データポイント（今月）</p>
+                <p class="text-3xl font-bold text-amber-600" x-text="(stats?.data_points_this_month ?? 0).toLocaleString()"></p>
+              </div>
+              <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">アラートイベント（今月）</p>
+                <p class="text-3xl font-bold text-yellow-600" x-text="stats?.alert_events_this_month ?? '-'"></p>
+              </div>
+              <div class="bg-white rounded-xl border border-gray-200 p-5">
+                <p class="text-xs font-medium text-gray-500 mb-1">ファームウェア（有効）</p>
+                <p class="text-3xl font-bold text-gray-700" x-text="stats?.firmware_releases ?? '-'"></p>
+              </div>
+            </div>
+          </div>
+
           <!-- ===== ダッシュボード設定 ===== -->
           <div x-show="activeTab === 'dashboard-config'">
             <div class="flex items-center justify-between mb-4">
@@ -1195,6 +1222,7 @@ function portalApp() {
     get tabs() {
       const base = [
         { id: 'dashboard',        label: 'ダッシュボード',           icon: '▦' },
+        { id: 'stats',            label: '統計',                     icon: '📊' },
         { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
         { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
         { id: 'devices',          label: 'デバイス',                 icon: '📡' },
@@ -1272,6 +1300,8 @@ function portalApp() {
     // ユーザー
     users: [], showUserForm: false, newUser: { email: '', password: '', role: 'viewer' },
     deletePortalUserId: null,
+    // 統計
+    stats: null, statsLoading: false,
     // デバイス
     devices: [], devicesLoading: false, _devTimer: null,
     // グループ管理
@@ -1408,6 +1438,7 @@ function portalApp() {
       if (tab === 'firmware') await this.loadFirmware();
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
+      if (tab === 'stats')    await this.loadStats();
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
@@ -1709,6 +1740,11 @@ function portalApp() {
     },
 
     // ----- デバイス -----
+    async loadStats() {
+      this.statsLoading = true;
+      try { this.stats = await portalFetch('GET', '/me/stats'); }
+      catch(e) { this.error = e.message; } finally { this.statsLoading = false; }
+    },
     async loadDevices() {
       this.devicesLoading = true;
       try { this.devices = await portalFetch('GET', '/me/devices') || []; }
