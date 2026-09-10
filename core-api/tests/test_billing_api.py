@@ -1,0 +1,183 @@
+from datetime import date
+from decimal import Decimal
+from unittest.mock import patch, MagicMock
+
+from fastapi.testclient import TestClient
+from app.main import app
+from app.services.auth import create_access_token
+from app.services.billing import InvalidEffectiveDateError
+
+client = TestClient(app)
+
+TENANT_ID = "11111111-1111-1111-1111-111111111111"
+
+
+def _platform_token():
+    return create_access_token({"sub": "admin-id", "email": "admin@iot.local", "type": "platform"})
+
+
+def _tenant_token():
+    return create_access_token({
+        "sub": "user-id", "email": "user@test.com", "type": "tenant",
+        "tenant_id": TENANT_ID, "role": "admin",
+    })
+
+
+def _session_ctx():
+    mock_db = MagicMock()
+    mock_db.__enter__ = lambda s: mock_db
+    mock_db.__exit__ = MagicMock(return_value=False)
+    return mock_db
+
+
+def test_list_current_prices_requires_platform_auth():
+    resp = client.get(f"/tenants/{TENANT_ID}/billing/prices")
+    assert resp.status_code == 401
+
+
+def test_list_current_prices_rejects_tenant_token():
+    resp = client.get(
+        f"/tenants/{TENANT_ID}/billing/prices",
+        headers={"Authorization": f"Bearer {_tenant_token()}"},
+    )
+    assert resp.status_code == 401
+
+
+def test_list_current_prices_returns_effective_prices():
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.get_effective_unit_prices",
+               return_value={"base_fee": Decimal("5000"), "data_points": Decimal("0.01")}):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body) == 2
+    by_key = {item["item_key"]: item["unit_price"] for item in body}
+    assert by_key == {"base_fee": "5000", "data_points": "0.01"}
+
+
+def test_create_price_success():
+    created = MagicMock()
+    created.item_key = "base_fee"
+    created.unit_price = Decimal("6000")
+    created.effective_from = date(2099, 1, 1)
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.set_unit_price", return_value=created) as mock_set:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body == {"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"}
+    assert mock_set.call_args[0][3] == Decimal("6000")
+
+
+def test_create_price_rejects_invalid_effective_date():
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.set_unit_price",
+               side_effect=InvalidEffectiveDateError("must be a future month")):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2020-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_malformed_unit_price_string():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "not-a-number", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_nan_unit_price():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "NaN", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_infinity_unit_price():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "Infinity", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_unit_price_exceeding_maximum():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "100000000", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_unit_price_with_too_many_decimal_places():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "0.00005", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_list_current_prices_returns_404_for_nonexistent_tenant():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_create_price_returns_404_for_nonexistent_tenant():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_create_price_requires_platform_auth():
+    resp = client.post(
+        f"/tenants/{TENANT_ID}/billing/prices",
+        json={"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"},
+    )
+    assert resp.status_code == 401
