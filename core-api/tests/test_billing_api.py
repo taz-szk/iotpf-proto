@@ -102,6 +102,28 @@ def test_create_price_rejects_malformed_unit_price_string():
     assert resp.status_code == 422
 
 
+def test_create_price_rejects_nan_unit_price():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "NaN", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_create_price_rejects_infinity_unit_price():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/prices",
+            json={"item_key": "base_fee", "unit_price": "Infinity", "effective_from": "2099-01-01"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
 def test_create_price_requires_platform_auth():
     resp = client.post(
         f"/tenants/{TENANT_ID}/billing/prices",

@@ -54,6 +54,8 @@ def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_re
         unit_price = Decimal(body.unit_price)
     except InvalidOperation:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must be a decimal number")
+    if not unit_price.is_finite():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must be a finite decimal number")
     if unit_price < 0:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must not be negative")
 
