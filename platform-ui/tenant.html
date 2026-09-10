@@ -83,6 +83,9 @@
         <button @click="activeTab = 'devices'; startDevicesRefresh()"
                 :class="activeTab === 'devices' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">デバイス</button>
+        <button @click="activeTab = 'billing'; loadBillingPrices()"
+                :class="activeTab === 'billing' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">単価設定</button>
       </div>
 
       <!-- プロビジョニングトークンタブ -->
@@ -618,6 +621,57 @@
         </div>
       </div>
 
+      <!-- 単価設定タブ -->
+      <div x-show="activeTab === 'billing'">
+        <h3 class="font-medium text-gray-700 mb-4">課金単価</h3>
+        <div x-show="billingSuccess" class="bg-green-50 border border-green-200 rounded p-3 mb-4 text-sm text-green-800" x-text="billingSuccess"></div>
+        <div x-show="billingPricesForm.open" class="bg-white rounded-xl border border-gray-200 p-4 mb-4">
+          <p class="text-sm font-medium text-gray-700 mb-3" x-text="billingItemLabel(billingPricesForm.item_key) + ' の単価を設定'"></p>
+          <div x-show="billingPricesForm.error" class="mb-3 text-sm text-red-600" x-text="billingPricesForm.error"></div>
+          <form @submit.prevent="saveBillingPrice" class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">単価（円）</label>
+              <input type="text" x-model="billingPricesForm.unit_price" required placeholder="例: 5000"
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-gray-600 mb-1">適用開始月（翌月以降）</label>
+              <input type="month" x-model="billingPricesForm.effective_month" :min="billingNextMonth()" required
+                     class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+            </div>
+            <p class="col-span-2 text-xs text-gray-400">※単価の変更は必ず翌月以降から適用されます。日割りや即時反映はできません。予約中の変更はこの一覧には表示されません。</p>
+            <div class="col-span-2 flex justify-end gap-2">
+              <button type="button" @click="closeBillingPriceForm()" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+              <button type="submit" class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded">設定</button>
+            </div>
+          </form>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200">
+          <table class="w-full text-sm">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">課金項目</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">単位</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">現在の単価</th>
+                <th class="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100">
+              <template x-for="item in billingItems" :key="item.key">
+                <tr>
+                  <td class="px-4 py-3 font-medium" x-text="item.label"></td>
+                  <td class="px-4 py-3 text-gray-400" x-text="item.unit"></td>
+                  <td class="px-4 py-3" x-text="billingPrices[item.key] !== undefined ? ('¥' + billingPrices[item.key]) : '未設定'"></td>
+                  <td class="px-4 py-3 text-right">
+                    <button @click="openBillingPriceForm(item.key)" class="text-blue-500 hover:text-blue-700 text-xs">設定</button>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- ファームウェアタブ -->
       <div x-show="activeTab === 'firmware'">
         <div class="flex items-center justify-between mb-4">
@@ -1039,6 +1093,18 @@
         groupForm: { name: '', description: '' },
         groupError: '',
 
+        // 単価設定
+        billingItems: [
+          { key: 'base_fee', label: '基本料金', unit: '月額' },
+          { key: 'data_points', label: 'データポイント数', unit: '件あたり' },
+          { key: 'device_count', label: 'デバイス数（月内通信）', unit: '台あたり' },
+          { key: 'provisionable_devices', label: 'プロビジョニング可能数', unit: '台あたり' },
+          { key: 'alert_events', label: 'アラートイベント数', unit: '件あたり' },
+        ],
+        billingPrices: {},
+        billingSuccess: '',
+        billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
+
         async loadUsers() {
           try {
             this.users = await api.tenantUsers.list(tenantId);
@@ -1161,6 +1227,53 @@
             await this.loadGroups();
           } catch(e) {
             this.error = 'このグループを削除できませんでした。使用中のアラートルールがある場合は、先にルールの対象を変更してください。';
+          }
+        },
+
+        billingItemLabel(key) {
+          const item = this.billingItems.find(i => i.key === key);
+          return item ? item.label : key;
+        },
+
+        billingNextMonth() {
+          const now = new Date();
+          let year = now.getFullYear();
+          let month = now.getMonth() + 2; // getMonth()は0始まりの当月。+2で翌月（1始まり）になる
+          if (month > 12) { month -= 12; year += 1; }
+          return `${year}-${String(month).padStart(2, '0')}`;
+        },
+
+        async loadBillingPrices() {
+          try {
+            const rows = await api.request('GET', `/tenants/${tenantId}/billing/prices`);
+            this.billingPrices = {};
+            for (const r of rows) { this.billingPrices[r.item_key] = r.unit_price; }
+          } catch(e) {
+            this.error = e.message;
+          }
+        },
+
+        openBillingPriceForm(key) {
+          this.billingPricesForm = { open: true, item_key: key, unit_price: '', effective_month: this.billingNextMonth(), error: '' };
+        },
+
+        closeBillingPriceForm() {
+          this.billingPricesForm.open = false;
+        },
+
+        async saveBillingPrice() {
+          this.billingPricesForm.error = '';
+          try {
+            const saved = await api.request('POST', `/tenants/${tenantId}/billing/prices`, {
+              item_key: this.billingPricesForm.item_key,
+              unit_price: this.billingPricesForm.unit_price,
+              effective_from: this.billingPricesForm.effective_month + '-01',
+            });
+            this.billingSuccess = `${this.billingItemLabel(saved.item_key)} の単価を ${saved.effective_from} から ¥${saved.unit_price} に設定しました`;
+            this.closeBillingPriceForm();
+            setTimeout(() => { this.billingSuccess = ''; }, 8000);
+          } catch(e) {
+            this.billingPricesForm.error = e.message || '保存に失敗しました';
           }
         },
 
