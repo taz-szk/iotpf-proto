@@ -368,3 +368,57 @@ def migrate_create_audit_logs() -> None:
                 ON audit_logs(created_at DESC)
         """))
         conn.commit()
+
+
+def migrate_create_billing_tables() -> None:
+    """billing_unit_prices・billing_invoices・billing_line_items テーブルを作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS billing_unit_prices (
+                id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id      UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                item_key       VARCHAR(50) NOT NULL,
+                unit_price     NUMERIC(12,4) NOT NULL,
+                effective_from DATE NOT NULL,
+                created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+                UNIQUE (tenant_id, item_key, effective_from)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS billing_invoices (
+                id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id          UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                target_year_month  VARCHAR(7) NOT NULL,
+                status             VARCHAR(20) NOT NULL DEFAULT 'draft'
+                    CHECK (status IN ('draft', 'finalized', 'corrected')),
+                subtotal           INTEGER NOT NULL DEFAULT 0,
+                tax_amount         INTEGER NOT NULL DEFAULT 0,
+                total_amount       INTEGER NOT NULL DEFAULT 0,
+                created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+                finalized_at       TIMESTAMPTZ
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS billing_line_items (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                invoice_id  UUID NOT NULL REFERENCES billing_invoices(id) ON DELETE CASCADE,
+                item_key    VARCHAR(50) NOT NULL,
+                quantity    INTEGER NOT NULL,
+                unit_price  NUMERIC(12,4) NOT NULL,
+                amount      INTEGER NOT NULL,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_billing_unit_prices_tenant_item
+                ON billing_unit_prices(tenant_id, item_key, effective_from DESC)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_billing_invoices_tenant_month
+                ON billing_invoices(tenant_id, target_year_month)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_billing_line_items_invoice
+                ON billing_line_items(invoice_id)
+        """))
+        conn.commit()
