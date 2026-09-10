@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.routers import health, auth, mfa, tenants, provisioning, emqx, provisioning_tokens, alert_rules, emqx_events, firmware, stats, tenant_auth, tenant_mfa, tenant_users, tenant_devices, tenant_grafana, tenant_portal, public_access, platform, audit_logs, device_groups, billing
 from app.database import migrate_add_grafana_org_id, migrate_add_device_name, migrate_add_provisioning_token_id, migrate_add_public_token, migrate_add_token_version, migrate_totp_columns, migrate_dashboard_panel_configs, migrate_create_audit_logs, migrate_device_groups, migrate_dashboard_panel_config_group_id, migrate_create_billing_tables
 from app.services.audit import start_audit_purge_worker
+from app.services.billing_batch import start_billing_batch_worker
 from app.services.emqx_setup import ensure_emqx_rules
 from app.config import settings
 
@@ -31,6 +32,7 @@ def on_startup():
             print(f"Migration warning: {e}")
     threading.Thread(target=_run_emqx_setup, daemon=True).start()
     start_audit_purge_worker()
+    start_billing_batch_worker()
 
 app.include_router(health.router)
 app.include_router(auth.router)
