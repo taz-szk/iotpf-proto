@@ -835,8 +835,9 @@
             </div>
           </div>
 
-          <!-- ===== 統計 ===== -->
-          <div x-show="activeTab === 'stats'">
+          <!-- ===== 統計・請求 ===== -->
+          <div x-show="activeTab === 'stats-billing'">
+            <h3 class="font-medium text-gray-700 mb-3">統計</h3>
             <div x-show="statsLoading" class="py-8 text-center text-gray-400">統計を取得中...</div>
             <div x-show="!statsLoading && stats" class="grid grid-cols-2 gap-4 md:grid-cols-3">
               <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -864,10 +865,8 @@
                 <p class="text-3xl font-bold text-indigo-600" x-text="provisionableLabel(stats)"></p>
               </div>
             </div>
-          </div>
 
-          <!-- ===== 請求 ===== -->
-          <div x-show="activeTab === 'billing'">
+            <h3 class="font-medium text-gray-700 mb-3 mt-8">請求</h3>
             <div x-show="invoicesLoading" class="py-8 text-center text-gray-400">請求書を取得中...</div>
             <div x-show="!invoicesLoading && invoices.length === 0" class="py-8 text-center text-gray-400 text-sm">
               請求書がありません
@@ -1296,13 +1295,12 @@ function portalApp() {
         { id: 'dashboard',        label: 'ダッシュボード',           icon: '▦' },
         { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
         { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
-        { id: 'devices',          label: 'デバイス',                 icon: '📡' },
         { id: 'groups',           label: 'グループ管理',             icon: '📁' },
+        { id: 'devices',          label: 'デバイス',                 icon: '📡' },
         { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
         { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
         { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
-        { id: 'stats',            label: '統計',                     icon: '📊' },
-        { id: 'billing',          label: '請求',                     icon: '💰' },
+        { id: 'stats-billing',    label: '統計・請求',               icon: '📊' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
@@ -1514,8 +1512,7 @@ function portalApp() {
       if (tab === 'firmware') await this.loadFirmware();
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
-      if (tab === 'stats')    await this.loadStats();
-      if (tab === 'billing')  await this.loadInvoices();
+      if (tab === 'stats-billing') { await this.loadStats(); await this.loadInvoices(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
