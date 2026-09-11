@@ -453,3 +453,21 @@ def migrate_create_billing_settings() -> None:
             ON CONFLICT (id) DO NOTHING
         """))
         conn.commit()
+
+
+def migrate_add_bill_shock_threshold_columns() -> None:
+    """ビルショック通知のしきい値・通知済みフラグ用カラムを追加する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE billing_settings
+            ADD COLUMN IF NOT EXISTS default_bill_shock_threshold_amount INTEGER
+        """))
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS bill_shock_threshold_amount INTEGER
+        """))
+        conn.execute(text("""
+            ALTER TABLE billing_invoices
+            ADD COLUMN IF NOT EXISTS bill_shock_notified_at TIMESTAMPTZ
+        """))
+        conn.commit()

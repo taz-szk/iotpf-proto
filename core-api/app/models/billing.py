@@ -25,6 +25,7 @@ class BillingInvoice(Base):
     total_amount = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     finalized_at = Column(DateTime(timezone=True), nullable=True)
+    bill_shock_notified_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class BillingLineItem(Base):
@@ -49,3 +50,4 @@ class BillingSettings(Base):
     __tablename__ = "billing_settings"
     id = Column(Integer, primary_key=True, default=1)
     tax_rate = Column(Numeric(5, 4), nullable=False)
+    default_bill_shock_threshold_amount = Column(Integer, nullable=True)

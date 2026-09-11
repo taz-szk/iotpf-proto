@@ -84,3 +84,17 @@ def test_migrate_create_billing_tables_executes():
     assert "billing_invoices" in sql_calls
     assert "billing_line_items" in sql_calls
     assert "UNIQUE (tenant_id, item_key, effective_from)" in sql_calls
+
+
+def test_migrate_add_bill_shock_threshold_columns_executes():
+    from app.database import migrate_add_bill_shock_threshold_columns
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        migrate_add_bill_shock_threshold_columns()
+    sql_calls = _sql_text(mock_conn.execute.call_args_list)
+    assert "billing_settings" in sql_calls and "default_bill_shock_threshold_amount" in sql_calls
+    assert "tenants" in sql_calls and "bill_shock_threshold_amount" in sql_calls
+    assert "billing_invoices" in sql_calls and "bill_shock_notified_at" in sql_calls
