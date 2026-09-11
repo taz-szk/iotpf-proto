@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from app.database import SessionLocal
 from app.models.public import Tenant
 from app.models.billing import BillingInvoice, BillingLineItem
-from app.services.billing import calculate_invoice, get_effective_unit_prices
+from app.services.billing import calculate_invoice, get_effective_unit_prices, get_tax_rate
 from app.services.billing_usage import aggregate_monthly_usage
 
 
@@ -41,7 +41,7 @@ def _finalize_stale_drafts(
         usage = aggregate_monthly_usage(db, tenant_id, schema, influxdb_org_id, influxdb_token, year, month)
         usage["provisionable_devices"] = preserved_provisionable
         prices = get_effective_unit_prices(db, tenant_id, year, month)
-        calc = calculate_invoice(usage, prices)
+        calc = calculate_invoice(usage, prices, get_tax_rate(db))
 
         invoice.subtotal = calc["subtotal"]
         invoice.tax_amount = calc["tax_amount"]
@@ -101,7 +101,7 @@ def run_monthly_billing_batch() -> list[dict]:
 
                 usage = aggregate_monthly_usage(db, tenant_id, schema, influxdb_org_id, influxdb_token, year, month)
                 prices = get_effective_unit_prices(db, tenant_id, year, month)
-                calc = calculate_invoice(usage, prices)
+                calc = calculate_invoice(usage, prices, get_tax_rate(db))
 
                 invoice.subtotal = calc["subtotal"]
                 invoice.tax_amount = calc["tax_amount"]

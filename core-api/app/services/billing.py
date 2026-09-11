@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 from sqlalchemy.orm import Session
 
-from app.models.billing import BillingDefaultUnitPrice, BillingUnitPrice
+from app.models.billing import BillingDefaultUnitPrice, BillingSettings, BillingUnitPrice
 
 ITEM_KEYS = ("base_fee", "data_points", "device_count", "provisionable_devices", "alert_events")
 
@@ -145,3 +145,38 @@ def seed_tenant_default_prices(db: Session, tenant_id: str) -> None:
             tenant_id=tenant_id, item_key=row.item_key,
             unit_price=row.unit_price, effective_from=month_start,
         ))
+
+
+def get_tax_rate(db: Session) -> Decimal:
+    """設定済みの消費税率を返す。行が無ければDEFAULT_TAX_RATEを返す
+    （マイグレーションで常に1行存在するはずだが、念のためのフォールバック）。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        return DEFAULT_TAX_RATE
+    return Decimal(str(row.tax_rate))
+
+
+def set_tax_rate(db: Session, tax_rate: Decimal) -> None:
+    """消費税率を更新する（シングルトン行、常にid=1）。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        db.add(BillingSettings(id=1, tax_rate=tax_rate))
+    else:
+        row.tax_rate = tax_rate
+    db.commit()
+
+
+def validate_tax_rate(tax_rate_str: str) -> Decimal:
+    """tax_rateの文字列をDecimalに変換し、消費税率として妥当かを検証する（0〜1の範囲、小数）。
+    不正な場合はInvalidUnitPriceError（メッセージはHTTPレスポンスのdetailに使う想定）を投げる。"""
+    try:
+        tax_rate = Decimal(tax_rate_str)
+    except InvalidOperation:
+        raise InvalidUnitPriceError("tax_rate must be a decimal number")
+    if not tax_rate.is_finite():
+        raise InvalidUnitPriceError("tax_rate must be a finite decimal number")
+    if tax_rate < 0:
+        raise InvalidUnitPriceError("tax_rate must not be negative")
+    if tax_rate > 1:
+        raise InvalidUnitPriceError("tax_rate must not exceed 1 (100%)")
+    return tax_rate

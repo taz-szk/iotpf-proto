@@ -9,7 +9,10 @@ from app.database import SessionLocal
 from app.services.billing import (
     InvalidUnitPriceError,
     get_default_unit_prices,
+    get_tax_rate,
     set_default_unit_prices,
+    set_tax_rate,
+    validate_tax_rate,
     validate_unit_price,
     ITEM_KEYS,
 )
@@ -35,6 +38,10 @@ class MfaSettingsUpdate(BaseModel):
 class DefaultPriceItem(BaseModel):
     item_key: str
     unit_price: str
+
+
+class TaxRateItem(BaseModel):
+    tax_rate: str
 
 
 @router.get("/mfa-settings")
@@ -94,3 +101,28 @@ def update_billing_default_prices(body: list[DefaultPriceItem], payload: dict = 
         db.commit()
 
     return [{"item_key": k, "unit_price": str(v)} for k, v in validated.items()]
+
+
+@router.get("/billing/tax-rate", response_model=TaxRateItem)
+def get_billing_tax_rate(_: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        rate = get_tax_rate(db)
+    return {"tax_rate": str(rate)}
+
+
+@router.put("/billing/tax-rate", response_model=TaxRateItem)
+def update_billing_tax_rate(body: TaxRateItem, payload: dict = Depends(_require_platform)):
+    try:
+        rate = validate_tax_rate(body.tax_rate)
+    except InvalidUnitPriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    with SessionLocal() as db:
+        set_tax_rate(db, rate)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_billing_tax_rate",
+                        resource_type="billing_settings",
+                        detail={"tax_rate": str(rate)})
+        db.commit()
+
+    return {"tax_rate": str(rate)}

@@ -435,3 +435,21 @@ def migrate_create_billing_default_prices() -> None:
             )
         """))
         conn.commit()
+
+
+def migrate_create_billing_settings() -> None:
+    """billing_settings テーブル（消費税率などのグローバル課金設定、シングルトン行）を作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS billing_settings (
+                id       INTEGER PRIMARY KEY DEFAULT 1,
+                tax_rate NUMERIC(5,4) NOT NULL DEFAULT 0.10,
+                CHECK (id = 1)
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO billing_settings (id, tax_rate)
+            VALUES (1, 0.10)
+            ON CONFLICT (id) DO NOTHING
+        """))
+        conn.commit()

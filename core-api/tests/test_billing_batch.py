@@ -28,6 +28,7 @@ def test_finalize_stale_drafts_recomputes_before_finalizing():
                return_value={"base_fee": 1, "data_points": 999, "device_count": 3,
                              "provisionable_devices": 0, "alert_events": 5}) as mock_aggregate, \
          patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.08")) as mock_tax_rate, \
          patch("app.services.billing_batch.calculate_invoice", return_value={
              "line_items": [{"item_key": "provisionable_devices", "quantity": 42,
                               "unit_price": Decimal("0"), "amount": 0}],
@@ -37,9 +38,11 @@ def test_finalize_stale_drafts_recomputes_before_finalizing():
         _finalize_stale_drafts(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-09")
 
     mock_aggregate.assert_called_once_with(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 8)
+    mock_tax_rate.assert_called_once_with(mock_db)
     # provisionable_devices must be overridden with the preserved value, not the freshly-aggregated one
     passed_usage = mock_calc.call_args[0][0]
     assert passed_usage["provisionable_devices"] == 42
+    assert mock_calc.call_args[0][2] == Decimal("0.08")
     assert old_draft.status == "finalized"
     assert old_draft.finalized_at is not None
     assert old_draft.subtotal == 100
@@ -130,15 +133,17 @@ def test_run_monthly_billing_batch_happy_path():
     with patch("app.services.billing_batch.SessionLocal", side_effect=[mock_list_db, mock_tenant_db]), \
          patch("app.services.billing_batch.aggregate_monthly_usage", return_value={"base_fee": 1}), \
          patch("app.services.billing_batch.get_effective_unit_prices", return_value={"base_fee": Decimal("5000")}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.08")), \
          patch("app.services.billing_batch.calculate_invoice", return_value={
              "line_items": [{"item_key": "base_fee", "quantity": 1, "unit_price": Decimal("5000"), "amount": 5000}],
              "subtotal": 5000, "tax_amount": 500, "total_amount": 5500,
-         }):
+         }) as mock_calc:
         results = run_monthly_billing_batch()
 
     assert results == [{"tenant_id": "tenant-1", "status": "ok", "total_amount": 5500}]
     assert draft_invoice.subtotal == 5000
     assert draft_invoice.total_amount == 5500
+    assert mock_calc.call_args[0][2] == Decimal("0.08")
 
 
 def test_run_monthly_billing_batch_skips_already_finalized_invoice():

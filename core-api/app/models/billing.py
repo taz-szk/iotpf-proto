@@ -43,3 +43,9 @@ class BillingDefaultUnitPrice(Base):
     item_key = Column(String(50), primary_key=True)
     unit_price = Column(Numeric(12, 4), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BillingSettings(Base):
+    __tablename__ = "billing_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    tax_rate = Column(Numeric(5, 4), nullable=False)

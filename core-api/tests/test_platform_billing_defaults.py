@@ -84,6 +84,48 @@ def test_put_default_prices_rejects_unknown_item_key():
     assert resp.status_code == 422
 
 
+def test_get_tax_rate_requires_platform_auth():
+    resp = client.get("/platform/billing/tax-rate")
+    assert resp.status_code == 401
+
+
+def test_get_tax_rate_returns_current_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.get_tax_rate", return_value=Decimal("0.10")):
+        mock_session.return_value = _session_ctx()
+        resp = client.get("/platform/billing/tax-rate",
+                           headers={"Authorization": f"Bearer {_platform_token()}"})
+    assert resp.status_code == 200
+    assert resp.json() == {"tax_rate": "0.10"}
+
+
+def test_put_tax_rate_updates_and_returns_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.set_tax_rate") as mock_set, \
+         patch("app.routers.platform.write_audit_log") as mock_audit:
+        mock_db = _session_ctx()
+        mock_session.return_value = mock_db
+        resp = client.put(
+            "/platform/billing/tax-rate",
+            json={"tax_rate": "0.08"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"tax_rate": "0.08"}
+    mock_set.assert_called_once_with(mock_db, Decimal("0.08"))
+    assert mock_audit.called
+    assert mock_db.commit.called
+
+
+def test_put_tax_rate_rejects_invalid_value():
+    resp = client.put(
+        "/platform/billing/tax-rate",
+        json={"tax_rate": "1.5"},
+        headers={"Authorization": f"Bearer {_platform_token()}"},
+    )
+    assert resp.status_code == 422
+
+
 def test_put_default_prices_commits_after_audit_log():
     with patch("app.routers.platform.SessionLocal") as mock_session, \
          patch("app.routers.platform.set_default_unit_prices"), \

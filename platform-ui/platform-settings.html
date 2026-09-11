@@ -6,7 +6,7 @@
   <title>プラットフォーム設定 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=12"></script>
+  <script src="/admin/js/api.js?v=13"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -78,6 +78,23 @@
       </button>
       <p x-show="defaultPricesSaved" class="mt-3 text-sm text-green-600">デフォルト料金テーブルを保存しました</p>
     </div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">消費税率</h2>
+      <p class="text-xs text-gray-400 mb-4">請求書の消費税額を計算する際に使う税率です（小数で入力。例: 0.10 = 10%）</p>
+      <div x-show="taxRateError" class="mb-3 text-sm text-red-600" x-text="taxRateError"></div>
+      <div class="flex items-center justify-between py-2">
+        <p class="text-sm font-medium text-gray-700">消費税率</p>
+        <input type="text" x-model="taxRate" placeholder="例: 0.10"
+               class="border border-gray-300 rounded px-2 py-1.5 text-sm w-32 text-right">
+      </div>
+      <button @click="saveTaxRate()" :disabled="savingTaxRate || taxRateLoadFailed"
+              class="mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
+        <span x-show="!savingTaxRate">保存</span>
+        <span x-show="savingTaxRate">保存中...</span>
+      </button>
+      <p x-show="taxRateSaved" class="mt-3 text-sm text-green-600">消費税率を保存しました</p>
+    </div>
   </div>
   <script>
     if (!api.isLoggedIn()) window.location.href = '/iotairx-console/';
@@ -97,6 +114,11 @@
         defaultPricesSaved: false,
         savingDefaultPrices: false,
         defaultPricesLoadFailed: false,
+        taxRate: '',
+        taxRateError: '',
+        taxRateSaved: false,
+        savingTaxRate: false,
+        taxRateLoadFailed: false,
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
@@ -107,6 +129,13 @@
           } catch(e) {
             this.defaultPricesError = e.message;
             this.defaultPricesLoadFailed = true;
+          }
+          try {
+            const rate = await api.platform.getBillingTaxRate();
+            this.taxRate = rate.tax_rate;
+          } catch(e) {
+            this.taxRateError = e.message;
+            this.taxRateLoadFailed = true;
           }
           this.loading = false;
         },
@@ -133,6 +162,18 @@
             setTimeout(() => this.defaultPricesSaved = false, 3000);
           } catch(e) { this.defaultPricesError = e.message; }
           finally { this.savingDefaultPrices = false; }
+        },
+        async saveTaxRate() {
+          this.taxRateSaved = false;
+          this.taxRateError = '';
+          this.savingTaxRate = true;
+          try {
+            const result = await api.platform.updateBillingTaxRate({ tax_rate: String(this.taxRate) });
+            this.taxRate = result.tax_rate;
+            this.taxRateSaved = true;
+            setTimeout(() => this.taxRateSaved = false, 3000);
+          } catch(e) { this.taxRateError = e.message; }
+          finally { this.savingTaxRate = false; }
         },
       };
     }

@@ -135,6 +135,8 @@ const api = {
         grafanaOrgId: () => request('GET', '/tenants/platform/grafana-org-id'),
         getBillingDefaultPrices: () => request('GET', '/platform/billing/default-prices'),
         updateBillingDefaultPrices: (body) => request('PUT', '/platform/billing/default-prices', body),
+        getBillingTaxRate: () => request('GET', '/platform/billing/tax-rate'),
+        updateBillingTaxRate: (body) => request('PUT', '/platform/billing/tax-rate', body),
     },
     tenantAuth: {
         changePassword: (currentPassword, newPassword) =>
