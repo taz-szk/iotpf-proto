@@ -258,3 +258,45 @@ def get_invoice_detail_aggregated(db: Session, tenant_id: str, target_year_month
         "corrections": corrections,
         "line_items": line_items,
     }
+
+
+def get_default_bill_shock_threshold(db: Session) -> int | None:
+    """設定済みのデフォルトビルショック通知しきい値（円）を返す。未設定ならNone。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        return None
+    return row.default_bill_shock_threshold_amount
+
+
+def set_default_bill_shock_threshold(db: Session, amount: int | None) -> None:
+    """デフォルトのビルショック通知しきい値を更新する（シングルトン行、常にid=1）。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        db.add(BillingSettings(id=1, tax_rate=DEFAULT_TAX_RATE, default_bill_shock_threshold_amount=amount))
+    else:
+        row.default_bill_shock_threshold_amount = amount
+    db.commit()
+
+
+def get_effective_bill_shock_threshold(db: Session, tenant) -> int | None:
+    """テナント個別のしきい値上書きがあればそれを、無ければデフォルト値を返す。
+    両方未設定ならNone（＝ビルショック通知しない）。"""
+    if tenant.bill_shock_threshold_amount is not None:
+        return tenant.bill_shock_threshold_amount
+    return get_default_bill_shock_threshold(db)
+
+
+def validate_bill_shock_threshold(value_str: str) -> int | None:
+    """しきい値の文字列をintに変換する。空文字列は「未設定に戻す」を意味しNoneを返す。
+    不正な場合はInvalidUnitPriceErrorを投げる。"""
+    if value_str == "":
+        return None
+    try:
+        amount = int(value_str)
+    except ValueError:
+        raise InvalidUnitPriceError("threshold_amount must be an integer")
+    if str(amount) != value_str.lstrip("+"):
+        raise InvalidUnitPriceError("threshold_amount must be an integer")
+    if amount < 0:
+        raise InvalidUnitPriceError("threshold_amount must not be negative")
+    return amount
