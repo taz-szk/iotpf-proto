@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     grafana_session_expire_hours: int = 24
     audit_log_retention_days: int = 365
     # 環境変数 AUDIT_LOG_RETENTION_DAYS で上書き可
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = "alerts@iot-platform.local"
 
     class Config:
         env_file = ".env"
