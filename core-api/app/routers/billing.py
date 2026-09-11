@@ -13,8 +13,10 @@ from app.services.auth import verify_token
 from app.services.audit import log_audit
 from app.services.billing import (
     InvalidEffectiveDateError,
+    InvalidUnitPriceError,
     get_effective_unit_prices,
     set_unit_price,
+    validate_unit_price,
 )
 
 router = APIRouter(prefix="/tenants/{tenant_id}/billing", tags=["billing"])
@@ -56,17 +58,9 @@ def list_current_prices(tenant_id: str, _: dict = Depends(_require_platform)):
 def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_require_platform)):
     tenant_id = _validate_uuid(tenant_id)
     try:
-        unit_price = Decimal(body.unit_price)
-    except InvalidOperation:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must be a decimal number")
-    if not unit_price.is_finite():
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must be a finite decimal number")
-    if unit_price < 0:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price must not be negative")
-    if unit_price > Decimal("99999999.9999"):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price exceeds the maximum (99999999.9999)")
-    if unit_price.as_tuple().exponent < -4:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="unit_price supports at most 4 decimal places")
+        unit_price = validate_unit_price(body.unit_price)
+    except InvalidUnitPriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()

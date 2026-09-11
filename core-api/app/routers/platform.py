@@ -1,3 +1,4 @@
+from decimal import Decimal
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
@@ -5,12 +6,21 @@ from app.models.public import MfaSettings
 from app.services.audit import write_audit_log
 from app.services.auth import verify_token
 from app.database import SessionLocal
+from app.services.billing import (
+    InvalidUnitPriceError,
+    get_default_unit_prices,
+    set_default_unit_prices,
+    validate_unit_price,
+    ITEM_KEYS,
+)
 
 router = APIRouter(prefix="/platform", tags=["platform"])
-_bearer = HTTPBearer()
+_bearer = HTTPBearer(auto_error=False)
 
 
 def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)) -> dict:
+    if not creds:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
     payload = verify_token(creds.credentials)
     if not payload or payload.get("type") != "platform" or payload.get("token_type") == "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
@@ -20,6 +30,11 @@ def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)) ->
 class MfaSettingsUpdate(BaseModel):
     platform_required: bool | None = None
     tenant_required: bool | None = None
+
+
+class DefaultPriceItem(BaseModel):
+    item_key: str
+    unit_price: str
 
 
 @router.get("/mfa-settings")
@@ -49,3 +64,32 @@ def update_mfa_settings(body: MfaSettingsUpdate, payload: dict = Depends(_requir
         db.commit()
         db.refresh(s)
         return {"platform_required": s.platform_required, "tenant_required": s.tenant_required}
+
+
+@router.get("/billing/default-prices", response_model=list[DefaultPriceItem])
+def get_billing_default_prices(_: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        prices = get_default_unit_prices(db)
+    return [{"item_key": k, "unit_price": str(v)} for k, v in prices.items()]
+
+
+@router.put("/billing/default-prices", response_model=list[DefaultPriceItem])
+def update_billing_default_prices(body: list[DefaultPriceItem], payload: dict = Depends(_require_platform)):
+    validated: dict[str, Decimal] = {}
+    for item in body:
+        if item.item_key not in ITEM_KEYS:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                 detail=f"Unknown item_key: {item.item_key}")
+        try:
+            validated[item.item_key] = validate_unit_price(item.unit_price)
+        except InvalidUnitPriceError as e:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    with SessionLocal() as db:
+        set_default_unit_prices(db, validated)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_billing_default_prices",
+                        resource_type="billing_default_unit_prices",
+                        detail={k: str(v) for k, v in validated.items()})
+
+    return [{"item_key": k, "unit_price": str(v)} for k, v in validated.items()]
