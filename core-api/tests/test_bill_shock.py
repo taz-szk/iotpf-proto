@@ -35,6 +35,18 @@ def test_skips_when_under_threshold():
     mock_mail.assert_not_called()
 
 
+def test_skips_when_exactly_at_threshold():
+    tenant = _tenant(threshold=100000)
+    invoice = MagicMock(total_amount=100000, bill_shock_notified_at=None)
+    mock_db = MagicMock()
+    with patch("app.services.bill_shock.get_effective_bill_shock_threshold", return_value=100000), \
+         patch("app.services.bill_shock.write_audit_log") as mock_audit, \
+         patch("app.services.bill_shock.send_bill_shock_email") as mock_mail:
+        check_and_notify_bill_shock(mock_db, tenant, "tenant_x", invoice)
+    mock_audit.assert_not_called()
+    mock_mail.assert_not_called()
+
+
 def test_skips_when_already_notified_this_month():
     tenant = _tenant(threshold=100000)
     invoice = MagicMock(total_amount=150000, bill_shock_notified_at="2026-09-05T00:00:00Z")

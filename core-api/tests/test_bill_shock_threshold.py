@@ -93,3 +93,9 @@ def test_validate_bill_shock_threshold_rejects_non_integer():
 def test_validate_bill_shock_threshold_rejects_decimal():
     with pytest.raises(InvalidUnitPriceError):
         validate_bill_shock_threshold("50000.5")
+
+
+def test_validate_bill_shock_threshold_rejects_value_exceeding_integer_max():
+    with pytest.raises(InvalidUnitPriceError):
+        validate_bill_shock_threshold("2147483648")
+    assert validate_bill_shock_threshold("2147483647") == 2147483647

@@ -299,4 +299,6 @@ def validate_bill_shock_threshold(value_str: str) -> int | None:
         raise InvalidUnitPriceError("threshold_amount must be an integer")
     if amount < 0:
         raise InvalidUnitPriceError("threshold_amount must not be negative")
+    if amount > 2147483647:
+        raise InvalidUnitPriceError("threshold_amount exceeds the maximum (2147483647)")
     return amount

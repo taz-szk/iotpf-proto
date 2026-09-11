@@ -673,9 +673,14 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-4">
           <p class="text-sm font-medium text-gray-700 mb-1">ビルショック通知しきい値（このテナントの上書き）</p>
-          <p class="text-xs text-gray-400 mb-3">空欄で保存するとデフォルト値に戻ります。</p>
+          <p class="text-xs text-gray-400 mb-3">
+            現在の実効値: <span x-text="'¥' + bsEffective"></span>
+            <span x-show="bsThresholdIsDefault">（デフォルト値を使用中）</span>
+            <span x-show="!bsThresholdIsDefault">（このテナント専用の設定）</span>
+            <br>空欄で保存するとデフォルト値に戻ります。
+          </p>
           <div class="flex items-center gap-2">
-            <input type="text" x-model="bsThreshold" :placeholder="'現在の実効値: ' + (bsThresholdIsDefault ? '¥' + bsThreshold + '（デフォルト）' : '¥' + bsThreshold)"
+            <input type="text" x-model="bsThreshold" placeholder="未設定（デフォルトを使用）"
                    class="border border-gray-300 rounded px-2 py-1.5 text-sm w-40">
             <button @click="saveBsThreshold()" :disabled="savingBsThreshold"
                     class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded disabled:bg-blue-300">保存</button>
@@ -1208,7 +1213,7 @@
         billingPrices: {},
         billingSuccess: '',
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
-        bsThreshold: '', bsThresholdIsDefault: true, savingBsThreshold: false, bsThresholdSaved: false,
+        bsThreshold: '', bsThresholdIsDefault: true, bsEffective: '', savingBsThreshold: false, bsThresholdSaved: false,
         invoices: [], invoicesLoading: false,
         expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
         correctingInvoice: false, correctionMessage: '',
@@ -1372,8 +1377,9 @@
         async loadBsThreshold() {
           try {
             const r = await api.request('GET', `/tenants/${tenantId}/billing/bill-shock-threshold`);
-            this.bsThreshold = r.threshold_amount ?? '';
+            this.bsEffective = r.threshold_amount ?? '';
             this.bsThresholdIsDefault = r.is_default;
+            this.bsThreshold = r.is_default ? '' : (r.threshold_amount ?? '');
           } catch(e) { this.error = e.message; }
         },
 
