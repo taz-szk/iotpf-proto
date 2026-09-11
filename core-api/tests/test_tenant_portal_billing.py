@@ -45,6 +45,7 @@ def test_list_my_invoices_allows_viewer():
     assert body == [{
         "target_year_month": "2026-09", "status": "draft",
         "subtotal": 5000, "tax_amount": 500, "total_amount": 5500,
+        "correction_count": 0,
     }]
     filter_args = mock_db.query.return_value.filter.call_args[0]
     # str(arg) renders SQLAlchemy binary expressions without bound values, so
@@ -65,7 +66,9 @@ def test_get_my_invoice_detail_includes_line_items():
 
     with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
         mock_db = mock_sl.return_value.__enter__.return_value
-        mock_db.query.return_value.filter.return_value.first.return_value = _invoice("2026-09", "draft")
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+            _invoice("2026-09", "draft"),
+        ]
         mock_db.query.return_value.filter.return_value.all.return_value = [line_item]
         resp = client.get(
             "/tenant-portal/me/billing/invoices/2026-09",
@@ -85,7 +88,7 @@ def test_get_my_invoice_detail_includes_line_items():
 def test_get_my_invoice_detail_not_found():
     with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
         mock_db = mock_sl.return_value.__enter__.return_value
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
         resp = client.get(
             "/tenant-portal/me/billing/invoices/2026-01",
             cookies={"iot_token": _tenant_token("viewer")},

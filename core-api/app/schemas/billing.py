@@ -23,3 +23,4 @@ class InvoiceOut(BaseModel):
     subtotal: int
     tax_amount: int
     total_amount: int
+    correction_count: int = 0

@@ -2,12 +2,14 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from app.services.billing_batch import (
+    InvoiceNotFinalizedError,
     _backfill_missing_months,
     _current_target_year_month,
     _finalize_stale_drafts,
     _get_or_create_draft_invoice,
     _months_between_exclusive,
     _replace_line_items,
+    correct_invoice,
     run_monthly_billing_batch,
 )
 
@@ -247,4 +249,101 @@ def test_run_monthly_billing_batch_skips_already_finalized_invoice():
         results = run_monthly_billing_batch()
 
     assert results == [{"tenant_id": "tenant-1", "status": "skipped_not_draft"}]
-    mock_aggregate.assert_not_called()
+
+
+def test_correct_invoice_raises_when_no_finalized_invoice_exists():
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+
+    try:
+        correct_invoice(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-09")
+        assert False, "expected InvoiceNotFinalizedError"
+    except InvoiceNotFinalizedError:
+        pass
+
+
+def test_correct_invoice_creates_corrected_delta_row_when_usage_increased():
+    finalized = MagicMock(status="finalized", id="inv-f", subtotal=100, tax_amount=10, total_amount=110)
+    li_data_points = MagicMock(item_key="data_points", quantity=1000, amount=100)
+    li_provisionable = MagicMock(item_key="provisionable_devices", quantity=5, amount=0)
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [finalized]
+    mock_db.query.return_value.filter.return_value.all.side_effect = [[li_data_points, li_provisionable]]
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage",
+               return_value={"base_fee": 1, "data_points": 1200, "device_count": 2,
+                             "provisionable_devices": 0, "alert_events": 3}) as mock_aggregate, \
+         patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.10")), \
+         patch("app.services.billing_batch.calculate_invoice", return_value={
+             "line_items": [
+                 {"item_key": "data_points", "quantity": 1200, "unit_price": Decimal("0.1"), "amount": 120},
+                 {"item_key": "provisionable_devices", "quantity": 5, "unit_price": Decimal("0"), "amount": 0},
+             ],
+             "subtotal": 120, "tax_amount": 12, "total_amount": 132,
+         }) as mock_calc:
+        result = correct_invoice(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-09")
+
+    mock_aggregate.assert_called_once_with(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 9)
+    # provisionable_devices must be carried forward from the finalized invoice's line item
+    passed_usage = mock_calc.call_args[0][0]
+    assert passed_usage["provisionable_devices"] == 5
+
+    assert result.status == "corrected"
+    assert result.subtotal == 20
+    assert result.tax_amount == 2
+    assert result.total_amount == 22
+
+    added_line_items = [c[0][0] for c in mock_db.add.call_args_list if c[0][0] is not result]
+    by_key = {li.item_key: li for li in added_line_items}
+    assert by_key["data_points"].quantity == 200
+    assert by_key["data_points"].amount == 20
+    assert by_key["provisionable_devices"].quantity == 0
+    assert by_key["provisionable_devices"].amount == 0
+
+
+def test_correct_invoice_returns_none_when_no_change():
+    finalized = MagicMock(status="finalized", id="inv-f", subtotal=100, tax_amount=10, total_amount=110)
+    li = MagicMock(item_key="base_fee", quantity=1, amount=100)
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [finalized]
+    mock_db.query.return_value.filter.return_value.all.side_effect = [[li]]
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage", return_value={"base_fee": 1}), \
+         patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.10")), \
+         patch("app.services.billing_batch.calculate_invoice", return_value={
+             "line_items": [{"item_key": "base_fee", "quantity": 1, "unit_price": Decimal("100"), "amount": 100}],
+             "subtotal": 100, "tax_amount": 10, "total_amount": 110,
+         }):
+        result = correct_invoice(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-09")
+
+    assert result is None
+    mock_db.add.assert_not_called()
+
+
+def test_correct_invoice_sums_prior_corrections_into_running_total():
+    finalized = MagicMock(status="finalized", id="inv-f", subtotal=100, tax_amount=10, total_amount=110)
+    prior_correction = MagicMock(status="corrected", id="inv-c1", subtotal=20, tax_amount=2, total_amount=22)
+    li_f = MagicMock(item_key="data_points", quantity=1000, amount=100)
+    li_c = MagicMock(item_key="data_points", quantity=200, amount=20)
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [finalized, prior_correction]
+    mock_db.query.return_value.filter.return_value.all.side_effect = [[li_f], [li_c]]
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage", return_value={"data_points": 0}), \
+         patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.10")), \
+         patch("app.services.billing_batch.calculate_invoice", return_value={
+             "line_items": [{"item_key": "data_points", "quantity": 1300, "unit_price": Decimal("0.1"), "amount": 130}],
+             "subtotal": 130, "tax_amount": 13, "total_amount": 143,
+         }):
+        result = correct_invoice(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-09")
+
+    # running totals must be the SUM across finalized + prior corrected rows (110+22=132), not just finalized (110)
+    assert result.subtotal == 10
+    assert result.tax_amount == 1
+    assert result.total_amount == 11

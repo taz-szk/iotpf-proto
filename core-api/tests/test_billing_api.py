@@ -244,7 +244,8 @@ def test_get_tenant_invoice_detail_includes_line_items():
 
     with patch("app.routers.billing.SessionLocal") as mock_session:
         mock_db = _session_ctx()
-        mock_db.query.return_value.filter.return_value.first.side_effect = [MagicMock(), invoice]
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()  # tenant exists
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [invoice]
         mock_db.query.return_value.filter.return_value.all.return_value = [line_item]
         mock_session.return_value = mock_db
         resp = client.get(
@@ -273,13 +274,80 @@ def test_get_tenant_invoice_detail_tenant_not_found():
 def test_get_tenant_invoice_detail_invoice_not_found():
     with patch("app.routers.billing.SessionLocal") as mock_session:
         mock_db = _session_ctx()
-        mock_db.query.return_value.filter.return_value.first.side_effect = [MagicMock(), None]
+        mock_db.query.return_value.filter.return_value.first.return_value = MagicMock()  # tenant exists
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
         mock_session.return_value = mock_db
         resp = client.get(
             f"/tenants/{TENANT_ID}/billing/invoices/2026-01",
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 404
+
+
+def test_correct_tenant_invoice_requires_platform_auth():
+    resp = client.post(f"/tenants/{TENANT_ID}/billing/invoices/2026-09/correct")
+    assert resp.status_code == 401
+
+
+def test_correct_tenant_invoice_tenant_not_found():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09/correct",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_correct_tenant_invoice_returns_409_when_not_finalized():
+    from app.services.billing_batch import InvoiceNotFinalizedError
+    tenant = MagicMock(id=TENANT_ID, influxdb_org_id="org-1", influxdb_token="tok")
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.correct_invoice", side_effect=InvoiceNotFinalizedError("no finalized invoice")):
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09/correct",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 409
+
+
+def test_correct_tenant_invoice_returns_no_change_when_nothing_to_correct():
+    tenant = MagicMock(id=TENANT_ID, influxdb_org_id="org-1", influxdb_token="tok")
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.correct_invoice", return_value=None):
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09/correct",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"corrected": False}
+
+
+def test_correct_tenant_invoice_returns_delta_when_corrected():
+    tenant = MagicMock(id=TENANT_ID, influxdb_org_id="org-1", influxdb_token="tok")
+    corrected = MagicMock(subtotal=20, tax_amount=2, total_amount=22)
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.correct_invoice", return_value=corrected) as mock_correct:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09/correct",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "corrected": True, "delta_subtotal": 20, "delta_tax_amount": 2, "delta_total_amount": 22,
+    }
+    mock_correct.assert_called_once_with(mock_db, TENANT_ID, f"tenant_{TENANT_ID.replace('-', '_')}", "org-1", "tok", "2026-09")
 
 
 def test_list_tenant_invoices_tenant_not_found():

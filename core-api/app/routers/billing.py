@@ -7,18 +7,19 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import SessionLocal
 from app.models.public import Tenant
-from app.models.billing import BillingInvoice, BillingLineItem
 from app.schemas.billing import InvoiceOut, UnitPriceOut, UnitPriceSet
 from app.services.auth import verify_token
 from app.services.audit import log_audit
 from app.services.billing import (
-    ITEM_KEYS,
     InvalidEffectiveDateError,
     InvalidUnitPriceError,
     get_effective_unit_prices,
+    get_invoice_detail_aggregated,
+    list_invoices_aggregated,
     set_unit_price,
     validate_unit_price,
 )
+from app.services.billing_batch import InvoiceNotFinalizedError, correct_invoice
 
 router = APIRouter(prefix="/tenants/{tenant_id}/billing", tags=["billing"])
 _bearer = HTTPBearer(auto_error=False)
@@ -91,19 +92,7 @@ def list_tenant_invoices(tenant_id: str, _: dict = Depends(_require_platform)):
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-        rows = (
-            db.query(BillingInvoice)
-            .filter(BillingInvoice.tenant_id == tenant_id)
-            .order_by(BillingInvoice.target_year_month.desc())
-            .all()
-        )
-        return [
-            InvoiceOut(
-                target_year_month=r.target_year_month, status=r.status,
-                subtotal=r.subtotal, tax_amount=r.tax_amount, total_amount=r.total_amount,
-            )
-            for r in rows
-        ]
+        return list_invoices_aggregated(db, tenant_id)
 
 
 @router.get("/invoices/{target_year_month}")
@@ -113,25 +102,38 @@ def get_tenant_invoice(tenant_id: str, target_year_month: str, _: dict = Depends
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-        invoice = db.query(BillingInvoice).filter(
-            BillingInvoice.tenant_id == tenant_id,
-            BillingInvoice.target_year_month == target_year_month,
-        ).first()
-        if not invoice:
+        detail = get_invoice_detail_aggregated(db, tenant_id, target_year_month)
+        if not detail:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
-        line_items = db.query(BillingLineItem).filter(BillingLineItem.invoice_id == invoice.id).all()
-        line_items.sort(key=lambda li: ITEM_KEYS.index(li.item_key) if li.item_key in ITEM_KEYS else len(ITEM_KEYS))
-        return {
-            "target_year_month": invoice.target_year_month,
-            "status": invoice.status,
-            "subtotal": invoice.subtotal,
-            "tax_amount": invoice.tax_amount,
-            "total_amount": invoice.total_amount,
-            "line_items": [
-                {
-                    "item_key": li.item_key, "quantity": li.quantity,
-                    "unit_price": str(li.unit_price), "amount": li.amount,
-                }
-                for li in line_items
-            ],
-        }
+        return detail
+
+
+@router.post("/invoices/{target_year_month}/correct")
+def correct_tenant_invoice(tenant_id: str, target_year_month: str, payload: dict = Depends(_require_platform)):
+    tenant_id = _validate_uuid(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        schema = f"tenant_{str(tenant.id).lower().replace('-', '_')}"
+        influxdb_org_id = tenant.influxdb_org_id or ""
+        influxdb_token = tenant.influxdb_token or ""
+        try:
+            invoice = correct_invoice(db, tenant_id, schema, influxdb_org_id, influxdb_token, target_year_month)
+        except InvoiceNotFinalizedError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+
+        if invoice is None:
+            result = {"corrected": False}
+        else:
+            result = {
+                "corrected": True,
+                "delta_subtotal": invoice.subtotal,
+                "delta_tax_amount": invoice.tax_amount,
+                "delta_total_amount": invoice.total_amount,
+            }
+
+    log_audit("platform", payload["sub"], payload["email"], "correct_billing_invoice",
+              tenant_id=tenant_id, resource_type="billing_invoice",
+              detail={"target_year_month": target_year_month, **result})
+    return result

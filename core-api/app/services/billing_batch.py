@@ -75,6 +75,78 @@ def _backfill_missing_months(
         _replace_line_items(db, invoice.id, calc["line_items"])
 
 
+class InvoiceNotFinalizedError(Exception):
+    pass
+
+
+def correct_invoice(
+    db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
+    target_year_month: str,
+) -> BillingInvoice | None:
+    """finalized済み請求書を手動で再集計し、差額(アジャストメント)のみを保持する
+    status='corrected'行を追加する。差額(小計・税・合計いずれも)が0なら何も作成せずNoneを返す。
+    その月にfinalized行が無ければInvoiceNotFinalizedErrorを投げる（draftや開通直後は対象外）。
+    running（現時点の確定金額）はfinalized行＋既存のcorrected行すべての合計。
+    provisionable_devicesは「現在時点」のスナップショットのため再計算せず、
+    finalized行が持っていた値をそのまま引き継ぐ（過去月の値を偽らないため）。"""
+    existing = db.query(BillingInvoice).filter(
+        BillingInvoice.tenant_id == tenant_id,
+        BillingInvoice.target_year_month == target_year_month,
+    ).order_by(BillingInvoice.created_at).all()
+
+    if not any(r.status == "finalized" for r in existing):
+        raise InvoiceNotFinalizedError(
+            f"No finalized invoice for tenant {tenant_id} in {target_year_month}"
+        )
+
+    running_subtotal = sum(r.subtotal for r in existing)
+    running_tax = sum(r.tax_amount for r in existing)
+    running_total = sum(r.total_amount for r in existing)
+
+    running_items: dict[str, dict] = {}
+    for r in existing:
+        for li in db.query(BillingLineItem).filter(BillingLineItem.invoice_id == r.id).all():
+            acc = running_items.setdefault(li.item_key, {"quantity": 0, "amount": 0})
+            acc["quantity"] += li.quantity
+            acc["amount"] += li.amount
+
+    preserved_provisionable = running_items.get("provisionable_devices", {"quantity": 0})["quantity"]
+
+    year, month = (int(p) for p in target_year_month.split("-"))
+    usage = aggregate_monthly_usage(db, tenant_id, schema, influxdb_org_id, influxdb_token, year, month)
+    usage["provisionable_devices"] = preserved_provisionable
+    prices = get_effective_unit_prices(db, tenant_id, year, month)
+    calc = calculate_invoice(usage, prices, get_tax_rate(db))
+
+    delta_subtotal = calc["subtotal"] - running_subtotal
+    delta_tax = calc["tax_amount"] - running_tax
+    delta_total = calc["total_amount"] - running_total
+
+    if delta_subtotal == 0 and delta_tax == 0 and delta_total == 0:
+        return None
+
+    invoice = BillingInvoice(
+        tenant_id=tenant_id, target_year_month=target_year_month, status="corrected",
+        subtotal=delta_subtotal, tax_amount=delta_tax, total_amount=delta_total,
+        finalized_at=datetime.now(timezone.utc),
+    )
+    db.add(invoice)
+    db.commit()
+    db.refresh(invoice)
+
+    for li in calc["line_items"]:
+        running = running_items.get(li["item_key"], {"quantity": 0, "amount": 0})
+        db.add(BillingLineItem(
+            invoice_id=invoice.id, item_key=li["item_key"],
+            quantity=li["quantity"] - running["quantity"],
+            unit_price=li["unit_price"],
+            amount=li["amount"] - running["amount"],
+        ))
+    db.commit()
+
+    return invoice
+
+
 def _finalize_stale_drafts(
     db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
     current_target_year_month: str,

@@ -696,6 +696,8 @@
                   <td class="px-4 py-3 text-sm">
                     <span :class="inv.status === 'draft' ? 'text-amber-600' : 'text-green-600'"
                           x-text="inv.status === 'draft' ? '集計中（今月）' : '確定'"></span>
+                    <span x-show="inv.correction_count > 0" class="ml-1 text-xs text-blue-600"
+                          x-text="'（補正' + inv.correction_count + '件）'"></span>
                   </td>
                   <td class="px-4 py-3 text-sm font-bold" x-text="inv.total_amount.toLocaleString() + ' 円'"></td>
                 </tr>
@@ -731,6 +733,26 @@
                           <span>小計: <b x-text="invoiceDetail.subtotal.toLocaleString() + ' 円'"></b></span>
                           <span>消費税: <b x-text="invoiceDetail.tax_amount.toLocaleString() + ' 円'"></b></span>
                           <span>合計: <b x-text="invoiceDetail.total_amount.toLocaleString() + ' 円'"></b></span>
+                        </div>
+
+                        <div x-show="invoiceDetail.corrections && invoiceDetail.corrections.length > 0" class="mt-3 pt-3 border-t border-blue-100">
+                          <p class="text-xs font-medium text-gray-600 mb-1">補正履歴</p>
+                          <template x-for="(c, idx) in (invoiceDetail.corrections || [])" :key="idx">
+                            <div class="text-xs text-gray-500 flex justify-between py-0.5">
+                              <span x-text="c.applied_at ? new Date(c.applied_at).toLocaleString() : ''"></span>
+                              <span :class="c.delta_total_amount >= 0 ? 'text-blue-600' : 'text-red-600'"
+                                    x-text="(c.delta_total_amount >= 0 ? '+' : '') + c.delta_total_amount.toLocaleString() + ' 円'"></span>
+                            </div>
+                          </template>
+                        </div>
+
+                        <div class="flex justify-between items-center mt-3 pt-3 border-t border-blue-100">
+                          <span class="text-xs" :class="correctionMessage.includes('ありません') ? 'text-gray-500' : 'text-blue-600'" x-text="correctionMessage"></span>
+                          <button x-show="inv.status !== 'draft'" @click="correctInvoice(inv.target_year_month)"
+                                  :disabled="correctingInvoice"
+                                  class="text-xs px-3 py-1.5 rounded border border-blue-300 text-blue-700 hover:bg-blue-100 disabled:opacity-50">
+                            <span x-text="correctingInvoice ? '再集計中...' : '再集計する'"></span>
+                          </button>
                         </div>
                       </div>
                     </template>
@@ -1176,6 +1198,7 @@
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
         invoices: [], invoicesLoading: false,
         expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
+        correctingInvoice: false, correctionMessage: '',
 
         async loadUsers() {
           try {
@@ -1335,10 +1358,33 @@
         async toggleInvoice(month) {
           if (this.expandedInvoiceMonth === month) { this.expandedInvoiceMonth = null; return; }
           this.expandedInvoiceMonth = month;
+          this.correctionMessage = '';
+          await this.loadInvoiceDetail(month);
+        },
+
+        async loadInvoiceDetail(month) {
           this.invoiceDetail = null;
           this.invoiceDetailLoading = true;
           try { this.invoiceDetail = await api.request('GET', `/tenants/${tenantId}/billing/invoices/${month}`); }
           catch(e) { this.error = e.message; } finally { this.invoiceDetailLoading = false; }
+        },
+
+        async correctInvoice(month) {
+          if (!window.confirm(`${month}分を再集計しますか？（最新の利用量で差額を確認します）`)) return;
+          this.correctingInvoice = true;
+          this.correctionMessage = '';
+          try {
+            const result = await api.request('POST', `/tenants/${tenantId}/billing/invoices/${month}/correct`);
+            this.correctionMessage = result.corrected
+              ? `再集計しました（差額: ${result.delta_total_amount.toLocaleString()} 円）`
+              : '再集計しましたが、差額はありませんでした';
+            await this.loadInvoices();
+            await this.loadInvoiceDetail(month);
+          } catch(e) {
+            this.error = e.message;
+          } finally {
+            this.correctingInvoice = false;
+          }
         },
 
         openBillingPriceForm(key) {

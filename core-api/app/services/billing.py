@@ -3,7 +3,7 @@ from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 from sqlalchemy.orm import Session
 
-from app.models.billing import BillingDefaultUnitPrice, BillingSettings, BillingUnitPrice
+from app.models.billing import BillingDefaultUnitPrice, BillingInvoice, BillingLineItem, BillingSettings, BillingUnitPrice
 
 ITEM_KEYS = ("base_fee", "data_points", "device_count", "provisionable_devices", "alert_events")
 
@@ -180,3 +180,81 @@ def validate_tax_rate(tax_rate_str: str) -> Decimal:
     if tax_rate > 1:
         raise InvalidUnitPriceError("tax_rate must not exceed 1 (100%)")
     return tax_rate
+
+
+def list_invoices_aggregated(db: Session, tenant_id: str) -> list[dict]:
+    """テナントの請求書一覧を対象月ごとに合算して返す（新しい月順）。
+    同じ対象月に複数行（finalized＋corrected1件以上）がある場合、金額を合算し
+    correction_countで補正が何件あったかを示す。draft/finalizedは月に1行のみの想定。"""
+    rows = (
+        db.query(BillingInvoice)
+        .filter(BillingInvoice.tenant_id == tenant_id)
+        .order_by(BillingInvoice.target_year_month.desc())
+        .all()
+    )
+    by_month: dict[str, list[BillingInvoice]] = {}
+    for r in rows:
+        by_month.setdefault(r.target_year_month, []).append(r)
+
+    result = []
+    for ym in sorted(by_month.keys(), reverse=True):
+        group = by_month[ym]
+        status = "draft" if any(r.status == "draft" for r in group) else "finalized"
+        result.append({
+            "target_year_month": ym,
+            "status": status,
+            "subtotal": sum(r.subtotal for r in group),
+            "tax_amount": sum(r.tax_amount for r in group),
+            "total_amount": sum(r.total_amount for r in group),
+            "correction_count": sum(1 for r in group if r.status == "corrected"),
+        })
+    return result
+
+
+def get_invoice_detail_aggregated(db: Session, tenant_id: str, target_year_month: str) -> dict | None:
+    """対象月の請求書明細を、同月の全行（finalized＋corrected）を合算して返す。
+    1件も無ければNone。corrections には適用された各補正の差分を個別に含める。"""
+    rows = (
+        db.query(BillingInvoice)
+        .filter(BillingInvoice.tenant_id == tenant_id, BillingInvoice.target_year_month == target_year_month)
+        .order_by(BillingInvoice.created_at)
+        .all()
+    )
+    if not rows:
+        return None
+
+    status = "draft" if any(r.status == "draft" for r in rows) else "finalized"
+    corrections = [
+        {
+            "applied_at": r.finalized_at,
+            "delta_subtotal": r.subtotal,
+            "delta_tax_amount": r.tax_amount,
+            "delta_total_amount": r.total_amount,
+        }
+        for r in rows if r.status == "corrected"
+    ]
+
+    line_item_totals: dict[str, dict] = {}
+    for r in rows:
+        for li in db.query(BillingLineItem).filter(BillingLineItem.invoice_id == r.id).all():
+            acc = line_item_totals.setdefault(li.item_key, {"quantity": 0, "amount": 0, "unit_price": li.unit_price})
+            acc["quantity"] += li.quantity
+            acc["amount"] += li.amount
+            acc["unit_price"] = li.unit_price
+
+    line_items = [
+        {"item_key": key, "quantity": v["quantity"], "unit_price": str(v["unit_price"]), "amount": v["amount"]}
+        for key, v in line_item_totals.items()
+    ]
+    line_items.sort(key=lambda li: ITEM_KEYS.index(li["item_key"]) if li["item_key"] in ITEM_KEYS else len(ITEM_KEYS))
+
+    return {
+        "target_year_month": target_year_month,
+        "status": status,
+        "subtotal": sum(r.subtotal for r in rows),
+        "tax_amount": sum(r.tax_amount for r in rows),
+        "total_amount": sum(r.total_amount for r in rows),
+        "correction_count": len(corrections),
+        "corrections": corrections,
+        "line_items": line_items,
+    }

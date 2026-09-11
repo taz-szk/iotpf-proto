@@ -110,9 +110,9 @@ GET /tenants/{tenant_id}/billing/invoices
 | 項目 | 内容 |
 |---|---|
 | ビルショック通知 | 閾値設定UI・通知ロジック（別Plan） |
-| 修正(corrected)機能 | finalized請求書の手動再集計・差分記録（別Plan） |
 
 **解決済み（2026-09-11追加実装）:**
 - PF管理者向け請求書確認UI → `platform-ui/tenant.html`の単価設定タブに一覧+明細ドリルダウンを追加。`GET /tenants/{tenant_id}/billing/invoices/{target_year_month}`を新設。
 - 消費税率のマスタ化 → `billing_settings`テーブル（シングルトン行）+ `GET/PUT /platform/billing/tax-rate` + `platform-settings.html`のUIで実装。ハードコードのDEFAULT_TAX_RATEはフォールバックとして残す。
 - バックフィル → `_backfill_missing_months()`を実装。既存の請求書と現在の対象月の間に抜けている月があればfinalizedとして遡って生成する。provisionable_devicesは直近の既存請求書の値を引き継ぐ（過去のスナップショットは再現できないため）。
+- 修正(corrected)機能 → `correct_invoice()`（`billing_batch.py`）を実装。差額（アジャストメント）方式：finalized請求書1件に対しPF管理者がAPI+UI（`platform-ui/tenant.html`の「再集計する」ボタン）で手動トリガーし、最新利用量で再計算した金額と現在の確定金額（finalized＋既存corrected行の合計）との差分のみを`status='corrected'`行として追加する（明細行も同様に差分で保持）。差額が0なら行を作らない。provisionable_devicesはfinalized行の値をそのまま引き継ぐ。一覧・明細APIは同一対象月の複数行（finalized＋corrected）を合算して1件の請求書として返す（`list_invoices_aggregated`/`get_invoice_detail_aggregated`、`app/services/billing.py`）ため、既存のレスポンス形式・UIは変更不要（`correction_count`フィールドと明細の`corrections`履歴のみ追加）。
