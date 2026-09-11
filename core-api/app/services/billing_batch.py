@@ -14,6 +14,67 @@ def _current_target_year_month() -> tuple[int, int, str]:
     return now.year, now.month, f"{now.year:04d}-{now.month:02d}"
 
 
+def _months_between_exclusive(start_ym: str, end_ym: str) -> list[str]:
+    """start_ym（除く）からend_ym（除く）までの"YYYY-MM"を昇順で返す。startがend以上なら空。"""
+    year, month = (int(p) for p in start_ym.split("-"))
+    end_year, end_month = (int(p) for p in end_ym.split("-"))
+    result = []
+    while True:
+        month += 1
+        if month > 12:
+            month = 1
+            year += 1
+        if (year, month) >= (end_year, end_month):
+            break
+        result.append(f"{year:04d}-{month:02d}")
+    return result
+
+
+def _backfill_missing_months(
+    db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
+    current_target_year_month: str,
+) -> None:
+    """既存の請求書と現在の対象月の間に抜けている月（バッチが複数月停止していた場合等）
+    があれば、finalizedとして遡って生成する。テナントにまだ請求書が1件も無い場合
+    （開通直後）は対象なし。provisionable_devicesは「現在時点」のスナップショットで
+    過去を再現できないため、直近の既存請求書が持っていた値をそのまま引き継ぐ。"""
+    existing = db.query(BillingInvoice).filter(BillingInvoice.tenant_id == tenant_id).all()
+    if not existing:
+        return
+    latest_existing_ym = max(row.target_year_month for row in existing)
+
+    missing_months = _months_between_exclusive(latest_existing_ym, current_target_year_month)
+    if not missing_months:
+        return
+
+    latest_invoice = db.query(BillingInvoice).filter(
+        BillingInvoice.tenant_id == tenant_id,
+        BillingInvoice.target_year_month == latest_existing_ym,
+    ).first()
+    latest_items = db.query(BillingLineItem).filter(BillingLineItem.invoice_id == latest_invoice.id).all()
+    preserved_provisionable = next(
+        (li.quantity for li in latest_items if li.item_key == "provisionable_devices"),
+        0,
+    )
+
+    for ym in missing_months:
+        year, month = (int(p) for p in ym.split("-"))
+        usage = aggregate_monthly_usage(db, tenant_id, schema, influxdb_org_id, influxdb_token, year, month)
+        usage["provisionable_devices"] = preserved_provisionable
+        prices = get_effective_unit_prices(db, tenant_id, year, month)
+        calc = calculate_invoice(usage, prices, get_tax_rate(db))
+
+        invoice = BillingInvoice(
+            tenant_id=tenant_id, target_year_month=ym, status="finalized",
+            subtotal=calc["subtotal"], tax_amount=calc["tax_amount"], total_amount=calc["total_amount"],
+            finalized_at=datetime.now(timezone.utc),
+        )
+        db.add(invoice)
+        db.commit()
+        db.refresh(invoice)
+        _replace_line_items(db, invoice.id, calc["line_items"])
+
+
 def _finalize_stale_drafts(
     db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
     current_target_year_month: str,
@@ -92,6 +153,7 @@ def run_monthly_billing_batch() -> list[dict]:
     for tenant_id, schema, influxdb_org_id, influxdb_token in tenant_infos:
         try:
             with SessionLocal() as db:
+                _backfill_missing_months(db, tenant_id, schema, influxdb_org_id, influxdb_token, target_year_month)
                 _finalize_stale_drafts(db, tenant_id, schema, influxdb_org_id, influxdb_token, target_year_month)
 
                 invoice = _get_or_create_draft_invoice(db, tenant_id, target_year_month)

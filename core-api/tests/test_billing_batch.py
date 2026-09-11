@@ -2,9 +2,11 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 from app.services.billing_batch import (
+    _backfill_missing_months,
     _current_target_year_month,
     _finalize_stale_drafts,
     _get_or_create_draft_invoice,
+    _months_between_exclusive,
     _replace_line_items,
     run_monthly_billing_batch,
 )
@@ -16,6 +18,82 @@ def test_current_target_year_month_formats_correctly():
         mock_dt.now.return_value = fixed_now
         year, month, ym = _current_target_year_month()
     assert (year, month, ym) == (2026, 9, "2026-09")
+
+
+def test_months_between_exclusive_normal_gap():
+    assert _months_between_exclusive("2026-09", "2026-11") == ["2026-10"]
+
+
+def test_months_between_exclusive_multi_month_gap_crossing_year():
+    assert _months_between_exclusive("2026-11", "2027-02") == ["2026-12", "2027-01"]
+
+
+def test_months_between_exclusive_no_gap():
+    assert _months_between_exclusive("2026-09", "2026-10") == []
+
+
+def test_months_between_exclusive_same_month():
+    assert _months_between_exclusive("2026-09", "2026-09") == []
+
+
+def test_months_between_exclusive_start_after_end_returns_empty():
+    assert _months_between_exclusive("2026-11", "2026-09") == []
+
+
+def test_backfill_missing_months_noop_when_no_existing_invoices():
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.all.return_value = []
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage") as mock_aggregate:
+        _backfill_missing_months(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-11")
+
+    mock_aggregate.assert_not_called()
+
+
+def test_backfill_missing_months_noop_when_no_gap():
+    mock_db = MagicMock()
+    existing = MagicMock(target_year_month="2026-10")
+    mock_db.query.return_value.filter.return_value.all.return_value = [existing]
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage") as mock_aggregate:
+        _backfill_missing_months(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-11")
+
+    mock_aggregate.assert_not_called()
+
+
+def test_backfill_missing_months_creates_finalized_invoice_for_gap():
+    existing = MagicMock(target_year_month="2026-09")
+    latest_invoice = MagicMock(id="invoice-sep")
+    old_line_item = MagicMock(item_key="provisionable_devices", quantity=99)
+
+    mock_db = MagicMock()
+    # 1st .all(): 既存請求書一覧(target_year_month収集用) 2nd .all(): 直近請求書の明細行
+    mock_db.query.return_value.filter.return_value.all.side_effect = [[existing], [old_line_item]]
+    mock_db.query.return_value.filter.return_value.first.return_value = latest_invoice
+
+    with patch("app.services.billing_batch.aggregate_monthly_usage",
+               return_value={"base_fee": 1, "data_points": 500, "device_count": 2,
+                             "provisionable_devices": 0, "alert_events": 3}) as mock_aggregate, \
+         patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
+         patch("app.services.billing_batch.get_tax_rate", return_value=Decimal("0.10")), \
+         patch("app.services.billing_batch.calculate_invoice", return_value={
+             "line_items": [{"item_key": "provisionable_devices", "quantity": 99,
+                              "unit_price": Decimal("0"), "amount": 0}],
+             "subtotal": 100, "tax_amount": 10, "total_amount": 110,
+         }) as mock_calc, \
+         patch("app.services.billing_batch._replace_line_items") as mock_replace:
+        _backfill_missing_months(mock_db, "tenant-1", "tenant_x", "org-1", "tok", "2026-11")
+
+    mock_aggregate.assert_called_once_with(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 10)
+    # provisionable_devices must be carried forward from the latest known invoice, not the fresh snapshot
+    passed_usage = mock_calc.call_args[0][0]
+    assert passed_usage["provisionable_devices"] == 99
+    mock_db.add.assert_called_once()
+    added_invoice = mock_db.add.call_args[0][0]
+    assert added_invoice.target_year_month == "2026-10"
+    assert added_invoice.status == "finalized"
+    assert added_invoice.total_amount == 110
+    mock_replace.assert_called_once()
 
 
 def test_finalize_stale_drafts_recomputes_before_finalizing():
