@@ -133,6 +133,8 @@ const api = {
         getMfaSettings: () => request('GET',   '/platform/mfa-settings'),
         updateMfaSettings: (body) => request('PATCH', '/platform/mfa-settings', body),
         grafanaOrgId: () => request('GET', '/tenants/platform/grafana-org-id'),
+        getBillingDefaultPrices: () => request('GET', '/platform/billing/default-prices'),
+        updateBillingDefaultPrices: (body) => request('PUT', '/platform/billing/default-prices', body),
     },
     tenantAuth: {
         changePassword: (currentPassword, newPassword) =>

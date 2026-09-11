@@ -54,6 +54,30 @@
       </div>
       <p x-show="saved" class="mt-4 text-sm text-green-600">設定を保存しました</p>
     </div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">デフォルト料金テーブル</h2>
+      <p class="text-xs text-gray-400 mb-4">新規テナント開通時に、ここで設定した単価がそのテナントの初期単価として自動セットされます（開通後の既存テナントには影響しません）</p>
+      <div x-show="defaultPricesError" class="mb-3 text-sm text-red-600" x-text="defaultPricesError"></div>
+      <div class="space-y-3">
+        <template x-for="item in billingItems" :key="item.key">
+          <div class="flex items-center justify-between py-2 border-b border-gray-100">
+            <div>
+              <p class="text-sm font-medium text-gray-700" x-text="item.label"></p>
+              <p class="text-xs text-gray-400" x-text="item.unit"></p>
+            </div>
+            <input type="text" x-model="defaultPrices[item.key]" placeholder="未設定（0円）"
+                   class="border border-gray-300 rounded px-2 py-1.5 text-sm w-32 text-right">
+          </div>
+        </template>
+      </div>
+      <button @click="saveDefaultPrices()" :disabled="savingDefaultPrices"
+              class="mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
+        <span x-show="!savingDefaultPrices">保存</span>
+        <span x-show="savingDefaultPrices">保存中...</span>
+      </button>
+      <p x-show="defaultPricesSaved" class="mt-3 text-sm text-green-600">デフォルト料金テーブルを保存しました</p>
+    </div>
   </div>
   <script>
     if (!api.isLoggedIn()) window.location.href = '/iotairx-console/';
@@ -61,9 +85,22 @@
       return {
         loading: true, error: '', saved: false,
         settings: { platform_required: false, tenant_required: false },
+        billingItems: [
+          { key: 'base_fee', label: '基本料金', unit: '月額' },
+          { key: 'data_points', label: 'データポイント数', unit: '件あたり' },
+          { key: 'device_count', label: 'デバイス数（月内通信）', unit: '台あたり' },
+          { key: 'provisionable_devices', label: 'プロビジョニング可能数', unit: '台あたり' },
+          { key: 'alert_events', label: 'アラートイベント数', unit: '件あたり' },
+        ],
+        defaultPrices: {},
+        defaultPricesError: '',
+        defaultPricesSaved: false,
+        savingDefaultPrices: false,
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
+            const rows = await api.platform.getBillingDefaultPrices();
+            for (const row of rows) this.defaultPrices[row.item_key] = row.unit_price;
           } catch(e) { this.error = e.message; }
           finally { this.loading = false; }
         },
@@ -76,6 +113,20 @@
             this.saved = true;
             setTimeout(() => this.saved = false, 3000);
           } catch(e) { this.error = e.message; this.settings[key] = !this.settings[key]; }
+        },
+        async saveDefaultPrices() {
+          this.defaultPricesSaved = false;
+          this.defaultPricesError = '';
+          this.savingDefaultPrices = true;
+          const body = this.billingItems
+            .filter(item => this.defaultPrices[item.key] !== undefined && this.defaultPrices[item.key] !== '')
+            .map(item => ({ item_key: item.key, unit_price: String(this.defaultPrices[item.key]) }));
+          try {
+            await api.platform.updateBillingDefaultPrices(body);
+            this.defaultPricesSaved = true;
+            setTimeout(() => this.defaultPricesSaved = false, 3000);
+          } catch(e) { this.defaultPricesError = e.message; }
+          finally { this.savingDefaultPrices = false; }
         },
       };
     }
