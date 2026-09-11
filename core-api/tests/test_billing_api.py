@@ -360,3 +360,97 @@ def test_list_tenant_invoices_tenant_not_found():
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 404
+
+
+def test_get_tenant_bill_shock_threshold_requires_platform_auth():
+    resp = client.get(f"/tenants/{TENANT_ID}/billing/bill-shock-threshold")
+    assert resp.status_code == 401
+
+
+def test_get_tenant_bill_shock_threshold_returns_override_when_set():
+    tenant = MagicMock(bill_shock_threshold_amount=70000)
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.get_effective_bill_shock_threshold", return_value=70000):
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"threshold_amount": "70000", "is_default": False}
+
+
+def test_get_tenant_bill_shock_threshold_returns_default_when_no_override():
+    tenant = MagicMock(bill_shock_threshold_amount=None)
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.get_effective_bill_shock_threshold", return_value=50000):
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"threshold_amount": "50000", "is_default": True}
+
+
+def test_get_tenant_bill_shock_threshold_tenant_not_found():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_put_tenant_bill_shock_threshold_sets_override():
+    tenant = MagicMock(bill_shock_threshold_amount=None)
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            json={"threshold_amount": "80000"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"threshold_amount": "80000"}
+    assert tenant.bill_shock_threshold_amount == 80000
+    assert mock_db.commit.called
+
+
+def test_put_tenant_bill_shock_threshold_clears_override_with_null():
+    tenant = MagicMock(bill_shock_threshold_amount=80000)
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            json={"threshold_amount": None},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"threshold_amount": None}
+    assert tenant.bill_shock_threshold_amount is None
+
+
+def test_put_tenant_bill_shock_threshold_rejects_invalid_value():
+    tenant = MagicMock()
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/billing/bill-shock-threshold",
+            json={"threshold_amount": "-5"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422

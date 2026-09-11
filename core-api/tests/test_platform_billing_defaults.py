@@ -142,3 +142,77 @@ def test_put_default_prices_commits_after_audit_log():
     # after write_audit_log was invoked)
     assert mock_audit.called
     assert mock_db.commit.called
+
+
+def test_get_bill_shock_threshold_requires_platform_auth():
+    resp = client.get("/platform/billing/bill-shock-threshold")
+    assert resp.status_code == 401
+
+
+def test_get_bill_shock_threshold_returns_current_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.get_default_bill_shock_threshold", return_value=50000):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            "/platform/billing/bill-shock-threshold",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_threshold_amount": "50000"}
+
+
+def test_get_bill_shock_threshold_returns_null_when_unset():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.get_default_bill_shock_threshold", return_value=None):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            "/platform/billing/bill-shock-threshold",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_threshold_amount": None}
+
+
+def test_put_bill_shock_threshold_updates_and_returns_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.set_default_bill_shock_threshold") as mock_set, \
+         patch("app.routers.platform.write_audit_log") as mock_audit:
+        mock_db = _session_ctx()
+        mock_session.return_value = mock_db
+        resp = client.put(
+            "/platform/billing/bill-shock-threshold",
+            json={"default_threshold_amount": "60000"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_threshold_amount": "60000"}
+    mock_set.assert_called_once_with(mock_db, 60000)
+    assert mock_audit.called
+    assert mock_db.commit.called
+
+
+def test_put_bill_shock_threshold_accepts_null_to_unset():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.set_default_bill_shock_threshold") as mock_set, \
+         patch("app.routers.platform.write_audit_log"):
+        mock_db = _session_ctx()
+        mock_session.return_value = mock_db
+        resp = client.put(
+            "/platform/billing/bill-shock-threshold",
+            json={"default_threshold_amount": None},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_threshold_amount": None}
+    mock_set.assert_called_once_with(mock_db, None)
+
+
+def test_put_bill_shock_threshold_rejects_invalid_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.put(
+            "/platform/billing/bill-shock-threshold",
+            json={"default_threshold_amount": "not-a-number"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422

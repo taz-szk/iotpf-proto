@@ -7,16 +7,18 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import SessionLocal
 from app.models.public import Tenant
-from app.schemas.billing import InvoiceOut, UnitPriceOut, UnitPriceSet
+from app.schemas.billing import BillShockThresholdOut, BillShockThresholdSet, InvoiceOut, UnitPriceOut, UnitPriceSet
 from app.services.auth import verify_token
 from app.services.audit import log_audit
 from app.services.billing import (
     InvalidEffectiveDateError,
     InvalidUnitPriceError,
+    get_effective_bill_shock_threshold,
     get_effective_unit_prices,
     get_invoice_detail_aggregated,
     list_invoices_aggregated,
     set_unit_price,
+    validate_bill_shock_threshold,
     validate_unit_price,
 )
 from app.services.billing_batch import InvoiceNotFinalizedError, correct_invoice
@@ -137,3 +139,39 @@ def correct_tenant_invoice(tenant_id: str, target_year_month: str, payload: dict
               tenant_id=tenant_id, resource_type="billing_invoice",
               detail={"target_year_month": target_year_month, **result})
     return result
+
+
+@router.get("/bill-shock-threshold", response_model=BillShockThresholdOut)
+def get_tenant_bill_shock_threshold(tenant_id: str, _: dict = Depends(_require_platform)):
+    tenant_id = _validate_uuid(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        effective = get_effective_bill_shock_threshold(db, tenant)
+        is_default = tenant.bill_shock_threshold_amount is None
+    return {
+        "threshold_amount": str(effective) if effective is not None else None,
+        "is_default": is_default,
+    }
+
+
+@router.put("/bill-shock-threshold", response_model=BillShockThresholdSet)
+def update_tenant_bill_shock_threshold(tenant_id: str, body: BillShockThresholdSet, payload: dict = Depends(_require_platform)):
+    tenant_id = _validate_uuid(tenant_id)
+    try:
+        amount = validate_bill_shock_threshold(body.threshold_amount or "")
+    except InvalidUnitPriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        tenant.bill_shock_threshold_amount = amount
+        db.commit()
+
+    log_audit("platform", payload["sub"], payload["email"], "update_tenant_bill_shock_threshold",
+              tenant_id=tenant_id, resource_type="tenant",
+              detail={"threshold_amount": amount})
+    return {"threshold_amount": str(amount) if amount is not None else None}

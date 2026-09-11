@@ -24,3 +24,12 @@ class InvoiceOut(BaseModel):
     tax_amount: int
     total_amount: int
     correction_count: int = 0
+
+
+class BillShockThresholdOut(BaseModel):
+    threshold_amount: str | None
+    is_default: bool
+
+
+class BillShockThresholdSet(BaseModel):
+    threshold_amount: str | None = None

@@ -8,10 +8,13 @@ from app.services.auth import verify_token
 from app.database import SessionLocal
 from app.services.billing import (
     InvalidUnitPriceError,
+    get_default_bill_shock_threshold,
     get_default_unit_prices,
     get_tax_rate,
+    set_default_bill_shock_threshold,
     set_default_unit_prices,
     set_tax_rate,
+    validate_bill_shock_threshold,
     validate_tax_rate,
     validate_unit_price,
     ITEM_KEYS,
@@ -42,6 +45,10 @@ class DefaultPriceItem(BaseModel):
 
 class TaxRateItem(BaseModel):
     tax_rate: str
+
+
+class BillShockThresholdItem(BaseModel):
+    default_threshold_amount: str | None = None
 
 
 @router.get("/mfa-settings")
@@ -126,3 +133,28 @@ def update_billing_tax_rate(body: TaxRateItem, payload: dict = Depends(_require_
         db.commit()
 
     return {"tax_rate": str(rate)}
+
+
+@router.get("/billing/bill-shock-threshold", response_model=BillShockThresholdItem)
+def get_billing_bill_shock_threshold(_: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        amount = get_default_bill_shock_threshold(db)
+    return {"default_threshold_amount": str(amount) if amount is not None else None}
+
+
+@router.put("/billing/bill-shock-threshold", response_model=BillShockThresholdItem)
+def update_billing_bill_shock_threshold(body: BillShockThresholdItem, payload: dict = Depends(_require_platform)):
+    try:
+        amount = validate_bill_shock_threshold(body.default_threshold_amount or "")
+    except InvalidUnitPriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    with SessionLocal() as db:
+        set_default_bill_shock_threshold(db, amount)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_billing_bill_shock_threshold",
+                        resource_type="billing_settings",
+                        detail={"default_threshold_amount": amount})
+        db.commit()
+
+    return {"default_threshold_amount": str(amount) if amount is not None else None}
