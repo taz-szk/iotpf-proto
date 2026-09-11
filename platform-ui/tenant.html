@@ -719,7 +719,7 @@
                     <template x-if="!invoiceDetailLoading && invoiceDetail && expandedInvoiceMonth === inv.target_year_month">
                       <div>
                         <p x-show="inv.status === 'draft'" class="text-xs text-amber-600 mb-2">
-                          ※このバッチは毎日更新されるため、月末までの推定額です
+                          ※このバッチは毎日更新されるため、前日までの金額です
                         </p>
                         <table class="w-full text-xs">
                           <thead>

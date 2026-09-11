@@ -907,7 +907,7 @@
                         <template x-if="!invoiceDetailLoading && invoiceDetail && expandedInvoiceMonth === inv.target_year_month">
                           <div>
                             <p x-show="inv.status === 'draft'" class="text-xs text-amber-600 mb-2">
-                              ※このバッチは毎日更新されるため、月末までの推定額です
+                              ※このバッチは毎日更新されるため、前日までの金額です
                             </p>
                             <table class="w-full text-xs">
                               <thead>
@@ -1307,7 +1307,7 @@ function portalApp() {
         { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
         { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
         { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
-        { id: 'stats-billing',    label: '統計・請求',               icon: '📊' },
+        { id: 'stats-billing',    label: '統計・ビリング',           icon: '📊' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
