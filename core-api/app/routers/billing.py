@@ -7,11 +7,12 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import SessionLocal
 from app.models.public import Tenant
-from app.models.billing import BillingInvoice
+from app.models.billing import BillingInvoice, BillingLineItem
 from app.schemas.billing import InvoiceOut, UnitPriceOut, UnitPriceSet
 from app.services.auth import verify_token
 from app.services.audit import log_audit
 from app.services.billing import (
+    ITEM_KEYS,
     InvalidEffectiveDateError,
     InvalidUnitPriceError,
     get_effective_unit_prices,
@@ -103,3 +104,34 @@ def list_tenant_invoices(tenant_id: str, _: dict = Depends(_require_platform)):
             )
             for r in rows
         ]
+
+
+@router.get("/invoices/{target_year_month}")
+def get_tenant_invoice(tenant_id: str, target_year_month: str, _: dict = Depends(_require_platform)):
+    tenant_id = _validate_uuid(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        invoice = db.query(BillingInvoice).filter(
+            BillingInvoice.tenant_id == tenant_id,
+            BillingInvoice.target_year_month == target_year_month,
+        ).first()
+        if not invoice:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
+        line_items = db.query(BillingLineItem).filter(BillingLineItem.invoice_id == invoice.id).all()
+        line_items.sort(key=lambda li: ITEM_KEYS.index(li.item_key) if li.item_key in ITEM_KEYS else len(ITEM_KEYS))
+        return {
+            "target_year_month": invoice.target_year_month,
+            "status": invoice.status,
+            "subtotal": invoice.subtotal,
+            "tax_amount": invoice.tax_amount,
+            "total_amount": invoice.total_amount,
+            "line_items": [
+                {
+                    "item_key": li.item_key, "quantity": li.quantity,
+                    "unit_price": str(li.unit_price), "amount": li.amount,
+                }
+                for li in line_items
+            ],
+        }

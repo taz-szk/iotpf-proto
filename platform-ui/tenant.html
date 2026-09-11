@@ -670,6 +670,76 @@
             </tbody>
           </table>
         </div>
+
+        <h3 class="font-medium text-gray-700 mb-3 mt-8">請求書</h3>
+        <div x-show="invoicesLoading" class="py-8 text-center text-gray-400">請求書を取得中...</div>
+        <div x-show="!invoicesLoading && invoices.length === 0" class="py-8 text-center text-gray-400 text-sm">
+          請求書がありません
+        </div>
+        <div x-show="!invoicesLoading && invoices.length > 0" class="bg-white rounded shadow-sm border border-gray-200">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-100">
+              <tr>
+                <th class="w-6 px-4 py-3"></th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">対象月</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">合計金額</th>
+              </tr>
+            </thead>
+            <template x-for="inv in invoices" :key="inv.target_year_month">
+              <tbody>
+                <tr class="border-t border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    @click="toggleInvoice(inv.target_year_month)">
+                  <td class="px-4 py-3 text-gray-400 text-xs select-none"
+                      x-text="expandedInvoiceMonth === inv.target_year_month ? '▾' : '▸'"></td>
+                  <td class="px-4 py-3 text-sm font-medium" x-text="inv.target_year_month"></td>
+                  <td class="px-4 py-3 text-sm">
+                    <span :class="inv.status === 'draft' ? 'text-amber-600' : 'text-green-600'"
+                          x-text="inv.status === 'draft' ? '集計中（今月）' : '確定'"></span>
+                  </td>
+                  <td class="px-4 py-3 text-sm font-bold" x-text="inv.total_amount.toLocaleString() + ' 円'"></td>
+                </tr>
+                <tr x-show="expandedInvoiceMonth === inv.target_year_month" class="bg-blue-50">
+                  <td colspan="4" class="px-8 py-3">
+                    <div x-show="invoiceDetailLoading" class="text-xs text-gray-400 py-1">読み込み中...</div>
+                    <template x-if="!invoiceDetailLoading && invoiceDetail && expandedInvoiceMonth === inv.target_year_month">
+                      <div>
+                        <p x-show="inv.status === 'draft'" class="text-xs text-amber-600 mb-2">
+                          ※このバッチは毎日更新されるため、月末までの推定額です
+                        </p>
+                        <table class="w-full text-xs">
+                          <thead>
+                            <tr class="text-gray-500">
+                              <th class="text-left py-1 pr-6 font-medium">項目</th>
+                              <th class="text-left py-1 pr-6 font-medium">数量</th>
+                              <th class="text-left py-1 pr-6 font-medium">単価</th>
+                              <th class="text-left py-1 font-medium">小計</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <template x-for="li in invoiceDetail.line_items" :key="li.item_key">
+                              <tr class="border-t border-blue-100">
+                                <td class="py-1.5 pr-6 font-medium text-gray-700" x-text="billingItemLabel(li.item_key)"></td>
+                                <td class="py-1.5 pr-6 text-gray-600" x-text="li.quantity.toLocaleString()"></td>
+                                <td class="py-1.5 pr-6 text-gray-500" x-text="Number(li.unit_price).toString()"></td>
+                                <td class="py-1.5 text-gray-800" x-text="li.amount.toLocaleString() + ' 円'"></td>
+                              </tr>
+                            </template>
+                          </tbody>
+                        </table>
+                        <div class="flex justify-end gap-6 mt-2 text-xs text-gray-600">
+                          <span>小計: <b x-text="invoiceDetail.subtotal.toLocaleString() + ' 円'"></b></span>
+                          <span>消費税: <b x-text="invoiceDetail.tax_amount.toLocaleString() + ' 円'"></b></span>
+                          <span>合計: <b x-text="invoiceDetail.total_amount.toLocaleString() + ' 円'"></b></span>
+                        </div>
+                      </div>
+                    </template>
+                  </td>
+                </tr>
+              </tbody>
+            </template>
+          </table>
+        </div>
       </div>
 
       <!-- ファームウェアタブ -->
@@ -1104,6 +1174,8 @@
         billingPrices: {},
         billingSuccess: '',
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
+        invoices: [], invoicesLoading: false,
+        expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
 
         async loadUsers() {
           try {
@@ -1251,6 +1323,22 @@
           } catch(e) {
             this.error = e.message;
           }
+          this.loadInvoices();
+        },
+
+        async loadInvoices() {
+          this.invoicesLoading = true;
+          try { this.invoices = await api.request('GET', `/tenants/${tenantId}/billing/invoices`) || []; }
+          catch(e) { this.error = e.message; } finally { this.invoicesLoading = false; }
+        },
+
+        async toggleInvoice(month) {
+          if (this.expandedInvoiceMonth === month) { this.expandedInvoiceMonth = null; return; }
+          this.expandedInvoiceMonth = month;
+          this.invoiceDetail = null;
+          this.invoiceDetailLoading = true;
+          try { this.invoiceDetail = await api.request('GET', `/tenants/${tenantId}/billing/invoices/${month}`); }
+          catch(e) { this.error = e.message; } finally { this.invoiceDetailLoading = false; }
         },
 
         openBillingPriceForm(key) {

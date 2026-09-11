@@ -228,6 +228,60 @@ def test_list_tenant_invoices_returns_invoices_newest_first():
     )
 
 
+def test_get_tenant_invoice_detail_requires_platform_auth():
+    resp = client.get(f"/tenants/{TENANT_ID}/billing/invoices/2026-09")
+    assert resp.status_code == 401
+
+
+def test_get_tenant_invoice_detail_includes_line_items():
+    line_item = MagicMock()
+    line_item.item_key = "base_fee"
+    line_item.quantity = 1
+    line_item.unit_price = Decimal("5000")
+    line_item.amount = 5000
+    invoice = _invoice_row("2026-09", "draft", 5000, 500, 5500)
+    invoice.id = "invoice-1"
+
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.side_effect = [MagicMock(), invoice]
+        mock_db.query.return_value.filter.return_value.all.return_value = [line_item]
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["target_year_month"] == "2026-09"
+    assert body["total_amount"] == 5500
+    assert body["line_items"] == [{"item_key": "base_fee", "quantity": 1, "unit_price": "5000", "amount": 5000}]
+
+
+def test_get_tenant_invoice_detail_tenant_not_found():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-09",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
+def test_get_tenant_invoice_detail_invoice_not_found():
+    with patch("app.routers.billing.SessionLocal") as mock_session:
+        mock_db = _session_ctx()
+        mock_db.query.return_value.filter.return_value.first.side_effect = [MagicMock(), None]
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/invoices/2026-01",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 404
+
+
 def test_list_tenant_invoices_tenant_not_found():
     with patch("app.routers.billing.SessionLocal") as mock_session:
         mock_db = _session_ctx()
