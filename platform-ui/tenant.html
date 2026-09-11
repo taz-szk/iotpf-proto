@@ -671,6 +671,18 @@
           </table>
         </div>
 
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-4">
+          <p class="text-sm font-medium text-gray-700 mb-1">ビルショック通知しきい値（このテナントの上書き）</p>
+          <p class="text-xs text-gray-400 mb-3">空欄で保存するとデフォルト値に戻ります。</p>
+          <div class="flex items-center gap-2">
+            <input type="text" x-model="bsThreshold" :placeholder="'現在の実効値: ' + (bsThresholdIsDefault ? '¥' + bsThreshold + '（デフォルト）' : '¥' + bsThreshold)"
+                   class="border border-gray-300 rounded px-2 py-1.5 text-sm w-40">
+            <button @click="saveBsThreshold()" :disabled="savingBsThreshold"
+                    class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded disabled:bg-blue-300">保存</button>
+          </div>
+          <p x-show="bsThresholdSaved" class="mt-2 text-xs text-green-600">保存しました</p>
+        </div>
+
         <h3 class="font-medium text-gray-700 mb-3 mt-8">請求書</h3>
         <div x-show="invoicesLoading" class="py-8 text-center text-gray-400">請求書を取得中...</div>
         <div x-show="!invoicesLoading && invoices.length === 0" class="py-8 text-center text-gray-400 text-sm">
@@ -1196,6 +1208,7 @@
         billingPrices: {},
         billingSuccess: '',
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
+        bsThreshold: '', bsThresholdIsDefault: true, savingBsThreshold: false, bsThresholdSaved: false,
         invoices: [], invoicesLoading: false,
         expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
         correctingInvoice: false, correctionMessage: '',
@@ -1347,12 +1360,35 @@
             this.error = e.message;
           }
           this.loadInvoices();
+          this.loadBsThreshold();
         },
 
         async loadInvoices() {
           this.invoicesLoading = true;
           try { this.invoices = await api.request('GET', `/tenants/${tenantId}/billing/invoices`) || []; }
           catch(e) { this.error = e.message; } finally { this.invoicesLoading = false; }
+        },
+
+        async loadBsThreshold() {
+          try {
+            const r = await api.request('GET', `/tenants/${tenantId}/billing/bill-shock-threshold`);
+            this.bsThreshold = r.threshold_amount ?? '';
+            this.bsThresholdIsDefault = r.is_default;
+          } catch(e) { this.error = e.message; }
+        },
+
+        async saveBsThreshold() {
+          this.bsThresholdSaved = false;
+          this.savingBsThreshold = true;
+          try {
+            await api.request('PUT', `/tenants/${tenantId}/billing/bill-shock-threshold`, {
+              threshold_amount: this.bsThreshold === '' ? null : String(this.bsThreshold),
+            });
+            await this.loadBsThreshold();
+            this.bsThresholdSaved = true;
+            setTimeout(() => this.bsThresholdSaved = false, 3000);
+          } catch(e) { this.error = e.message; }
+          finally { this.savingBsThreshold = false; }
         },
 
         async toggleInvoice(month) {

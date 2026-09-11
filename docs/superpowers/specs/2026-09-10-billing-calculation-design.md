@@ -91,10 +91,10 @@
 
 | 項目 | 内容 |
 |---|---|
-| 想定利用量閾値のデフォルト値（数値そのもの） | 画面から変更可能にする方針は確定（3節・2.5節）。デフォルト初期値をいくつにするかは次回決める |
 | 個別デバイス異常検知の実装方式 | リアルタイム監視 or 日次バッチ、判定ロジックの具体化 |
 
 **解決済み（2026-09-11）:** 消費税率の設定方法 → 税率マスタ（`billing_settings`テーブル、PF管理者がUIから変更可能）として実装。
+- ビルショック通知 → `billing_settings.default_bill_shock_threshold_amount`（デフォルト）＋`tenants.bill_shock_threshold_amount`（テナント個別上書き）で実装。当月draft請求書の合計金額が実効しきい値を超えたら、監査ログ記録＋メール送信（`app/services/mailer.py`、core-apiに新規実装）で月1回のみ通知する（`billing_invoices.bill_shock_notified_at`でdedup）。デフォルト初期値は未設定（PF管理者が画面から設定するまで通知しない）。
 
 ---
 

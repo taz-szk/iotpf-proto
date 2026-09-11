@@ -6,7 +6,7 @@
   <title>プラットフォーム設定 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=13"></script>
+  <script src="/admin/js/api.js?v=14"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -95,6 +95,23 @@
       </button>
       <p x-show="taxRateSaved" class="mt-3 text-sm text-green-600">消費税率を保存しました</p>
     </div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">ビルショック通知しきい値（デフォルト）</h2>
+      <p class="text-xs text-gray-400 mb-4">当月の請求合計金額がこの金額を超えたら、PF管理者・テナント管理者へメールで通知します。空欄の場合は通知しません。テナントごとに個別の上書き値を設定することもできます（テナント詳細画面）。</p>
+      <div x-show="bsThresholdError" class="mb-3 text-sm text-red-600" x-text="bsThresholdError"></div>
+      <div class="flex items-center justify-between py-2">
+        <p class="text-sm font-medium text-gray-700">しきい値（円）</p>
+        <input type="text" x-model="bsThreshold" placeholder="未設定（通知しない）"
+               class="border border-gray-300 rounded px-2 py-1.5 text-sm w-32 text-right">
+      </div>
+      <button @click="saveBsThreshold()" :disabled="savingBsThreshold || bsThresholdLoadFailed"
+              class="mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
+        <span x-show="!savingBsThreshold">保存</span>
+        <span x-show="savingBsThreshold">保存中...</span>
+      </button>
+      <p x-show="bsThresholdSaved" class="mt-3 text-sm text-green-600">しきい値を保存しました</p>
+    </div>
   </div>
   <script>
     if (!api.isLoggedIn()) window.location.href = '/iotairx-console/';
@@ -119,6 +136,11 @@
         taxRateSaved: false,
         savingTaxRate: false,
         taxRateLoadFailed: false,
+        bsThreshold: '',
+        bsThresholdError: '',
+        bsThresholdSaved: false,
+        savingBsThreshold: false,
+        bsThresholdLoadFailed: false,
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
@@ -136,6 +158,13 @@
           } catch(e) {
             this.taxRateError = e.message;
             this.taxRateLoadFailed = true;
+          }
+          try {
+            const bs = await api.platform.getBillingBillShockThreshold();
+            this.bsThreshold = bs.default_threshold_amount ?? '';
+          } catch(e) {
+            this.bsThresholdError = e.message;
+            this.bsThresholdLoadFailed = true;
           }
           this.loading = false;
         },
@@ -174,6 +203,20 @@
             setTimeout(() => this.taxRateSaved = false, 3000);
           } catch(e) { this.taxRateError = e.message; }
           finally { this.savingTaxRate = false; }
+        },
+        async saveBsThreshold() {
+          this.bsThresholdSaved = false;
+          this.bsThresholdError = '';
+          this.savingBsThreshold = true;
+          try {
+            const result = await api.platform.updateBillingBillShockThreshold({
+              default_threshold_amount: this.bsThreshold === '' ? null : String(this.bsThreshold),
+            });
+            this.bsThreshold = result.default_threshold_amount ?? '';
+            this.bsThresholdSaved = true;
+            setTimeout(() => this.bsThresholdSaved = false, 3000);
+          } catch(e) { this.bsThresholdError = e.message; }
+          finally { this.savingBsThreshold = false; }
         },
       };
     }
