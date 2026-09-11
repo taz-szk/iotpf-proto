@@ -69,3 +69,37 @@ def test_tenant_audit_logs_empty(client):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 0
+
+
+def test_tenant_audit_logs_excludes_platform_actor():
+    """テナント管理者の監査ログにはPF管理者の操作(actor_type='platform')を含めない。"""
+    import app.routers.tenant_portal as tenant_portal_module
+    tid = str(uuid.uuid4())
+    query_calls = []
+
+    class FakeQuery:
+        def filter(self, *conditions):
+            query_calls.extend(conditions)
+            return self
+        def count(self):
+            return 0
+        def order_by(self, *a, **k):
+            return self
+        def offset(self, *a, **k):
+            return self
+        def limit(self, *a, **k):
+            return self
+        def all(self):
+            return []
+
+    mock_db = MagicMock()
+    mock_db.__enter__ = lambda s: mock_db
+    mock_db.__exit__ = MagicMock(return_value=False)
+    mock_db.query.return_value = FakeQuery()
+
+    with patch.object(tenant_portal_module, "SessionLocal", return_value=mock_db):
+        payload = {"tenant_id": tid, "role": "admin"}
+        tenant_portal_module.get_tenant_audit_logs(payload=payload)
+
+    actor_type_conditions = [c for c in query_calls if getattr(c.left, "key", None) == "actor_type"]
+    assert any(getattr(c.right, "value", None) == "tenant" for c in actor_type_conditions)

@@ -1135,7 +1135,10 @@ def get_tenant_audit_logs(
 ):
     tenant_id = payload["tenant_id"]
     with SessionLocal() as db:
-        q = db.query(AuditLog).filter(AuditLog.tenant_id == tenant_id)
+        q = db.query(AuditLog).filter(
+            AuditLog.tenant_id == tenant_id,
+            AuditLog.actor_type == "tenant",
+        )
         if action:
             q = q.filter(AuditLog.action == action)
         if from_dt:
