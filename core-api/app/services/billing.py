@@ -1,9 +1,9 @@
 from datetime import date
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, InvalidOperation
 
 from sqlalchemy.orm import Session
 
-from app.models.billing import BillingUnitPrice
+from app.models.billing import BillingDefaultUnitPrice, BillingUnitPrice
 
 ITEM_KEYS = ("base_fee", "data_points", "device_count", "provisionable_devices", "alert_events")
 
@@ -94,3 +94,54 @@ def set_unit_price(db: Session, tenant_id: str, item_key: str, unit_price: Decim
     db.commit()
     db.refresh(row)
     return row
+
+
+class InvalidUnitPriceError(Exception):
+    pass
+
+
+def validate_unit_price(unit_price_str: str) -> Decimal:
+    """unit_priceの文字列をDecimalに変換し、課金単価として妥当かを検証する。
+    不正な場合はInvalidUnitPriceError（メッセージはHTTPレスポンスのdetailに使う想定）を投げる。"""
+    try:
+        unit_price = Decimal(unit_price_str)
+    except InvalidOperation:
+        raise InvalidUnitPriceError("unit_price must be a decimal number")
+    if not unit_price.is_finite():
+        raise InvalidUnitPriceError("unit_price must be a finite decimal number")
+    if unit_price < 0:
+        raise InvalidUnitPriceError("unit_price must not be negative")
+    if unit_price > Decimal("99999999.9999"):
+        raise InvalidUnitPriceError("unit_price exceeds the maximum (99999999.9999)")
+    if unit_price.as_tuple().exponent < -4:
+        raise InvalidUnitPriceError("unit_price supports at most 4 decimal places")
+    return unit_price
+
+
+def get_default_unit_prices(db: Session) -> dict[str, Decimal]:
+    """設定済みのデフォルト単価を item_key -> unit_price の辞書で返す。"""
+    rows = db.query(BillingDefaultUnitPrice).all()
+    return {row.item_key: Decimal(str(row.unit_price)) for row in rows}
+
+
+def set_default_unit_prices(db: Session, prices: dict[str, Decimal]) -> None:
+    """デフォルト単価を全件置き換えする（既存を全削除してprices全件を新規挿入）。"""
+    db.query(BillingDefaultUnitPrice).delete()
+    for item_key, unit_price in prices.items():
+        db.add(BillingDefaultUnitPrice(item_key=item_key, unit_price=unit_price))
+    db.commit()
+
+
+def seed_tenant_default_prices(db: Session, tenant_id: str) -> None:
+    """テナント開通時にデフォルト単価をそのテナントの単価として設定する。
+    set_unit_price()の「変更は翌月からのみ適用」ルールは適用しない
+    （これは初期値の設定であり「変更」ではないため）。デフォルトが1件も無ければ何もしない。
+    呼び出し側のdb.commit()と同じトランザクションに含めること（このテナントのINSERTは
+    ここではcommitしない）。"""
+    defaults = db.query(BillingDefaultUnitPrice).all()
+    month_start = date.today().replace(day=1)
+    for row in defaults:
+        db.add(BillingUnitPrice(
+            tenant_id=tenant_id, item_key=row.item_key,
+            unit_price=row.unit_price, effective_from=month_start,
+        ))
