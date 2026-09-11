@@ -207,7 +207,8 @@ def test_run_monthly_billing_batch_happy_path():
     mock_tenant_db.__enter__ = lambda s: mock_tenant_db
     mock_tenant_db.__exit__ = MagicMock(return_value=False)
     draft_invoice = MagicMock(status="draft", id="invoice-1")
-    mock_tenant_db.query.return_value.filter.return_value.first.return_value = draft_invoice
+    # 1st .first(): tenant再取得, 2nd .first(): draft請求書取得
+    mock_tenant_db.query.return_value.filter.return_value.first.side_effect = [tenant, draft_invoice]
     mock_tenant_db.query.return_value.filter.return_value.all.return_value = []  # 失効対象のdraftなし
 
     with patch("app.services.billing_batch.SessionLocal", side_effect=[mock_list_db, mock_tenant_db]), \
@@ -217,13 +218,15 @@ def test_run_monthly_billing_batch_happy_path():
          patch("app.services.billing_batch.calculate_invoice", return_value={
              "line_items": [{"item_key": "base_fee", "quantity": 1, "unit_price": Decimal("5000"), "amount": 5000}],
              "subtotal": 5000, "tax_amount": 500, "total_amount": 5500,
-         }) as mock_calc:
+         }) as mock_calc, \
+         patch("app.services.billing_batch.check_and_notify_bill_shock") as mock_notify:
         results = run_monthly_billing_batch()
 
     assert results == [{"tenant_id": "tenant-1", "status": "ok", "total_amount": 5500}]
     assert draft_invoice.subtotal == 5000
     assert draft_invoice.total_amount == 5500
     assert mock_calc.call_args[0][2] == Decimal("0.08")
+    mock_notify.assert_called_once_with(mock_tenant_db, tenant, "tenant_tenant_1", draft_invoice)
 
 
 def test_run_monthly_billing_batch_skips_already_finalized_invoice():
@@ -237,7 +240,8 @@ def test_run_monthly_billing_batch_skips_already_finalized_invoice():
     mock_tenant_db.__enter__ = lambda s: mock_tenant_db
     mock_tenant_db.__exit__ = MagicMock(return_value=False)
     already_finalized = MagicMock(status="finalized")
-    mock_tenant_db.query.return_value.filter.return_value.first.return_value = already_finalized
+    # 1st .first(): tenant再取得, 2nd .first(): 既存請求書取得（finalized済み）
+    mock_tenant_db.query.return_value.filter.return_value.first.side_effect = [tenant, already_finalized]
     mock_tenant_db.query.return_value.filter.return_value.all.return_value = []
 
     with patch("app.services.billing_batch.SessionLocal", side_effect=[mock_list_db, mock_tenant_db]), \
@@ -245,10 +249,12 @@ def test_run_monthly_billing_batch_skips_already_finalized_invoice():
          patch("app.services.billing_batch.get_effective_unit_prices", return_value={}), \
          patch("app.services.billing_batch.calculate_invoice", return_value={
              "line_items": [], "subtotal": 0, "tax_amount": 0, "total_amount": 0,
-         }):
+         }), \
+         patch("app.services.billing_batch.check_and_notify_bill_shock") as mock_notify:
         results = run_monthly_billing_batch()
 
     assert results == [{"tenant_id": "tenant-1", "status": "skipped_not_draft"}]
+    mock_notify.assert_not_called()
 
 
 def test_correct_invoice_raises_when_no_finalized_invoice_exists():

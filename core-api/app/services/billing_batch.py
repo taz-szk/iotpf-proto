@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from app.database import SessionLocal
 from app.models.public import Tenant
 from app.models.billing import BillingInvoice, BillingLineItem
+from app.services.bill_shock import check_and_notify_bill_shock
 from app.services.billing import calculate_invoice, get_effective_unit_prices, get_tax_rate
 from app.services.billing_usage import aggregate_monthly_usage
 
@@ -225,6 +226,8 @@ def run_monthly_billing_batch() -> list[dict]:
     for tenant_id, schema, influxdb_org_id, influxdb_token in tenant_infos:
         try:
             with SessionLocal() as db:
+                tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
                 _backfill_missing_months(db, tenant_id, schema, influxdb_org_id, influxdb_token, target_year_month)
                 _finalize_stale_drafts(db, tenant_id, schema, influxdb_org_id, influxdb_token, target_year_month)
 
@@ -243,6 +246,7 @@ def run_monthly_billing_batch() -> list[dict]:
                 db.commit()
 
                 _replace_line_items(db, invoice.id, calc["line_items"])
+                check_and_notify_bill_shock(db, tenant, schema, invoice)
             results.append({"tenant_id": tenant_id, "status": "ok", "total_amount": calc["total_amount"]})
         except Exception as e:
             results.append({"tenant_id": tenant_id, "status": "error", "detail": str(e)})
