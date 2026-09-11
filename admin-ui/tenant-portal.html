@@ -837,7 +837,14 @@
 
           <!-- ===== 統計・請求 ===== -->
           <div x-show="activeTab === 'stats-billing'">
-            <h3 class="font-medium text-gray-700 mb-3">統計</h3>
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-gray-700">統計</h3>
+              <button @click="loadStatsAndBilling()" :disabled="statsLoading || invoicesLoading"
+                      class="text-sm text-amber-600 hover:text-amber-800 disabled:text-amber-200">
+                <span x-show="!statsLoading && !invoicesLoading">↻ 更新</span>
+                <span x-show="statsLoading || invoicesLoading">更新中...</span>
+              </button>
+            </div>
             <div x-show="statsLoading" class="py-8 text-center text-gray-400">統計を取得中...</div>
             <div x-show="!statsLoading && stats" class="grid grid-cols-2 gap-4 md:grid-cols-3">
               <div class="bg-white rounded-xl border border-gray-200 p-5">
@@ -1512,7 +1519,7 @@ function portalApp() {
       if (tab === 'firmware') await this.loadFirmware();
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
-      if (tab === 'stats-billing') { await this.loadStats(); await this.loadInvoices(); }
+      if (tab === 'stats-billing') await this.loadStatsAndBilling();
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
@@ -1829,6 +1836,10 @@ function portalApp() {
       this.invoicesLoading = true;
       try { this.invoices = await portalFetch('GET', '/me/billing/invoices') || []; }
       catch(e) { this.error = e.message; } finally { this.invoicesLoading = false; }
+    },
+    async loadStatsAndBilling() {
+      await this.loadStats();
+      await this.loadInvoices();
     },
     async toggleInvoice(month) {
       if (this.expandedInvoiceMonth === month) { this.expandedInvoiceMonth = null; return; }
