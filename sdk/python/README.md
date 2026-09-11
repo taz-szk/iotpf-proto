@@ -46,6 +46,10 @@ client = IotClient(api_url, broker_host, broker_port=8883)
 # プロビジョニング（初回のみ）
 client.provision(bootstrap_token, device_id, cert_dir)
 
+# プロビジョニング時にデバイスグループを指定する場合（省略可）
+groups = client.list_groups(bootstrap_token)   # -> [{"id": ..., "name": ...}, ...]
+client.provision(bootstrap_token, device_id, cert_dir, group_id=groups[0]["id"])
+
 # 既存証明書で初期化
 client.load_credentials(cert_dir)
 

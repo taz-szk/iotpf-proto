@@ -477,6 +477,12 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(6)">
       <span class="sb-label">MAIL</span>アラートメール
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(7)">
+      <span class="sb-label">GROUP</span>デバイスグループ管理
+    </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(8)">
+      <span class="sb-label">BILL</span>料金積算
+    </button>
   </nav>
 </aside>
 
@@ -567,6 +573,16 @@ td code { font-size: 12px; }
         <div class="req-card-id">FR-10 公開アクセス</div>
         <div class="req-card-title">認証なしデータ閲覧</div>
         <div class="req-card-body">テナントが発行する public_token で、特定テナントのセンサーデータを認証なしで閲覧可能な API を提供。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-11 デバイスグループ</div>
+        <div class="req-card-title">拠点・機種単位のグループ管理</div>
+        <div class="req-card-body">デバイスをグループ化し、アラートルール・OTA配信・ダッシュボード表示をグループ単位で扱える。プロビジョニング時にグループ指定可能。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-12 料金積算</div>
+        <div class="req-card-title">利用量ベースの月次課金</div>
+        <div class="req-card-body">テナントごとの単価マスタと実利用量（データポイント数・デバイス数・アラート件数等）から月次請求書を自動生成。draft → finalized のライフサイクル。</div>
       </div>
     </div>
   </div>
@@ -929,6 +945,38 @@ td code { font-size: 12px; }
             <tr><td><code>GET</code></td><td><code>/me/sensor-keys</code></td><td>センサーキー一覧（InfluxDB から取得）</td><td>admin / operator</td></tr>
             <tr><td><code>POST</code></td><td><code>/me/devices/{did}/ota</code></td><td>OTA コマンド配信</td><td>admin / operator</td></tr>
             <tr><td><code>GET</code></td><td><code>/me/stats</code></td><td>テナント統計（デバイス数・センサー件数）</td><td>admin / operator</td></tr>
+            <tr><td><code>GET</code></td><td><code>/me/billing/invoices</code></td><td>自テナントの請求書一覧</td><td>viewer 以上</td></tr>
+            <tr><td><code>GET</code></td><td><code>/me/billing/invoices/{target_year_month}</code></td><td>請求書詳細（明細行含む）</td><td>viewer 以上</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>デバイスグループ (/tenants/{id}/groups)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/tenants/{id}/groups</code></td><td>グループ一覧</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/groups</code></td><td>グループ作成</td><td>Platform JWT</td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/tenants/{id}/groups/{gid}</code></td><td>グループ名・説明更新</td><td>Platform JWT</td></tr>
+            <tr><td><code>DELETE</code></td><td><code>/tenants/{id}/groups/{gid}</code></td><td>グループ削除（有効なアラートルールが参照中は 409）</td><td>Platform JWT</td></tr>
+            <tr><td><code>PATCH</code></td><td><code>/tenants/{id}/devices/{did}</code></td><td>デバイスのグループ割当変更</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/provision/groups</code></td><td>Bootstrap Token に紐づくテナントのグループ一覧（プロビジョニング時の選択用）</td><td>Bootstrap Token</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)"><code>POST /provision</code> は <code>group_id</code>（任意）を受け付け、登録時点でデバイスをグループに割当できる。</p>
+    </div>
+    <div class="subsection">
+      <h3>料金積算 (/tenants/{id}/billing, /me/billing)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/tenants/{id}/billing/prices</code></td><td>当月時点で有効な単価一覧</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/billing/prices</code></td><td>単価設定（適用開始日は翌月以降の月初のみ）</td><td>Platform JWT</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenants/{id}/billing/invoices</code></td><td>指定テナントの請求書一覧（サポート用途）</td><td>Platform JWT</td></tr>
           </tbody>
         </table>
       </div>
@@ -984,6 +1032,21 @@ td code { font-size: 12px; }
             <tr><td><code>connection_status</code></td><td>VARCHAR(20)</td><td>online / offline / unknown</td></tr>
             <tr><td><code>cert_not_after</code></td><td>TIMESTAMPTZ</td><td>クライアント証明書有効期限</td></tr>
             <tr><td><code>fw_version</code></td><td>VARCHAR(100)</td><td>現在のファームウェアバージョン</td></tr>
+            <tr><td><code>group_id</code></td><td>UUID NULL</td><td>所属デバイスグループ（device_groups 参照）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>tenant_{uuid}.device_groups（テナントスキーマ）</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>グループ ID</td></tr>
+            <tr><td><code>name</code></td><td>VARCHAR(100)</td><td>グループ名（テナント内 UNIQUE）</td></tr>
+            <tr><td><code>description</code></td><td>TEXT NULL</td><td>説明</td></tr>
+            <tr><td><code>created_at</code></td><td>TIMESTAMPTZ</td><td>作成日時</td></tr>
           </tbody>
         </table>
       </div>
@@ -1004,6 +1067,57 @@ td code { font-size: 12px; }
           </tbody>
         </table>
       </div>
+    </div>
+    <div class="subsection">
+      <h3>public.billing_unit_prices</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>レコード ID</td></tr>
+            <tr><td><code>tenant_id</code></td><td>UUID FK</td><td>対象テナント（tenants 参照）</td></tr>
+            <tr><td><code>item_key</code></td><td>VARCHAR(50)</td><td>base_fee / data_points / device_count / provisionable_devices / alert_events</td></tr>
+            <tr><td><code>unit_price</code></td><td>NUMERIC(12,4)</td><td>単価</td></tr>
+            <tr><td><code>effective_from</code></td><td>DATE</td><td>適用開始日（常に月初日。翌月以降のみ設定可）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">同じ item_key で複数の effective_from を持てる（履歴管理）。請求計算時は対象月以前で最新の行を採用する。</p>
+    </div>
+    <div class="subsection">
+      <h3>public.billing_invoices</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>請求書 ID</td></tr>
+            <tr><td><code>tenant_id</code></td><td>UUID FK</td><td>対象テナント</td></tr>
+            <tr><td><code>target_year_month</code></td><td>VARCHAR(7)</td><td>対象年月（"YYYY-MM"）</td></tr>
+            <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>draft / finalized / corrected（corrected は未実装）</td></tr>
+            <tr><td><code>subtotal</code></td><td>INTEGER</td><td>小計（円、明細行合計）</td></tr>
+            <tr><td><code>tax_amount</code></td><td>INTEGER</td><td>消費税額（10%固定、円未満切り捨て）</td></tr>
+            <tr><td><code>total_amount</code></td><td>INTEGER</td><td>合計金額</td></tr>
+            <tr><td><code>finalized_at</code></td><td>TIMESTAMPTZ NULL</td><td>確定日時</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.billing_line_items</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>明細行 ID</td></tr>
+            <tr><td><code>invoice_id</code></td><td>UUID FK</td><td>billing_invoices 参照</td></tr>
+            <tr><td><code>item_key</code></td><td>VARCHAR(50)</td><td>課金項目</td></tr>
+            <tr><td><code>quantity</code></td><td>INTEGER</td><td>利用量</td></tr>
+            <tr><td><code>unit_price</code></td><td>NUMERIC(12,4)</td><td>計算時点の単価（スナップショット）</td></tr>
+            <tr><td><code>amount</code></td><td>INTEGER</td><td>小計（quantity × unit_price、円未満切り捨て）</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">billing_unit_prices が将来変更されても過去の請求書には影響しないよう、計算時点の単価をコピーして保持する（スナップショット設計）。3 テーブルとも public スキーマ（テナントスキーマではない）。</p>
     </div>
   </div>
 
@@ -1370,6 +1484,19 @@ td code { font-size: 12px; }
           <tr><td><code>tests/test_tenant_auth.py</code></td><td>9</td><td>テナントログイン・JWT 検証・Auth Proxy 保護</td></tr>
           <tr><td><code>tests/test_tenants.py</code></td><td>—</td><td>テナント CRUD</td></tr>
           <tr><td><code>tests/test_emqx.py</code></td><td>—</td><td>EMQX Webhook 認証</td></tr>
+          <tr><td><code>tests/test_device_groups.py</code></td><td>10</td><td>グループ CRUD サービス層</td></tr>
+          <tr><td><code>tests/test_device_groups_api.py</code></td><td>12</td><td>グループ CRUD API（認証・409/404 分岐）</td></tr>
+          <tr><td><code>tests/test_device_group_assignment.py</code></td><td>6</td><td>デバイスのグループ割当変更</td></tr>
+          <tr><td><code>tests/test_provisioning.py</code></td><td>—</td><td>デバイスプロビジョニング（group_id 指定含む）</td></tr>
+          <tr><td><code>tests/test_grafana.py</code></td><td>—</td><td>ダッシュボード生成（グループ変数の chained variables 生成含む）</td></tr>
+          <tr><td><code>tests/test_billing_calc.py</code></td><td>9</td><td>積算エンジン（明細・消費税・合計金額の計算）</td></tr>
+          <tr><td><code>tests/test_billing_prices.py</code></td><td>7</td><td>単価マスタの取得・設定（翌月適用ルール）</td></tr>
+          <tr><td><code>tests/test_billing_models.py</code></td><td>3</td><td>billing_* テーブルの SQLAlchemy モデル</td></tr>
+          <tr><td><code>tests/test_billing_schemas.py</code></td><td>3</td><td>単価設定リクエストの Pydantic スキーマ</td></tr>
+          <tr><td><code>tests/test_billing_api.py</code></td><td>16</td><td>PF管理者向け単価・請求書一覧 API</td></tr>
+          <tr><td><code>tests/test_billing_usage.py</code></td><td>7</td><td>月次利用量集計（InfluxDB 月範囲クエリ・アラート件数）</td></tr>
+          <tr><td><code>tests/test_billing_batch.py</code></td><td>9</td><td>請求書 draft/finalized 生成バッチ（月末再集計・冪等性）</td></tr>
+          <tr><td><code>tests/test_tenant_portal_billing.py</code></td><td>4</td><td>テナントポータル向け請求書一覧・詳細 API</td></tr>
         </tbody>
       </table>
     </div>
@@ -1993,6 +2120,161 @@ sequenceDiagram
         </tbody>
       </table>
     </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 7: デバイスグループ管理 ==================== -->
+<section class="doc-section" id="tab-7">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">デバイスグループ管理 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>参照: docs/superpowers/specs/2026-09-08-device-groups-design.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>拠点ごと・機種ごとなど複数デバイスをまとめて運用したいという要望に対応するため、デバイスをグループ化し、アラートルール・OTA配信・ダッシュボード表示をグループ単位で扱えるようにする。</p>
+    <ul class="checklist">
+      <li>アラートルールの対象をグループ単位で指定可能（デバイス個別指定・全デバイス指定と並ぶ第三の選択肢）</li>
+      <li>OTA配信画面でグループによる絞り込み</li>
+      <li>ダッシュボード設定（パネル構成）をグループ単位で上書き可能</li>
+      <li>プロビジョニング時にグループを指定してデバイスを登録可能</li>
+      <li>Grafanaダッシュボードでグループ単位のデバイス絞り込み表示</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>API エンドポイント</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET / POST</code></td><td><code>/tenants/{id}/groups</code></td><td>グループ一覧・作成</td></tr>
+          <tr><td><code>PATCH / DELETE</code></td><td><code>/tenants/{id}/groups/{gid}</code></td><td>更新・削除（アラートルールが参照中は削除 409）</td></tr>
+          <tr><td><code>PATCH</code></td><td><code>/tenants/{id}/devices/{did}</code></td><td>デバイスのグループ割当変更</td></tr>
+          <tr><td><code>POST</code></td><td><code>/provision</code></td><td>プロビジョニング時に <code>group_id</code>（任意）を指定して登録</td></tr>
+          <tr><td><code>POST</code></td><td><code>/provision/groups</code></td><td>Bootstrap Token に紐づくテナントのグループ一覧を返す（JWT不要、シミュレータ等のデバイス側から呼ぶ用途）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">データモデル（<code>tenant_{uuid}.device_groups</code>・<code>devices.group_id</code>）は「基本設計 → データモデル」タブを参照。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>Grafanaグループ絞り込みの設計</h2></div>
+    <div class="callout">
+      <strong>InfluxDBにグループ情報をタグとして持たせない。</strong> グループの再割当はいつでも起こりうる（可変）のに対し、InfluxDBのタグは書き込み時点で固定される（不変）ため、タグ方式では過去データの表示がグループ変更後に食い違う。代わりに、Grafanaの<strong>chained variables</strong>機能を使い、core-api側でPostgresの現在のグループ所属からダッシュボード変数を都度再生成する。
+    </div>
+    <div class="subsection">
+      <h3>仕組み</h3>
+      <ul class="checklist">
+        <li>新規 <code>group</code> 変数（Custom型）を追加。選択肢は「全デバイス」（正規表現 <code>.*</code>）と各グループ名（そのグループに属するdevice_nameの正規表現）を、<code>build_group_variable()</code> がPostgresの現在のグループ所属から生成する</li>
+        <li>既存の <code>device_name</code> 変数（Query型、InfluxDBのタグ値を動的取得、行リピート表示に使用）のFluxクエリ先頭に <code>|&gt; filter(fn: (r) =&gt; r.device_name =~ /${group}/)</code> を追加し、<code>group</code> の選択値を差し込む。これにより <code>group</code> を選ぶと <code>device_name</code> の候補一覧（＝リピートされる行）自体が絞り込まれる</li>
+        <li><code>build_templating()</code> が上記2変数を組み立て、<code>app/services/grafana.py</code> のダッシュボード生成・再同期関数群から呼ばれる</li>
+      </ul>
+    </div>
+    <div class="subsection">
+      <h3>再同期のタイミング（<code>resync_grafana_groups()</code>）</h3>
+      <ul class="checklist">
+        <li>グループの作成・更新・削除時</li>
+        <li>デバイスのグループ割当変更時</li>
+        <li>ダッシュボードパネル設定の変更時・PF管理者の「全ダッシュボード再同期」実行時（既存の同期経路にグループ変数の再生成を統合）</li>
+      </ul>
+      <p style="font-size:13px;color:var(--text-3)">Grafana未連携（org未作成）のテナントに対しては何もしない。DB接続失敗等はベストエフォートとして握り込み、グループ操作自体は失敗させない。</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>実装上の注意</h2></div>
+    <div class="callout">
+      <strong>Alpine.js <code>&lt;template x-for&gt;</code> は直下の子要素が1つでなければならない。</strong> 複数の <code>&lt;tr&gt;</code>（例: 一覧行＋展開用の詳細行）を並べると2番目以降が描画されない。1つの <code>&lt;tbody&gt;</code>で包んで単一の子要素にする（本プロジェクトの「トークン」タブ以降で確立したパターン）。
+    </div>
+    <div class="callout">
+      <strong><code>&lt;option :value="null"&gt;</code> は value 属性そのものを除去してしまう。</strong> プレースホルダ選択肢には <code>value=""</code>（空文字列）を使う。動的生成した <code>&lt;option&gt;</code> を含む <code>&lt;select&gt;</code> の初期選択は、<code>:value</code> ではなく各 <code>&lt;option&gt;</code> 側の <code>:selected</code> で制御する（<code>x-for</code> の評価順序に依存しないため）。
+    </div>
+  </div>
+</section>
+
+<!-- ==================== TAB 8: 料金積算 ==================== -->
+<section class="doc-section" id="tab-8">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">料金積算機能 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0（Phase 1 + Phase 2）</span><span>参照: docs/superpowers/specs/2026-09-10-billing-calculation-design.md · 同 phase2-design.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>テナント統計情報（データポイント数・デバイス数・アラート件数等）をベースに、単価マスタと実利用量から月次請求金額を自動的に算出・確定する。「いくら請求すべきか」を確定するところまでを対象とし、請求書ドキュメントの生成・実際の決済処理はスコープ外。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>課金項目と算出方法</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>item_key</th><th>内容</th><th>算出方法</th></tr></thead>
+        <tbody>
+          <tr><td><code>base_fee</code></td><td>基本料金</td><td>常に数量 1（単価そのものが月額基本料金）</td></tr>
+          <tr><td><code>data_points</code></td><td>当月データポイント数</td><td>InfluxDBの月範囲クエリ（<code>range(start: 月初, stop: 翌月初)</code>）で合計</td></tr>
+          <tr><td><code>device_count</code></td><td>当月ユニーク通信デバイス数</td><td>InfluxDBの月範囲クエリでユニーク <code>device_name</code> 数を集計</td></tr>
+          <tr><td><code>provisionable_devices</code></td><td>プロビジョニング可能数</td><td>既存の <code>_calc_provisionable_devices()</code> を再利用（現在時点のスナップショット。無制限トークンは合計から除外し、課金上も特別扱いしない）</td></tr>
+          <tr><td><code>alert_events</code></td><td>当月アラート発報件数</td><td>Postgres の月範囲クエリで集計</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">無制限プロビジョニングトークンのみを持つテナントは <code>provisionable_devices</code> が 0 として請求される（既存API仕様どおりの意図した挙動）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>単価マスタと適用ルール</h2></div>
+    <p><code>billing_unit_prices</code> はテナント・項目・適用開始日の組で単価履歴を保持する。<strong>単価変更は必ず翌月から適用</strong>し、当月中の即時適用・日割り計算は行わない（<code>effective_from</code> は月初日かつ未来の月のみ設定可）。消費税率は10%固定（<code>calculate_invoice()</code> の引数として持つが、現状ハードコード）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>請求書生成バッチとライフサイクル</h2></div>
+    <div class="subsection">
+      <h3>実行方式</h3>
+      <p>core-api起動時に、既存の <code>start_audit_purge_worker</code>（監査ログ削除ワーカー）と同じ「daemon thread + <code>time.sleep(86400)</code>」パターンで <code>start_billing_batch_worker()</code> を起動する。APSchedulerは導入しない（alert-serviceのみで使用、core-apiには依存を増やさない設計判断）。</p>
+    </div>
+    <div class="subsection">
+      <h3>draft → finalized の遷移</h3>
+      <div class="flow">
+        <div class="flow-step">日次バッチ実行</div><span class="flow-arrow">→</span>
+        <div class="flow-step">対象月より前のdraftをfinalizeの対象として検出</div><span class="flow-arrow">→</span>
+        <div class="flow-step">最終再集計（月末までのデータを取りこぼさないため）</div><span class="flow-arrow">→</span>
+        <div class="flow-step">finalized確定</div><span class="flow-arrow">→</span>
+        <div class="flow-step">当月分をdraftとして作成/更新</div>
+      </div>
+      <div class="callout">
+        <strong>finalize時は必ず最終再集計を行う。</strong>「flagを立てるだけ」だと、月をまたぐタイミングによっては月末最大24時間分のデータが確定金額に反映されないまま確定してしまう（最終レビューで発見・修正済みの実装上の要点）。ただし <code>provisionable_devices</code> は「現在時点」のスナップショット値であり過去月分を再現できないため、finalize時は再集計せず、そのdraftが最後に持っていた明細行の値をそのまま引き継ぐ。
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>API</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET / POST</code></td><td><code>/tenants/{id}/billing/prices</code></td><td>単価一覧取得・設定</td><td>Platform JWT</td></tr>
+          <tr><td><code>GET</code></td><td><code>/tenants/{id}/billing/invoices</code></td><td>指定テナントの請求書一覧（サポート用途）</td><td>Platform JWT</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/billing/invoices</code></td><td>自テナントの請求書一覧</td><td>viewer 以上</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/billing/invoices/{target_year_month}</code></td><td>請求書詳細（明細行含む）</td><td>viewer 以上</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>今後の課題（Phase 3・未着手）</h2></div>
+    <ul class="checklist">
+      <li>バッチが長期間停止していた場合の欠落月バックフィル（現状は「対象月が変わった時点で見つかったdraft」のみをfinalize。バッチが1ヶ月間丸ごと動かないと、その月の請求書は一切作られない）</li>
+      <li>ビルショック対策（想定利用量の閾値通知）— 閾値をテナントごとに画面設定できるようにする方針は決定済みだが、デフォルト値・通知実装は未着手</li>
+      <li>消費税率のマスタ化（現状ハードコード10%）</li>
+      <li>確定済み(finalized)請求書の手動再集計「修正(corrected)」ワークフロー</li>
+      <li>PF管理者向けの請求書確認UI画面（APIのみ実装済み、画面は未実装）</li>
+    </ul>
   </div>
 </section>
 
