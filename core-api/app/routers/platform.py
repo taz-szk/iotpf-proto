@@ -91,5 +91,6 @@ def update_billing_default_prices(body: list[DefaultPriceItem], payload: dict = 
                         "update_billing_default_prices",
                         resource_type="billing_default_unit_prices",
                         detail={k: str(v) for k, v in validated.items()})
+        db.commit()
 
     return [{"item_key": k, "unit_price": str(v)} for k, v in validated.items()]

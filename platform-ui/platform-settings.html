@@ -6,7 +6,7 @@
   <title>プラットフォーム設定 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=11"></script>
+  <script src="/admin/js/api.js?v=12"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -71,7 +71,7 @@
           </div>
         </template>
       </div>
-      <button @click="saveDefaultPrices()" :disabled="savingDefaultPrices"
+      <button @click="saveDefaultPrices()" :disabled="savingDefaultPrices || defaultPricesLoadFailed"
               class="mt-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
         <span x-show="!savingDefaultPrices">保存</span>
         <span x-show="savingDefaultPrices">保存中...</span>
@@ -96,13 +96,19 @@
         defaultPricesError: '',
         defaultPricesSaved: false,
         savingDefaultPrices: false,
+        defaultPricesLoadFailed: false,
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
+          } catch(e) { this.error = e.message; }
+          try {
             const rows = await api.platform.getBillingDefaultPrices();
             for (const row of rows) this.defaultPrices[row.item_key] = row.unit_price;
-          } catch(e) { this.error = e.message; }
-          finally { this.loading = false; }
+          } catch(e) {
+            this.defaultPricesError = e.message;
+            this.defaultPricesLoadFailed = true;
+          }
+          this.loading = false;
         },
         async toggle(key) {
           this.saved = false;

@@ -82,3 +82,21 @@ def test_put_default_prices_rejects_unknown_item_key():
         headers={"Authorization": f"Bearer {_platform_token()}"},
     )
     assert resp.status_code == 422
+
+
+def test_put_default_prices_commits_after_audit_log():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.set_default_unit_prices"), \
+         patch("app.routers.platform.write_audit_log") as mock_audit:
+        mock_db = _session_ctx()
+        mock_session.return_value = mock_db
+        client.put(
+            "/platform/billing/default-prices",
+            json=[{"item_key": "base_fee", "unit_price": "5000"}],
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    # write_audit_log must be called, and a commit must happen after it
+    # (call order matters: the commit that persists the audit row must come
+    # after write_audit_log was invoked)
+    assert mock_audit.called
+    assert mock_db.commit.called

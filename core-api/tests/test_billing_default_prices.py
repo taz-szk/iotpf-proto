@@ -2,6 +2,7 @@ from datetime import date
 from decimal import Decimal
 from unittest.mock import MagicMock
 import pytest
+from app.models.billing import BillingDefaultUnitPrice
 from app.services.billing import (
     InvalidUnitPriceError,
     get_default_unit_prices,
@@ -37,6 +38,7 @@ def test_get_default_unit_prices_empty_when_none_set():
 def test_set_default_unit_prices_replaces_all():
     mock_db = MagicMock()
     set_default_unit_prices(mock_db, {"base_fee": Decimal("5000"), "data_points": Decimal("0.01")})
+    mock_db.query.assert_called_once_with(BillingDefaultUnitPrice)
     mock_db.query.return_value.delete.assert_called_once()
     assert mock_db.add.call_count == 2
     mock_db.commit.assert_called_once()
