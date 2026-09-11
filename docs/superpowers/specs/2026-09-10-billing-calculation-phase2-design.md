@@ -111,4 +111,8 @@ GET /tenants/{tenant_id}/billing/invoices
 |---|---|
 | ビルショック通知 | 閾値設定UI・通知ロジック（別Plan） |
 | 修正(corrected)機能 | finalized請求書の手動再集計・差分記録（別Plan） |
-| PF管理者向け請求書確認UI | APIのみ今回用意。画面は次回検討 |
+| バックフィル | バッチが複数月停止した場合、その間の月に請求書が1件も作られない（2026-09-11の最終レビューで発見。別Plan） |
+
+**解決済み（2026-09-11追加実装）:**
+- PF管理者向け請求書確認UI → `platform-ui/tenant.html`の単価設定タブに一覧+明細ドリルダウンを追加。`GET /tenants/{tenant_id}/billing/invoices/{target_year_month}`を新設。
+- 消費税率のマスタ化 → `billing_settings`テーブル（シングルトン行）+ `GET/PUT /platform/billing/tax-rate` + `platform-settings.html`のUIで実装。ハードコードのDEFAULT_TAX_RATEはフォールバックとして残す。
