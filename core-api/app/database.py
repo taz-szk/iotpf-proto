@@ -422,3 +422,16 @@ def migrate_create_billing_tables() -> None:
                 ON billing_line_items(invoice_id)
         """))
         conn.commit()
+
+
+def migrate_create_billing_default_prices() -> None:
+    """billing_default_unit_prices テーブルを作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS billing_default_unit_prices (
+                item_key    VARCHAR(50) PRIMARY KEY,
+                unit_price  NUMERIC(12,4) NOT NULL,
+                updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+            )
+        """))
+        conn.commit()

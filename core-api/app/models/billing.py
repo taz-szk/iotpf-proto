@@ -36,3 +36,10 @@ class BillingLineItem(Base):
     unit_price = Column(Numeric(12, 4), nullable=False)
     amount = Column(Integer, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class BillingDefaultUnitPrice(Base):
+    __tablename__ = "billing_default_unit_prices"
+    item_key = Column(String(50), primary_key=True)
+    unit_price = Column(Numeric(12, 4), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
