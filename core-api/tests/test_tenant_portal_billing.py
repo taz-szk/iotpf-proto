@@ -46,6 +46,13 @@ def test_list_my_invoices_allows_viewer():
         "target_year_month": "2026-09", "status": "draft",
         "subtotal": 5000, "tax_amount": 500, "total_amount": 5500,
     }]
+    filter_args = mock_db.query.return_value.filter.call_args[0]
+    # str(arg) renders SQLAlchemy binary expressions without bound values, so
+    # also check the bound parameter's actual value to pin the real predicate.
+    assert any(
+        TENANT_ID in str(arg) or getattr(getattr(arg, "right", None), "value", None) == TENANT_ID
+        for arg in filter_args
+    )
 
 
 def test_get_my_invoice_detail_includes_line_items():
@@ -68,6 +75,11 @@ def test_get_my_invoice_detail_includes_line_items():
     body = resp.json()
     assert body["target_year_month"] == "2026-09"
     assert body["line_items"] == [{"item_key": "base_fee", "quantity": 1, "unit_price": "5000", "amount": 5000}]
+    invoice_filter_args = mock_db.query.return_value.filter.call_args_list[0][0]
+    assert any(
+        TENANT_ID in str(arg) or getattr(getattr(arg, "right", None), "value", None) == TENANT_ID
+        for arg in invoice_filter_args
+    )
 
 
 def test_get_my_invoice_detail_not_found():

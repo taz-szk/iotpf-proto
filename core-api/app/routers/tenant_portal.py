@@ -15,6 +15,7 @@ from sqlalchemy import text, bindparam, ARRAY, String as SaString
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
 from app.models.billing import BillingInvoice, BillingLineItem
+from app.services.billing import ITEM_KEYS
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
@@ -789,6 +790,7 @@ def get_my_invoice(target_year_month: str, payload: dict = Depends(_require_tena
         if not invoice:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
         line_items = db.query(BillingLineItem).filter(BillingLineItem.invoice_id == invoice.id).all()
+        line_items.sort(key=lambda li: ITEM_KEYS.index(li.item_key) if li.item_key in ITEM_KEYS else len(ITEM_KEYS))
         return {
             "target_year_month": invoice.target_year_month,
             "status": invoice.status,

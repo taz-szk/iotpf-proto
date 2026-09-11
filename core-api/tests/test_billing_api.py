@@ -218,6 +218,14 @@ def test_list_tenant_invoices_returns_invoices_newest_first():
     assert len(body) == 2
     assert body[0]["target_year_month"] == "2026-09"
     assert body[0]["total_amount"] == 5500
+    filter_calls = mock_db.query.return_value.filter.call_args_list
+    # str(call.args) renders SQLAlchemy binary expressions without bound values,
+    # so also check each bound parameter's actual value to pin the real predicate.
+    assert any(
+        TENANT_ID in str(call.args)
+        or any(getattr(getattr(arg, "right", None), "value", None) == TENANT_ID for arg in call.args)
+        for call in filter_calls
+    )
 
 
 def test_list_tenant_invoices_tenant_not_found():
