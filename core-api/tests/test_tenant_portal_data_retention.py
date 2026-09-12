@@ -2,6 +2,7 @@ import uuid
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 from app.main import app
+from app.models.public import Tenant
 from app.services.auth import create_access_token
 
 client = TestClient(app)
@@ -55,6 +56,53 @@ def test_put_data_retention_sets_override_as_admin():
     assert resp.status_code == 200
     assert resp.json() == {"retention_days": "90"}
     assert tenant.data_retention_days == 90
+
+
+def test_put_data_retention_does_not_read_tenant_attribute_after_commit():
+    tenant = MagicMock(spec=Tenant)
+    tenant.data_retention_days = None
+
+    def _commit_side_effect():
+        # Simulate SQLAlchemy's expire-on-commit: any further attribute
+        # access on `tenant` after this point should be treated as a bug.
+        type(tenant).data_retention_days = property(
+            lambda self: (_ for _ in ()).throw(AssertionError("read tenant attribute after commit"))
+        )
+
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_db.commit.side_effect = _commit_side_effect
+        resp = client.put(
+            "/tenant-portal/data-retention",
+            json={"retention_days": "90"},
+            cookies={"iot_token": _tenant_token("admin")},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"retention_days": "90"}
+
+
+def test_get_data_retention_returns_404_when_tenant_deleted():
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        resp = client.get(
+            "/tenant-portal/data-retention",
+            cookies={"iot_token": _tenant_token("admin")},
+        )
+    assert resp.status_code == 404
+
+
+def test_put_data_retention_returns_404_when_tenant_deleted():
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_sl:
+        mock_db = mock_sl.return_value.__enter__.return_value
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        resp = client.put(
+            "/tenant-portal/data-retention",
+            json={"retention_days": "90"},
+            cookies={"iot_token": _tenant_token("admin")},
+        )
+    assert resp.status_code == 404
 
 
 def test_put_data_retention_rejects_non_admin():

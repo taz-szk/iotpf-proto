@@ -12,7 +12,7 @@
 
 **スコープ外（今回やらない）:**
 - PostgreSQL側のデータ（audit_logs以外のテーブル）の保持ルール（既存の`audit_log_retention_days`はグローバル固定値のまま、今回変更しない）
-- テナントごとの保持期間に上限（延長の天井）を設けること — ユーザーの明示的な要望により、短縮・延長ともに自由
+- テナントごとの保持期間に上限（延長の天井）を設けること — ユーザーの明示的な要望により、短縮・延長ともに自由（ただしこれはあくまでポリシー上の方針であり、`tenants.data_retention_days`列はPostgreSQLの`INTEGER`型のため、物理的な最大値は2147483647に制限される。`validate_retention_days`はこの値を超える入力を422で拒否する）
 
 ---
 
@@ -20,7 +20,7 @@
 
 - **削除の実行方式:** InfluxDBネイティブのバケット単位retention rule機能を使う。自前の削除バッチは書かない。バケット単位の設定のため、同じ`telemetry`バケットに入っている`telemetry`測定値と`device_status`測定値の両方が対象になる（分離不可、InfluxDBの仕様上の制約であり選択の余地はない）。
 - **PF管理者デフォルト値変更の反映タイミング:** 日次バッチで定期同期する（即時反映はしない）。全アクティブテナントの実効保持日数を計算し、InfluxDB側の現在値と異なればPATCHする。反映まで最大24時間の遅延を許容する。
-- **保持期間の下限:** 60日。当月＋前月分のデータ（当月課金計算・バックフィル・月末再集計が必要とする範囲）に安全マージンを持たせるため。上限は設けない。
+- **保持期間の下限:** 60日。当月＋前月分のデータ（当月課金計算・バックフィル・月末再集計が必要とする範囲）に安全マージンを持たせるため。上限は設けない（DB列の物理上限2147483647を除く）。この下限は`validate_retention_days`によるAPI入力時のチェックだけでなく、`get_effective_retention_days`が返す実効値そのものにも常時クランプとして適用される（直接SQLでの書き込みなどバリデーションを経由しない経路でDB内の値が60日未満になった場合でも、日次同期ジョブが誤って過度に短い保持期間をInfluxDBに適用しないようにするため）。
 - **テナント個別設定の権限:** テナント管理者（セルフサービス）＋PF管理者（代理設定）の両方が変更可能。
 - **課金バッチとの実行順序:** 日次サイクル内で「課金バッチ→保持期間同期」の順に実行する。60日下限により通常運用では競合しないが、課金バッチが長期停止していた場合のバックフィルに少しでも猶予を持たせるための防御的措置。
 
@@ -97,7 +97,7 @@ def create_influxdb_bucket(org_id: str, admin_token: str, retention_days: int) -
 ### 4.2 日次同期ジョブ（新規 `app/services/data_retention.py`）
 
 ```python
-def sync_tenant_retention(tenant_id: str, org_id: str, effective_days: int) -> None:
+def sync_tenant_retention(org_id: str, admin_token: str, effective_days: int) -> None:
     """指定テナントのtelemetryバケットのretention ruleを実効値に同期する。
     バケットが存在しなければ何もしない（次回テレメトリ受信時に正しい値で作成される）。
     現在のretention_secondsが既に一致していればPATCHしない。"""
@@ -182,3 +182,11 @@ PUT /tenant-portal/data-retention   ← { "retention_days": "180" | null }
 - `create_influxdb_bucket`: httpxをモックしてリクエストボディ（retentionRulesの秒数換算）を検証。
 - `sync_tenant_retention`/`run_daily_retention_sync`: バケット未存在でスキップ／現在値と一致でPATCHしない／不一致でPATCHする、の3パターンをモックで検証。
 - API（PF管理者向けデフォルト・テナント個別・テナント管理者セルフサービス）: 既存の`test_platform_billing_defaults.py`/`test_billing_api.py`/`test_tenant_portal_*.py`と同じ形式で認証・バリデーション・404系を検証。
+
+---
+
+## 8. 運用上の注意（デプロイ時の考慮事項）
+
+この機能のデプロイ以前に`ingestion-service`が遅延作成した既存テナントの`telemetry`バケットには、retention ruleが一切設定されていない（＝事実上無期限保持）。この機能をデプロイした後、日次保持期間同期ジョブ（`run_daily_retention_sync`）が初めて実行されると、すべての既存バケットに対して実効保持日数（デフォルトの365日、またはPF管理者が設定した値）が適用され、InfluxDBはそのカットオフより古いデータを不可逆に削除する。
+
+これはこの機能の意図した動作である可能性が高いが、事前にドライランや確認ステップは用意されていない。そのため、運用担当者はこの機能をデプロイする前に、本番InfluxDBインスタンスに意図したデフォルト保持期間より古いテレメトリデータが存在しないかを確認しておくことを強く推奨する。必要であれば、デプロイ前に該当データをバックアップするか、`default_retention_days`を十分に長い値に設定した上でデプロイし、後から段階的に短縮することを検討する。

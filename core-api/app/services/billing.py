@@ -329,15 +329,19 @@ def set_default_retention_days(db: Session, days: int) -> None:
 
 def get_effective_retention_days(db: Session, tenant) -> int:
     """テナント個別の保持日数上書きがあればそれを、無ければデフォルト値を返す。
-    しきい値と異なり、保持期間は必ず具体的な日数を持つ（Noneを返すことはない）。"""
+    しきい値と異なり、保持期間は必ず具体的な日数を持つ（Noneを返すことはない）。
+    DB内の値がAPI経由のバリデーションを経ずに60日未満になっていた場合の防御として、
+    常にMIN_RETENTION_DAYSでクランプする。"""
     if tenant.data_retention_days is not None:
-        return tenant.data_retention_days
-    return get_default_retention_days(db)
+        days = tenant.data_retention_days
+    else:
+        days = get_default_retention_days(db)
+    return max(days, MIN_RETENTION_DAYS)
 
 
 def validate_retention_days(value_str: str) -> int:
     """保持日数の文字列をintに変換する。60未満・空文字列・非整数はInvalidUnitPriceErrorを投げる。
-    上限は設けない。"""
+    上限は設けない（ただしPostgreSQL INTEGER列の物理的な最大値2147483647は超えられない）。"""
     try:
         days = int(value_str)
     except (ValueError, TypeError):
@@ -346,4 +350,6 @@ def validate_retention_days(value_str: str) -> int:
         raise InvalidUnitPriceError("retention_days must be an integer")
     if days < MIN_RETENTION_DAYS:
         raise InvalidUnitPriceError(f"retention_days must be at least {MIN_RETENTION_DAYS}")
+    if days > 2147483647:
+        raise InvalidUnitPriceError("retention_days exceeds the maximum (2147483647)")
     return days

@@ -44,7 +44,10 @@ def create_tenant(body: TenantCreate, payload: dict = Depends(_require_platform)
         tenant.influxdb_token = token
         tenant.grafana_org_id = str(grafana_org_id)
         seed_tenant_default_prices(db, tenant_id)
-        create_influxdb_bucket(org_id, settings.influxdb_admin_token, get_default_retention_days(db))
+        try:
+            create_influxdb_bucket(org_id, settings.influxdb_admin_token, get_default_retention_days(db))
+        except Exception as e:
+            print(f"[create_tenant] InfluxDB bucket pre-creation failed (will be created lazily by ingestion-service): {e}")
         write_audit_log(db, "platform", payload["sub"], payload["email"],
                         "create_tenant", tenant_id=tenant_id, resource_type="tenant", resource_id=body.name)
         db.commit()
@@ -217,9 +220,10 @@ def update_tenant_data_retention(tenant_id: str, body: DataRetentionSet, payload
             except InvalidUnitPriceError as e:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
+        new_days = tenant.data_retention_days
         write_audit_log(db, "platform", payload["sub"], payload["email"],
                         "update_tenant_data_retention", tenant_id=tenant_id, resource_type="tenant",
-                        detail={"retention_days": tenant.data_retention_days})
+                        detail={"retention_days": new_days})
         db.commit()
 
-    return {"retention_days": str(tenant.data_retention_days) if tenant.data_retention_days is not None else None}
+    return {"retention_days": str(new_days) if new_days is not None else None}

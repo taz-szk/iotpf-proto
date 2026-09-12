@@ -102,3 +102,15 @@ def test_validate_retention_days_rejects_decimal():
 
 def test_validate_retention_days_accepts_large_value_no_upper_bound():
     assert validate_retention_days("36500") == 36500
+
+
+def test_validate_retention_days_rejects_value_exceeding_integer_max():
+    with pytest.raises(InvalidUnitPriceError):
+        validate_retention_days("2147483648")
+    assert validate_retention_days("2147483647") == 2147483647
+
+
+def test_get_effective_retention_days_clamps_below_minimum_floor():
+    tenant = MagicMock(data_retention_days=10)
+    mock_db = MagicMock()
+    assert get_effective_retention_days(mock_db, tenant) == MIN_RETENTION_DAYS

@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+import pytest
 
 from app.services.tenant import create_influxdb_bucket
 
@@ -27,8 +28,5 @@ def test_create_influxdb_bucket_raises_on_other_errors():
     mock_resp = MagicMock(status_code=500)
     mock_resp.raise_for_status.side_effect = Exception("server error")
     with patch("app.services.tenant.httpx.post", return_value=mock_resp):
-        try:
+        with pytest.raises(Exception):
             create_influxdb_bucket("org-1", "admin-token", 180)
-            assert False, "expected exception"
-        except Exception:
-            pass

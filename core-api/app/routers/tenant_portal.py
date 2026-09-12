@@ -793,6 +793,8 @@ def get_my_data_retention(payload: dict = Depends(_require_admin)):
     tenant_id = payload["tenant_id"]
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
         effective = get_effective_retention_days(db, tenant)
         is_default = tenant.data_retention_days is None
     return {"retention_days": str(effective), "is_default": is_default}
@@ -803,6 +805,8 @@ def update_my_data_retention(body: DataRetentionSet, payload: dict = Depends(_re
     tenant_id = payload["tenant_id"]
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
         if body.retention_days is None:
             tenant.data_retention_days = None
@@ -812,12 +816,13 @@ def update_my_data_retention(body: DataRetentionSet, payload: dict = Depends(_re
             except InvalidUnitPriceError as e:
                 raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
 
+        new_days = tenant.data_retention_days
         write_audit_log(db, "tenant", payload["sub"], payload["email"],
                         "update_data_retention", tenant_id=tenant_id, resource_type="tenant",
-                        detail={"retention_days": tenant.data_retention_days})
+                        detail={"retention_days": new_days})
         db.commit()
 
-    return {"retention_days": str(tenant.data_retention_days) if tenant.data_retention_days is not None else None}
+    return {"retention_days": str(new_days) if new_days is not None else None}
 
 
 # ---------------------------------------------------------------------------
