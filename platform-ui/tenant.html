@@ -821,10 +821,12 @@
                 <template x-if="msg.role === 'pending_action'">
                   <div class="inline-block bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-sm">
                     <p x-text="msg.content"></p>
-                    <div class="mt-2 flex gap-2">
-                      <button @click="confirmAssistantAction(msg.pending_action_id)" class="bg-blue-600 text-white text-xs px-3 py-1 rounded">実行する</button>
-                      <button @click="msg.dismissed = true" x-show="!msg.dismissed" class="text-gray-500 text-xs px-3 py-1">キャンセル</button>
+                    <div class="mt-2 flex gap-2" x-show="!msg.dismissed && !msg.resolved">
+                      <button @click="confirmAssistantAction(msg)" :disabled="msg.executing" class="bg-blue-600 text-white text-xs px-3 py-1 rounded disabled:opacity-50">実行する</button>
+                      <button @click="msg.dismissed = true" :disabled="msg.executing" class="text-gray-500 text-xs px-3 py-1 disabled:opacity-50">キャンセル</button>
                     </div>
+                    <p x-show="msg.dismissed" class="text-xs text-gray-400 mt-1">キャンセルしました</p>
+                    <p x-show="msg.resolved" class="text-xs text-green-600 mt-1">実行しました</p>
                   </div>
                 </template>
               </div>
@@ -1502,14 +1504,17 @@
             this.assistantLoading = false;
           }
         },
-        async confirmAssistantAction(pendingActionId) {
+        async confirmAssistantAction(msg) {
+          msg.executing = true;
           this.assistantLoading = true;
           try {
-            const result = await api.request('POST', `/tenants/${tenantId}/assistant/confirm-action`, { pending_action_id: pendingActionId });
+            const result = await api.request('POST', `/tenants/${tenantId}/assistant/confirm-action`, { pending_action_id: msg.pending_action_id });
+            msg.resolved = true;
             this.assistantMessages.push({ role: 'assistant', content: '実行しました。' });
           } catch(e) {
             this.assistantMessages.push({ role: 'assistant', content: 'エラー: ' + e.message });
           } finally {
+            msg.executing = false;
             this.assistantLoading = false;
           }
         },
