@@ -1,5 +1,7 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.services.rag import answer_question, execute_pending_action
 
 
@@ -109,3 +111,39 @@ def test_execute_pending_action_returns_none_when_not_found():
     result = execute_pending_action(mock_db, tenant_id="tenant-1", pending_action_id="missing")
 
     assert result is None
+
+
+def test_execute_pending_action_returns_none_when_tenant_mismatch():
+    """他テナントのpending_action_idを指定した場合、Noneが返ることを検証する（テナント越境防止のリグレッションテスト）。"""
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    result = execute_pending_action(mock_db, tenant_id="tenant-2", pending_action_id="pending-1")
+
+    assert result is None
+    # mock.call のrepr()はSQLAlchemy式をコンパイルしないため、各引数を個別にstr()して
+    # 実際にコンパイルされたSQL条件文字列(例: "agent_pending_actions.tenant_id = :tenant_id_1")を検証する。
+    # これにより、将来filter()からtenant_id条件が誤って削除された場合にこのテストが失敗する。
+    filter_call = mock_db.query.return_value.filter.call_args
+    filter_args_strs = [str(arg) for arg in filter_call.args]
+    assert any("tenant_id" in s for s in filter_args_strs)
+
+
+def test_execute_pending_action_raises_when_tool_not_registered():
+    pending = MagicMock()
+    pending.id = "pending-1"
+    pending.tenant_id = "tenant-1"
+    pending.tool_name = "removed_tool"
+    pending.tool_args = {}
+    pending.expires_at.__gt__ = lambda self, other: True
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = pending
+
+    with patch("app.services.rag.TOOLS") as mock_tools:
+        mock_tools.__iter__.return_value = iter([])
+
+        with pytest.raises(ValueError):
+            execute_pending_action(mock_db, tenant_id="tenant-1", pending_action_id="pending-1")
+
+    mock_db.delete.assert_called_once_with(pending)

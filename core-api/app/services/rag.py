@@ -119,7 +119,8 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
 
 
 def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
-    """未確認アクションを実行する。見つからない/期限切れならNoneを返す。"""
+    """未確認アクションを実行する。見つからない/期限切れならNoneを返す。
+    ツールがレジストリから削除/リネームされていて実行不能な場合はレコードを削除しValueErrorを送出する。"""
     pending = db.query(AgentPendingAction).filter(
         AgentPendingAction.id == pending_action_id,
         AgentPendingAction.tenant_id == tenant_id,
@@ -133,6 +134,11 @@ def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
 
     tools = list(TOOLS)
     tool = _find_tool(tools, pending.tool_name)
+    if tool is None:
+        db.delete(pending)
+        db.commit()
+        raise ValueError(f"Tool '{pending.tool_name}' is no longer registered")
+
     result = tool.handler(tenant_id=tenant_id, **pending.tool_args)
 
     write_audit_log(
