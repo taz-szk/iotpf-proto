@@ -216,3 +216,60 @@ def test_put_bill_shock_threshold_rejects_invalid_value():
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 422
+
+
+def test_get_data_retention_requires_platform_auth():
+    resp = client.get("/platform/data-retention")
+    assert resp.status_code == 401
+
+
+def test_get_data_retention_returns_current_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.get_default_retention_days", return_value=365):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            "/platform/data-retention",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_retention_days": "365"}
+
+
+def test_put_data_retention_updates_and_returns_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session, \
+         patch("app.routers.platform.set_default_retention_days") as mock_set, \
+         patch("app.routers.platform.write_audit_log") as mock_audit:
+        mock_db = _session_ctx()
+        mock_session.return_value = mock_db
+        resp = client.put(
+            "/platform/data-retention",
+            json={"default_retention_days": "180"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"default_retention_days": "180"}
+    mock_set.assert_called_once_with(mock_db, 180)
+    assert mock_audit.called
+    assert mock_db.commit.called
+
+
+def test_put_data_retention_rejects_below_minimum():
+    with patch("app.routers.platform.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.put(
+            "/platform/data-retention",
+            json={"default_retention_days": "30"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422
+
+
+def test_put_data_retention_rejects_invalid_value():
+    with patch("app.routers.platform.SessionLocal") as mock_session:
+        mock_session.return_value = _session_ctx()
+        resp = client.put(
+            "/platform/data-retention",
+            json={"default_retention_days": "not-a-number"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 422

@@ -9,12 +9,15 @@ from app.database import SessionLocal
 from app.services.billing import (
     InvalidUnitPriceError,
     get_default_bill_shock_threshold,
+    get_default_retention_days,
     get_default_unit_prices,
     get_tax_rate,
     set_default_bill_shock_threshold,
+    set_default_retention_days,
     set_default_unit_prices,
     set_tax_rate,
     validate_bill_shock_threshold,
+    validate_retention_days,
     validate_tax_rate,
     validate_unit_price,
     ITEM_KEYS,
@@ -49,6 +52,10 @@ class TaxRateItem(BaseModel):
 
 class BillShockThresholdItem(BaseModel):
     default_threshold_amount: str | None = None
+
+
+class DataRetentionItem(BaseModel):
+    default_retention_days: str
 
 
 @router.get("/mfa-settings")
@@ -158,3 +165,28 @@ def update_billing_bill_shock_threshold(body: BillShockThresholdItem, payload: d
         db.commit()
 
     return {"default_threshold_amount": str(amount) if amount is not None else None}
+
+
+@router.get("/data-retention", response_model=DataRetentionItem)
+def get_platform_data_retention(_: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        days = get_default_retention_days(db)
+    return {"default_retention_days": str(days)}
+
+
+@router.put("/data-retention", response_model=DataRetentionItem)
+def update_platform_data_retention(body: DataRetentionItem, payload: dict = Depends(_require_platform)):
+    try:
+        days = validate_retention_days(body.default_retention_days)
+    except InvalidUnitPriceError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+    with SessionLocal() as db:
+        set_default_retention_days(db, days)
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_data_retention_default",
+                        resource_type="billing_settings",
+                        detail={"default_retention_days": days})
+        db.commit()
+
+    return {"default_retention_days": str(days)}

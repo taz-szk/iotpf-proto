@@ -1,6 +1,8 @@
 from unittest.mock import patch, MagicMock
 import uuid
 
+TENANT_ID = "11111111-1111-1111-1111-111111111111"
+
 def test_create_tenant_success(client):
     mock_influx_org = {"id": "influx-org-id-001", "name": "test-tenant"}
     mock_influx_token = "influx-token-001"
@@ -142,3 +144,91 @@ def test_create_tenant_creates_influxdb_bucket_with_default_retention(client):
     call_args = mock_create_bucket.call_args[0]
     assert call_args[0] == "influx-org-id-001"  # org_id
     assert call_args[2] == 365  # retention_days（get_default_retention_daysの戻り値）
+
+
+def test_get_tenant_data_retention_returns_override_when_set(client):
+    tenant = MagicMock(data_retention_days=90)
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.get_effective_retention_days", return_value=90), \
+         patch("app.routers.tenants.verify_token", return_value={"sub": "admin-id", "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/data-retention",
+            headers={"Authorization": "Bearer dummy"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"retention_days": "90", "is_default": False}
+
+
+def test_get_tenant_data_retention_tenant_not_found(client):
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.verify_token", return_value={"sub": "admin-id", "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/data-retention",
+            headers={"Authorization": "Bearer dummy"},
+        )
+    assert resp.status_code == 404
+
+
+def test_put_tenant_data_retention_sets_override(client):
+    tenant = MagicMock(data_retention_days=None)
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.verify_token", return_value={"sub": str(uuid.uuid4()), "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/data-retention",
+            json={"retention_days": "90"},
+            headers={"Authorization": "Bearer dummy"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"retention_days": "90"}
+    assert tenant.data_retention_days == 90
+
+
+def test_put_tenant_data_retention_clears_override_with_null(client):
+    tenant = MagicMock(data_retention_days=90)
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.verify_token", return_value={"sub": str(uuid.uuid4()), "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/data-retention",
+            json={"retention_days": None},
+            headers={"Authorization": "Bearer dummy"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"retention_days": None}
+    assert tenant.data_retention_days is None
+
+
+def test_put_tenant_data_retention_rejects_below_minimum(client):
+    tenant = MagicMock()
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.verify_token", return_value={"sub": "admin-id", "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.put(
+            f"/tenants/{TENANT_ID}/data-retention",
+            json={"retention_days": "10"},
+            headers={"Authorization": "Bearer dummy"},
+        )
+    assert resp.status_code == 422

@@ -6,7 +6,13 @@ from app.models.public import Tenant
 from app.database import SessionLocal
 from app.services.auth import verify_token
 from app.services.tenant import setup_tenant, teardown_tenant, create_influxdb_bucket
-from app.services.billing import seed_tenant_default_prices, get_default_retention_days
+from app.services.billing import (
+    InvalidUnitPriceError,
+    get_default_retention_days,
+    get_effective_retention_days,
+    seed_tenant_default_prices,
+    validate_retention_days,
+)
 from app.config import settings
 from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
 from app.services.device_groups import list_groups_with_devices
@@ -174,3 +180,46 @@ def sync_all_dashboards(_: dict = Depends(_require_platform)):
     except Exception as e:
         results.append({"tenant": "platform-admin", "status": "error", "detail": str(e)})
     return {"synced": results}
+
+
+class DataRetentionOut(BaseModel):
+    retention_days: str
+    is_default: bool
+
+
+class DataRetentionSet(BaseModel):
+    retention_days: str | None = None
+
+
+@router.get("/{tenant_id}/data-retention", response_model=DataRetentionOut)
+def get_tenant_data_retention(tenant_id: str, _: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        effective = get_effective_retention_days(db, tenant)
+        is_default = tenant.data_retention_days is None
+    return {"retention_days": str(effective), "is_default": is_default}
+
+
+@router.put("/{tenant_id}/data-retention", response_model=DataRetentionSet)
+def update_tenant_data_retention(tenant_id: str, body: DataRetentionSet, payload: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+        if body.retention_days is None:
+            tenant.data_retention_days = None
+        else:
+            try:
+                tenant.data_retention_days = validate_retention_days(body.retention_days)
+            except InvalidUnitPriceError as e:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "update_tenant_data_retention", tenant_id=tenant_id, resource_type="tenant",
+                        detail={"retention_days": tenant.data_retention_days})
+        db.commit()
+
+    return {"retention_days": str(tenant.data_retention_days) if tenant.data_retention_days is not None else None}

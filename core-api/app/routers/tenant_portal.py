@@ -14,7 +14,13 @@ from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
 from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
-from app.services.billing import get_invoice_detail_aggregated, list_invoices_aggregated
+from app.services.billing import (
+    InvalidUnitPriceError,
+    get_effective_retention_days,
+    get_invoice_detail_aggregated,
+    list_invoices_aggregated,
+    validate_retention_days,
+)
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.auth import hash_password, verify_password, verify_token
@@ -771,6 +777,47 @@ def get_my_invoice(target_year_month: str, payload: dict = Depends(_require_tena
         if not detail:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invoice not found")
         return detail
+
+
+class DataRetentionOut(BaseModel):
+    retention_days: str
+    is_default: bool
+
+
+class DataRetentionSet(BaseModel):
+    retention_days: str | None = None
+
+
+@router.get("/data-retention", response_model=DataRetentionOut)
+def get_my_data_retention(payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        effective = get_effective_retention_days(db, tenant)
+        is_default = tenant.data_retention_days is None
+    return {"retention_days": str(effective), "is_default": is_default}
+
+
+@router.put("/data-retention", response_model=DataRetentionSet)
+def update_my_data_retention(body: DataRetentionSet, payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+
+        if body.retention_days is None:
+            tenant.data_retention_days = None
+        else:
+            try:
+                tenant.data_retention_days = validate_retention_days(body.retention_days)
+            except InvalidUnitPriceError as e:
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+        write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                        "update_data_retention", tenant_id=tenant_id, resource_type="tenant",
+                        detail={"retention_days": tenant.data_retention_days})
+        db.commit()
+
+    return {"retention_days": str(tenant.data_retention_days) if tenant.data_retention_days is not None else None}
 
 
 # ---------------------------------------------------------------------------
