@@ -86,6 +86,9 @@
         <button @click="activeTab = 'billing'; loadBillingPrices()"
                 :class="activeTab === 'billing' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">単価設定</button>
+        <button @click="activeTab = 'assistant'"
+                :class="activeTab === 'assistant' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
+                class="px-4 py-2 text-sm font-medium">AIアシスタント</button>
       </div>
 
       <!-- プロビジョニングトークンタブ -->
@@ -798,6 +801,44 @@
         </div>
       </div>
 
+      <!-- AIアシスタントタブ -->
+      <div x-show="activeTab === 'assistant'">
+        <h3 class="font-medium text-gray-700 mb-4">AIアシスタント</h3>
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4" style="height: 500px; display: flex; flex-direction: column;">
+          <div class="flex-1 overflow-y-auto space-y-3 mb-3" x-ref="chatLog">
+            <template x-for="(msg, idx) in assistantMessages" :key="idx">
+              <div :class="msg.role === 'user' ? 'text-right' : 'text-left'">
+                <template x-if="msg.role !== 'pending_action'">
+                  <div :class="msg.role === 'user' ? 'inline-block bg-blue-600 text-white rounded-lg px-3 py-2 text-sm' : 'inline-block bg-gray-100 text-gray-800 rounded-lg px-3 py-2 text-sm'">
+                    <p x-text="msg.content"></p>
+                    <template x-if="msg.sources && msg.sources.length > 0">
+                      <p class="text-xs text-gray-400 mt-1">
+                        出典: <template x-for="(s, i) in msg.sources" :key="i"><span x-text="s.source_path + (s.heading ? ' - ' + s.heading : '') + (i < msg.sources.length - 1 ? '、' : '')"></span></template>
+                      </p>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="msg.role === 'pending_action'">
+                  <div class="inline-block bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-sm">
+                    <p x-text="msg.content"></p>
+                    <div class="mt-2 flex gap-2">
+                      <button @click="confirmAssistantAction(msg.pending_action_id)" class="bg-blue-600 text-white text-xs px-3 py-1 rounded">実行する</button>
+                      <button @click="msg.dismissed = true" x-show="!msg.dismissed" class="text-gray-500 text-xs px-3 py-1">キャンセル</button>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+            <div x-show="assistantLoading" class="text-left text-xs text-gray-400">考え中...</div>
+          </div>
+          <form @submit.prevent="sendAssistantMessage()" class="flex gap-2">
+            <input type="text" x-model="assistantInput" placeholder="質問を入力..."
+                   class="flex-1 border border-gray-300 rounded px-3 py-2 text-sm" :disabled="assistantLoading">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm" :disabled="assistantLoading || !assistantInput">送信</button>
+          </form>
+        </div>
+      </div>
+
       <!-- ファームウェアタブ -->
       <div x-show="activeTab === 'firmware'">
         <div class="flex items-center justify-between mb-4">
@@ -1232,6 +1273,7 @@
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
         bsThreshold: '', bsThresholdIsDefault: true, bsEffective: '', savingBsThreshold: false, bsThresholdSaved: false,
         retentionDays: '', retentionIsDefault: true, retentionEffective: '', savingRetention: false, retentionSaved: false,
+        assistantMessages: [], assistantInput: '', assistantLoading: false,
         invoices: [], invoicesLoading: false,
         expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
         correctingInvoice: false, correctionMessage: '',
@@ -1437,6 +1479,39 @@
             setTimeout(() => this.retentionSaved = false, 3000);
           } catch(e) { this.error = e.message; }
           finally { this.savingRetention = false; }
+        },
+
+        async sendAssistantMessage() {
+          const question = this.assistantInput;
+          if (!question) return;
+          this.assistantMessages.push({ role: 'user', content: question });
+          this.assistantInput = '';
+          this.assistantLoading = true;
+          try {
+            const result = await api.request('POST', `/tenants/${tenantId}/assistant/chat`, { message: question });
+            this.assistantMessages.push({ role: 'assistant', content: result.answer, sources: result.sources });
+            if (result.pending_action) {
+              this.assistantMessages.push({
+                role: 'pending_action', content: result.answer,
+                pending_action_id: result.pending_action.pending_action_id, dismissed: false,
+              });
+            }
+          } catch(e) {
+            this.assistantMessages.push({ role: 'assistant', content: 'エラー: ' + e.message });
+          } finally {
+            this.assistantLoading = false;
+          }
+        },
+        async confirmAssistantAction(pendingActionId) {
+          this.assistantLoading = true;
+          try {
+            const result = await api.request('POST', `/tenants/${tenantId}/assistant/confirm-action`, { pending_action_id: pendingActionId });
+            this.assistantMessages.push({ role: 'assistant', content: '実行しました。' });
+          } catch(e) {
+            this.assistantMessages.push({ role: 'assistant', content: 'エラー: ' + e.message });
+          } finally {
+            this.assistantLoading = false;
+          }
         },
 
         async toggleInvoice(month) {

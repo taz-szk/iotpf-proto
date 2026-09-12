@@ -141,6 +141,7 @@ const api = {
         updateBillingBillShockThreshold: (body) => request('PUT', '/platform/billing/bill-shock-threshold', body),
         getDataRetention: () => request('GET', '/platform/data-retention'),
         updateDataRetention: (body) => request('PUT', '/platform/data-retention', body),
+        reindexAssistantDocs: () => request('POST', '/platform/assistant/reindex'),
     },
     tenantAuth: {
         changePassword: (currentPassword, newPassword) =>

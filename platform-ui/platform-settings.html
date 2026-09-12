@@ -129,6 +129,18 @@
       </button>
       <p x-show="retentionSaved" class="mt-3 text-sm text-green-600">保持期間を保存しました</p>
     </div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">AIアシスタント ドキュメント再インデックス</h2>
+      <p class="text-xs text-gray-400 mb-4">design.html・specs・CLAUDE.md等のドキュメントをAIアシスタントの検索対象として再取り込みします。ドキュメントを更新した後に実行してください。</p>
+      <div x-show="reindexError" class="mb-3 text-sm text-red-600" x-text="reindexError"></div>
+      <button @click="reindexDocuments()" :disabled="reindexing"
+              class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
+        <span x-show="!reindexing">再インデックスを実行</span>
+        <span x-show="reindexing">実行中...</span>
+      </button>
+      <p x-show="reindexResult" class="mt-3 text-sm text-green-600" x-text="reindexResult"></p>
+    </div>
   </div>
   <script>
     if (!api.isLoggedIn()) window.location.href = '/iotairx-console/';
@@ -163,6 +175,7 @@
         retentionSaved: false,
         savingRetention: false,
         retentionLoadFailed: false,
+        reindexing: false, reindexError: '', reindexResult: '',
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
@@ -258,6 +271,16 @@
             setTimeout(() => this.retentionSaved = false, 3000);
           } catch(e) { this.retentionError = e.message; }
           finally { this.savingRetention = false; }
+        },
+        async reindexDocuments() {
+          this.reindexError = '';
+          this.reindexResult = '';
+          this.reindexing = true;
+          try {
+            const result = await api.platform.reindexAssistantDocs();
+            this.reindexResult = `${result.chunk_count}件のチャンクを再インデックスしました`;
+          } catch(e) { this.reindexError = e.message; }
+          finally { this.reindexing = false; }
         },
       };
     }
