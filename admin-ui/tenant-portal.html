@@ -942,6 +942,23 @@
                 </template>
               </table>
             </div>
+
+          <div x-show="isAdmin" class="bg-white rounded-xl shadow-sm border border-gray-200 p-4 mt-4">
+            <p class="text-sm font-medium text-gray-700 mb-1">データ保持期間</p>
+            <p class="text-xs text-gray-400 mb-3">
+              現在の実効値: <span x-text="retentionEffective + ' 日'"></span>
+              <span x-show="retentionIsDefault">（PF管理者のデフォルト値を使用中）</span>
+              <span x-show="!retentionIsDefault">（このテナント専用の設定）</span>
+              <br>テレメトリデータをこの日数より古いものは自動削除します（最短60日）。空欄で保存するとデフォルトに戻ります。
+            </p>
+            <div class="flex items-center gap-2">
+              <input type="text" x-model="retentionDays" placeholder="未設定（デフォルトを使用）"
+                     class="border border-gray-300 rounded px-2 py-1.5 text-sm w-40">
+              <button @click="saveRetentionDays()" :disabled="savingRetention"
+                      class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded disabled:bg-blue-300">保存</button>
+            </div>
+            <p x-show="retentionSaved" class="mt-2 text-xs text-green-600">保存しました</p>
+          </div>
           </div>
 
           <!-- ===== ダッシュボード設定 ===== -->
@@ -1381,6 +1398,7 @@ function portalApp() {
     // 統計
     stats: null, statsLoading: false,
     // 請求
+    retentionDays: '', retentionIsDefault: true, retentionEffective: '', savingRetention: false, retentionSaved: false,
     invoices: [], invoicesLoading: false,
     expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
     // デバイス
@@ -1840,6 +1858,28 @@ function portalApp() {
     async loadStatsAndBilling() {
       await this.loadStats();
       await this.loadInvoices();
+      if (this.isAdmin) await this.loadRetention();
+    },
+    async loadRetention() {
+      try {
+        const r = await portalFetch('GET', '/data-retention');
+        this.retentionEffective = r.retention_days;
+        this.retentionIsDefault = r.is_default;
+        this.retentionDays = r.is_default ? '' : r.retention_days;
+      } catch(e) { this.error = e.message; }
+    },
+    async saveRetentionDays() {
+      this.retentionSaved = false;
+      this.savingRetention = true;
+      try {
+        await portalFetch('PUT', '/data-retention', {
+          retention_days: this.retentionDays === '' ? null : String(this.retentionDays),
+        });
+        await this.loadRetention();
+        this.retentionSaved = true;
+        setTimeout(() => this.retentionSaved = false, 3000);
+      } catch(e) { this.error = e.message; }
+      finally { this.savingRetention = false; }
     },
     async toggleInvoice(month) {
       if (this.expandedInvoiceMonth === month) { this.expandedInvoiceMonth = null; return; }

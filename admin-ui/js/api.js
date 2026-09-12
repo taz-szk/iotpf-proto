@@ -139,6 +139,8 @@ const api = {
         updateBillingTaxRate: (body) => request('PUT', '/platform/billing/tax-rate', body),
         getBillingBillShockThreshold: () => request('GET', '/platform/billing/bill-shock-threshold'),
         updateBillingBillShockThreshold: (body) => request('PUT', '/platform/billing/bill-shock-threshold', body),
+        getDataRetention: () => request('GET', '/platform/data-retention'),
+        updateDataRetention: (body) => request('PUT', '/platform/data-retention', body),
     },
     tenantAuth: {
         changePassword: (currentPassword, newPassword) =>
