@@ -67,11 +67,15 @@ def test_alert_rule_create_calls_existing_endpoint():
 def test_dashboard_panel_config_set_calls_existing_endpoint_with_synthetic_tenant_payload():
     from app.services.rag_tools.dashboard import set_dashboard_panel_config
 
-    with patch("app.services.rag_tools.dashboard.put_panel_configs") as mock_put:
+    with patch("app.services.rag_tools.dashboard.get_panel_configs", return_value=[{"sensor_key": "humidity", "panel_type": "gauge"}]), \
+         patch("app.services.rag_tools.dashboard.put_panel_configs") as mock_put:
         set_dashboard_panel_config(tenant_id="tenant-1", sensor_key="temperature", panel_type="timeseries")
 
     mock_put.assert_called_once()
     call_args = mock_put.call_args
     assert call_args.kwargs["payload"]["tenant_id"] == "tenant-1"
     assert call_args.kwargs["payload"]["role"] == "admin"
-    assert call_args.kwargs["items"][0].sensor_key == "temperature"
+    items = call_args.kwargs["items"]
+    items_by_key = {i.sensor_key: i.panel_type for i in items}
+    assert items_by_key["temperature"] == "timeseries"
+    assert items_by_key["humidity"] == "gauge"

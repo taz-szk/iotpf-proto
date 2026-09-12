@@ -7,8 +7,12 @@ def _tenant_admin_payload(tenant_id: str) -> dict:
 
 
 def set_dashboard_panel_config(tenant_id: str, sensor_key: str, panel_type: str) -> dict:
+    existing = get_panel_configs(group_id=None, payload=_tenant_admin_payload(tenant_id))
+    merged = {item["sensor_key"]: item["panel_type"] for item in existing}
+    merged[sensor_key] = panel_type
+    items = [PanelConfigItem(sensor_key=k, panel_type=v) for k, v in merged.items()]
     put_panel_configs(
-        items=[PanelConfigItem(sensor_key=sensor_key, panel_type=panel_type)],
+        items=items,
         group_id=None,
         payload=_tenant_admin_payload(tenant_id),
     )
