@@ -52,6 +52,8 @@
 
 ### 2.2 新規PostgreSQL拡張（pgvector）
 
+**前提条件（実装時に必須の変更）:** 既存の`docker-compose.yml`の`postgres`サービスは`postgres:16-alpine`イメージを使用しているが、これにはpgvector拡張が同梱されていない。`pgvector/pgvector:pg16`イメージ（PostgreSQL 16 + pgvector同梱、公式メンテナンス）に切り替える。データボリューム（`postgres_data`）・スキーマは互換性があるためデータ移行は不要——イメージのタグ変更のみで既存データはそのまま引き継がれる。
+
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 
