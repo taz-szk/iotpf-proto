@@ -302,3 +302,48 @@ def validate_bill_shock_threshold(value_str: str) -> int | None:
     if amount > 2147483647:
         raise InvalidUnitPriceError("threshold_amount exceeds the maximum (2147483647)")
     return amount
+
+
+DEFAULT_RETENTION_DAYS = 365
+MIN_RETENTION_DAYS = 60
+
+
+def get_default_retention_days(db: Session) -> int:
+    """設定済みのデフォルトデータ保持日数を返す。行が無ければDEFAULT_RETENTION_DAYSを返す
+    （マイグレーションで常に1行存在するはずだが、念のためのフォールバック）。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        return DEFAULT_RETENTION_DAYS
+    return row.default_retention_days
+
+
+def set_default_retention_days(db: Session, days: int) -> None:
+    """デフォルトのデータ保持日数を更新する（シングルトン行、常にid=1）。"""
+    row = db.query(BillingSettings).filter(BillingSettings.id == 1).first()
+    if row is None:
+        db.add(BillingSettings(id=1, tax_rate=DEFAULT_TAX_RATE, default_retention_days=days))
+    else:
+        row.default_retention_days = days
+    db.commit()
+
+
+def get_effective_retention_days(db: Session, tenant) -> int:
+    """テナント個別の保持日数上書きがあればそれを、無ければデフォルト値を返す。
+    しきい値と異なり、保持期間は必ず具体的な日数を持つ（Noneを返すことはない）。"""
+    if tenant.data_retention_days is not None:
+        return tenant.data_retention_days
+    return get_default_retention_days(db)
+
+
+def validate_retention_days(value_str: str) -> int:
+    """保持日数の文字列をintに変換する。60未満・空文字列・非整数はInvalidUnitPriceErrorを投げる。
+    上限は設けない。"""
+    try:
+        days = int(value_str)
+    except (ValueError, TypeError):
+        raise InvalidUnitPriceError("retention_days must be an integer")
+    if str(days) != value_str.lstrip("+"):
+        raise InvalidUnitPriceError("retention_days must be an integer")
+    if days < MIN_RETENTION_DAYS:
+        raise InvalidUnitPriceError(f"retention_days must be at least {MIN_RETENTION_DAYS}")
+    return days
