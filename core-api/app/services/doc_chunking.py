@@ -27,11 +27,17 @@ def chunk_markdown(content: str) -> list[dict]:
 
 
 def chunk_html(content: str) -> list[dict]:
-    """HTMLを<h2>/<h3>セクション単位で分割し、タグを除去したテキストにする。"""
+    """HTMLを<h2>/<h3>セクション単位で分割し、タグを除去したテキストにする。見出しが無い場合は全体を1チャンクにする。"""
     # <h2>または<h3>タグで本文を分割する
     parts = re.split(r"<h[23][^>]*>(.*?)</h[23]>", content, flags=re.DOTALL)
     # parts[0] は最初の見出しより前の部分（無視する）。以降は [heading, body, heading, body, ...] の繰り返し
     chunks: list[dict] = []
+    if len(parts) == 1:
+        # 見出しが1つも見つからない場合は、全文を1チャンクにする
+        text = _strip_tags(parts[0]).strip()
+        if text:
+            chunks.append({"heading": None, "content": text})
+        return chunks
     for i in range(1, len(parts), 2):
         heading = _strip_tags(parts[i]).strip()
         body = parts[i + 1] if i + 1 < len(parts) else ""

@@ -55,3 +55,11 @@ def test_chunk_html_handles_h3_sections():
     headings = [c["heading"] for c in chunks]
     assert "親" in headings
     assert "子" in headings
+
+
+def test_chunk_html_returns_single_chunk_when_no_headings():
+    content = "<html><body><p>見出しが全く無い本文です。install-guide.htmlのような文書。</p></body></html>"
+    chunks = chunk_html(content)
+    assert len(chunks) == 1
+    assert chunks[0]["heading"] is None
+    assert "見出しが全く無い本文です" in chunks[0]["content"]
