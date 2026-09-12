@@ -51,3 +51,4 @@ class BillingSettings(Base):
     id = Column(Integer, primary_key=True, default=1)
     tax_rate = Column(Numeric(5, 4), nullable=False)
     default_bill_shock_threshold_amount = Column(Integer, nullable=True)
+    default_retention_days = Column(Integer, nullable=False, default=365)

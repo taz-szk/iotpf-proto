@@ -471,3 +471,17 @@ def migrate_add_bill_shock_threshold_columns() -> None:
             ADD COLUMN IF NOT EXISTS bill_shock_notified_at TIMESTAMPTZ
         """))
         conn.commit()
+
+
+def migrate_add_data_retention_columns() -> None:
+    """テレメトリデータ保持期間の設定用カラムを追加する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE billing_settings
+            ADD COLUMN IF NOT EXISTS default_retention_days INTEGER NOT NULL DEFAULT 365
+        """))
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS data_retention_days INTEGER
+        """))
+        conn.commit()

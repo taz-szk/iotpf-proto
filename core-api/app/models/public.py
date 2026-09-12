@@ -16,6 +16,7 @@ class Tenant(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     bill_shock_threshold_amount = Column(Integer, nullable=True)
+    data_retention_days = Column(Integer, nullable=True)
 
 class PlatformUser(Base):
     __tablename__ = "platform_users"
