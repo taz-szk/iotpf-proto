@@ -112,3 +112,17 @@ def test_migrate_add_data_retention_columns_executes():
     assert "billing_settings" in sql_calls and "default_retention_days" in sql_calls
     assert "DEFAULT 365" in sql_calls
     assert "tenants" in sql_calls and "data_retention_days" in sql_calls
+
+
+def test_migrate_create_rag_tables_executes():
+    from app.database import migrate_create_rag_tables
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        migrate_create_rag_tables()
+    sql_calls = _sql_text(mock_conn.execute.call_args_list)
+    assert "CREATE EXTENSION IF NOT EXISTS vector" in sql_calls
+    assert "doc_chunks" in sql_calls and "VECTOR(768)" in sql_calls
+    assert "agent_pending_actions" in sql_calls and "JSONB" in sql_calls

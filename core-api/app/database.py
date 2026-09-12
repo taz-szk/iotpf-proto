@@ -485,3 +485,32 @@ def migrate_add_data_retention_columns() -> None:
             ADD COLUMN IF NOT EXISTS data_retention_days INTEGER
         """))
         conn.commit()
+
+
+def migrate_create_rag_tables() -> None:
+    """RAGアシスタント機能用のテーブル（doc_chunks, agent_pending_actions）を
+    作成する（べき等）。pgvector拡張の有効化も含む。"""
+    with engine.connect() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS doc_chunks (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                source_path VARCHAR(500) NOT NULL,
+                heading     VARCHAR(500),
+                content     TEXT NOT NULL,
+                embedding   VECTOR(768),
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS agent_pending_actions (
+                id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id    UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                tool_name    VARCHAR(100) NOT NULL,
+                tool_args    JSONB NOT NULL,
+                requested_by VARCHAR(255) NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                expires_at   TIMESTAMPTZ NOT NULL
+            )
+        """))
+        conn.commit()
