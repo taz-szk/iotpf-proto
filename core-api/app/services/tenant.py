@@ -31,6 +31,22 @@ def create_influxdb_token_for_org(org_id: str, admin_token: str) -> str:
     resp.raise_for_status()
     return resp.json()["token"]
 
+def create_influxdb_bucket(org_id: str, admin_token: str, retention_days: int) -> None:
+    """telemetryバケットを指定の保持日数のretention ruleで作成する。
+    既に存在する場合（ingestion-serviceの遅延作成と競合した場合等）は何もしない。"""
+    resp = httpx.post(
+        f"{settings.influxdb_url}/api/v2/buckets",
+        headers={"Authorization": f"Token {admin_token}", "Content-Type": "application/json"},
+        json={
+            "orgID": org_id, "name": "telemetry",
+            "retentionRules": [{"type": "expire", "everySeconds": retention_days * 86400}],
+        },
+        timeout=10.0,
+    )
+    if resp.status_code not in (201, 422):
+        resp.raise_for_status()
+
+
 def teardown_tenant(tenant_id: str, influxdb_org_id: str | None, grafana_org_id: str | None) -> None:
     """テナントの全リソースを削除する。BackgroundTask として呼び出す。"""
 

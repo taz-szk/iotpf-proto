@@ -5,8 +5,9 @@ from app.schemas.tenant import TenantCreate, TenantOut
 from app.models.public import Tenant
 from app.database import SessionLocal
 from app.services.auth import verify_token
-from app.services.tenant import setup_tenant, teardown_tenant
-from app.services.billing import seed_tenant_default_prices
+from app.services.tenant import setup_tenant, teardown_tenant, create_influxdb_bucket
+from app.services.billing import seed_tenant_default_prices, get_default_retention_days
+from app.config import settings
 from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
 from app.services.device_groups import list_groups_with_devices
 from app.services.audit import write_audit_log
@@ -37,6 +38,7 @@ def create_tenant(body: TenantCreate, payload: dict = Depends(_require_platform)
         tenant.influxdb_token = token
         tenant.grafana_org_id = str(grafana_org_id)
         seed_tenant_default_prices(db, tenant_id)
+        create_influxdb_bucket(org_id, settings.influxdb_admin_token, get_default_retention_days(db))
         write_audit_log(db, "platform", payload["sub"], payload["email"],
                         "create_tenant", tenant_id=tenant_id, resource_type="tenant", resource_id=body.name)
         db.commit()
