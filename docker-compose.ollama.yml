@@ -1,0 +1,25 @@
+name: iot-platform
+
+# ローカル開発用: Ollamaを同一マシンで同居させたい場合のオーバーレイ。
+# 本番環境ではリソース分離のため別インスタンスでOllamaを動かすことを推奨する
+# （docs/install-guide.htmlの「AIアシスタントの初期セットアップ」参照）。
+#
+# 使い方:
+#   docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d
+#   docker compose exec ollama ollama pull qwen2.5:3b
+#   docker compose exec ollama ollama pull nomic-embed-text
+# その後、プラットフォーム設定画面でOllama接続先を http://ollama:11434 に設定する。
+
+volumes:
+  ollama_data:
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    restart: unless-stopped
+    networks: [internal]
+    volumes:
+      - ollama_data:/root/.ollama
+    expose:
+      - "11434"

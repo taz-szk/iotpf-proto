@@ -6,7 +6,7 @@
   <title>プラットフォーム設定 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=15"></script>
+  <script src="/admin/js/api.js?v=16"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
   <nav class="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
@@ -131,10 +131,40 @@
     </div>
 
     <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
+      <h2 class="text-base font-semibold text-gray-800 mb-1">AIアシスタント接続設定</h2>
+      <p class="text-xs text-gray-400 mb-4">ローカルLLM(Ollama)への接続先を設定するとAIアシスタント機能が有効になります。メモリ消費が大きいため、リソース分離のため別インスタンスでOllamaを動かすことを推奨します。未設定の間はテナント画面のAIアシスタントタブは表示されません。</p>
+      <label class="block text-sm text-gray-700 mb-1">Ollama接続先URL</label>
+      <input type="text" x-model="assistantSettings.ollama_url" placeholder="http://172.31.19.73:11434"
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+      <label class="block text-sm text-gray-700 mb-1">チャットモデル</label>
+      <input type="text" x-model="assistantSettings.ollama_chat_model" placeholder="qwen2.5:3b"
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+      <label class="block text-sm text-gray-700 mb-1">埋め込みモデル</label>
+      <input type="text" x-model="assistantSettings.ollama_embed_model" placeholder="nomic-embed-text"
+             class="w-full border border-gray-300 rounded px-3 py-2 text-sm mb-3">
+      <div x-show="assistantTestResult" class="mb-3 text-sm" :class="assistantTestOk ? 'text-green-600' : 'text-red-600'" x-text="assistantTestResult"></div>
+      <div class="flex gap-2">
+        <button @click="testAssistantConnection()" :disabled="assistantTesting || !assistantSettings.ollama_url"
+                class="bg-gray-100 hover:bg-gray-200 disabled:opacity-50 text-gray-700 px-4 py-2 rounded text-sm">
+          <span x-show="!assistantTesting">接続テスト</span>
+          <span x-show="assistantTesting">確認中...</span>
+        </button>
+        <button @click="saveAssistantSettings()" :disabled="savingAssistantSettings"
+                class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
+          <span x-show="!savingAssistantSettings">保存</span>
+          <span x-show="savingAssistantSettings">保存中...</span>
+        </button>
+      </div>
+      <p x-show="assistantSettingsSaved" class="mt-3 text-sm text-green-600">設定を保存しました</p>
+      <p x-show="assistantSettingsError" class="mt-3 text-sm text-red-600" x-text="assistantSettingsError"></p>
+    </div>
+
+    <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
       <h2 class="text-base font-semibold text-gray-800 mb-1">AIアシスタント ドキュメント再インデックス</h2>
       <p class="text-xs text-gray-400 mb-4">design.html・specs・CLAUDE.md等のドキュメントをAIアシスタントの検索対象として再取り込みします。ドキュメントを更新した後に実行してください。</p>
+      <p x-show="!assistantSettings.ollama_url" class="mb-3 text-sm text-gray-400">Ollama接続先を設定すると実行できます。</p>
       <div x-show="reindexError" class="mb-3 text-sm text-red-600" x-text="reindexError"></div>
-      <button @click="reindexDocuments()" :disabled="reindexing"
+      <button @click="reindexDocuments()" :disabled="reindexing || !assistantSettings.ollama_url"
               class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded text-sm">
         <span x-show="!reindexing">再インデックスを実行</span>
         <span x-show="reindexing">実行中...</span>
@@ -176,6 +206,9 @@
         savingRetention: false,
         retentionLoadFailed: false,
         reindexing: false, reindexError: '', reindexResult: '',
+        assistantSettings: { ollama_url: '', ollama_chat_model: '', ollama_embed_model: '' },
+        savingAssistantSettings: false, assistantSettingsSaved: false, assistantSettingsError: '',
+        assistantTesting: false, assistantTestResult: '', assistantTestOk: false,
         async init() {
           try {
             this.settings = await api.platform.getMfaSettings();
@@ -208,7 +241,51 @@
             this.retentionError = e.message;
             this.retentionLoadFailed = true;
           }
+          try {
+            const r = await api.platform.getAssistantSettings();
+            this.assistantSettings = {
+              ollama_url: r.ollama_url || '',
+              ollama_chat_model: r.ollama_chat_model || 'qwen2.5:3b',
+              ollama_embed_model: r.ollama_embed_model || 'nomic-embed-text',
+            };
+          } catch(e) {
+            this.assistantSettingsError = e.message;
+          }
           this.loading = false;
+        },
+        async testAssistantConnection() {
+          this.assistantTestResult = '';
+          this.assistantTesting = true;
+          try {
+            const r = await api.platform.testAssistantConnection({ ollama_url: this.assistantSettings.ollama_url });
+            this.assistantTestOk = !!r.ok;
+            this.assistantTestResult = r.ok
+              ? `接続成功（モデル: ${(r.models || []).join(', ') || 'なし'}）`
+              : `接続失敗: ${r.error}`;
+          } catch(e) {
+            this.assistantTestOk = false;
+            this.assistantTestResult = 'エラー: ' + e.message;
+          } finally {
+            this.assistantTesting = false;
+          }
+        },
+        async saveAssistantSettings() {
+          this.assistantSettingsSaved = false;
+          this.assistantSettingsError = '';
+          this.savingAssistantSettings = true;
+          try {
+            const r = await api.platform.updateAssistantSettings(this.assistantSettings);
+            this.assistantSettings = {
+              ollama_url: r.ollama_url || '',
+              ollama_chat_model: r.ollama_chat_model,
+              ollama_embed_model: r.ollama_embed_model,
+            };
+            this.assistantSettingsSaved = true;
+          } catch(e) {
+            this.assistantSettingsError = e.message;
+          } finally {
+            this.savingAssistantSettings = false;
+          }
         },
         async toggle(key) {
           this.saved = false;

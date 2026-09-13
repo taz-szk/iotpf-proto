@@ -6,7 +6,7 @@
   <title>テナント詳細 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=10"></script>
+  <script src="/admin/js/api.js?v=16"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -86,7 +86,7 @@
         <button @click="activeTab = 'billing'; loadBillingPrices()"
                 :class="activeTab === 'billing' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">単価設定</button>
-        <button @click="activeTab = 'assistant'"
+        <button x-show="assistantConfigured" @click="activeTab = 'assistant'"
                 :class="activeTab === 'assistant' ? 'border-b-2 border-blue-600 text-blue-600' : 'text-gray-500 hover:text-gray-700'"
                 class="px-4 py-2 text-sm font-medium">AIアシスタント</button>
       </div>
@@ -1009,6 +1009,9 @@
               el.classList.remove('hidden');
             }
           }).catch(() => {});
+          api.platform.getAssistantSettings().then(r => {
+            this.assistantConfigured = !!r?.configured;
+          }).catch(() => {});
           try {
             const [tenant, tokens, rules] = await Promise.all([
               api.tenants.get(tenantId),
@@ -1279,7 +1282,7 @@
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
         bsThreshold: '', bsThresholdIsDefault: true, bsEffective: '', savingBsThreshold: false, bsThresholdSaved: false,
         retentionDays: '', retentionIsDefault: true, retentionEffective: '', savingRetention: false, retentionSaved: false,
-        assistantMessages: [], assistantInput: '', assistantLoading: false,
+        assistantMessages: [], assistantInput: '', assistantLoading: false, assistantConfigured: false,
         invoices: [], invoicesLoading: false,
         expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
         correctingInvoice: false, correctionMessage: '',

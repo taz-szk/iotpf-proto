@@ -142,6 +142,9 @@ const api = {
         getDataRetention: () => request('GET', '/platform/data-retention'),
         updateDataRetention: (body) => request('PUT', '/platform/data-retention', body),
         reindexAssistantDocs: () => request('POST', '/platform/assistant/reindex'),
+        getAssistantSettings: () => request('GET', '/platform/assistant/settings'),
+        updateAssistantSettings: (body) => request('PUT', '/platform/assistant/settings', body),
+        testAssistantConnection: (body) => request('POST', '/platform/assistant/settings/test-connection', body),
     },
     tenantAuth: {
         changePassword: (currentPassword, newPassword) =>

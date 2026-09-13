@@ -21,7 +21,6 @@ volumes:
   grafana_data:
   step_ca_data:
   mailhog_data:
-  ollama_data:
 
 services:
 
@@ -47,7 +46,7 @@ services:
       retries: 5
 
   postgres:
-    image: pgvector/pgvector:pg16
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     container_name: postgres
     restart: unless-stopped
     networks: [internal]
@@ -174,16 +173,6 @@ services:
       influxdb:
         condition: service_healthy
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: ollama
-    restart: unless-stopped
-    networks: [internal]
-    volumes:
-      - ollama_data:/root/.ollama
-    expose:
-      - "11434"
-
   core-api:
     build:
       context: ./core-api
@@ -223,9 +212,6 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_FROM: "${SMTP_FROM:-alerts@iot-platform.local}"
-      OLLAMA_URL: "http://ollama:11434"
-      OLLAMA_CHAT_MODEL: "${OLLAMA_CHAT_MODEL:-qwen2.5:3b}"
-      OLLAMA_EMBED_MODEL: "${OLLAMA_EMBED_MODEL:-nomic-embed-text}"
     expose:
       - "8000"
     healthcheck:

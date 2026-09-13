@@ -100,6 +100,14 @@ else
 
     ok ".env generated with random secrets."
 
+    echo ""
+    read -rp "AIアシスタント機能(ローカルLLMによるRAG)を将来使う予定はありますか？ [y/N]: " USE_AI_ASSISTANT
+    if [[ "$USE_AI_ASSISTANT" =~ ^[Yy]$ ]]; then
+        sed -i.bak "s|POSTGRES_IMAGE=.*|POSTGRES_IMAGE=pgvector/pgvector:pg16|" .env && rm -f .env.bak
+        ok "postgresイメージをpgvector対応版に設定しました。Ollamaの接続先はプラットフォーム設定画面から後で設定できます。"
+        echo "  詳細: docs/install-guide.html の「AIアシスタントの初期セットアップ」を参照してください。"
+    fi
+
     echo -e "${YELLOW}
     +-------------------------------------------------+
     |  SAVE THESE CREDENTIALS                         |

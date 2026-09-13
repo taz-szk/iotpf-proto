@@ -153,6 +153,14 @@ if (Test-Path ".env") {
     $env_content | Set-Content ".env" -Encoding UTF8
     Write-OK ".env generated with random secrets."
 
+    Write-Host ""
+    $useAiAssistant = Read-Host "AIアシスタント機能(ローカルLLMによるRAG)を将来使う予定はありますか？ [y/N]"
+    if ($useAiAssistant -match '^[Yy]$') {
+        (Get-Content ".env" -Raw) -replace 'POSTGRES_IMAGE=.*', 'POSTGRES_IMAGE=pgvector/pgvector:pg16' | Set-Content ".env" -Encoding UTF8
+        Write-OK "postgresイメージをpgvector対応版に設定しました。Ollamaの接続先はプラットフォーム設定画面から後で設定できます。"
+        Write-Host "  詳細: docs/install-guide.html の「AIアシスタントの初期セットアップ」を参照してください。"
+    }
+
     Write-Host @"
 
     +-------------------------------------------------+
