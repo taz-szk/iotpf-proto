@@ -113,6 +113,8 @@ def get_me(payload: dict = Depends(_require_tenant)):
         except Exception:
             grafana_url = f"/grafana/?orgId={grafana_org_id}&kiosk&theme=light"
     public_token = tenant.public_token
+    with SessionLocal() as assistant_db:
+        assistant_configured = is_assistant_configured(assistant_db)
     return {
         "user_id": payload["sub"],
         "email": payload["email"],
@@ -124,6 +126,7 @@ def get_me(payload: dict = Depends(_require_tenant)):
         "grafana_url": grafana_url,
         "public_token": public_token,
         "public_url": f"/public/{public_token}" if public_token else None,
+        "assistant_configured": assistant_configured,
     }
 
 
