@@ -14,7 +14,7 @@ from app.services.rag_tools import TOOLS
 logger = logging.getLogger(__name__)
 
 _MAX_TOOL_ROUNDS = 2
-_TOP_K_CHUNKS = 5
+_TOP_K_CHUNKS = 3
 _PENDING_ACTION_TTL_MINUTES = 10
 
 _SYSTEM_PROMPT = (

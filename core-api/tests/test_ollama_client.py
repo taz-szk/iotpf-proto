@@ -56,7 +56,7 @@ def test_chat_includes_num_ctx_option():
         chat(ollama_url="http://172.31.19.73:11434", model="qwen2.5:3b", messages=[{"role": "user", "content": "質問"}])
 
     call = mock_post.call_args
-    assert call.kwargs["json"]["options"]["num_ctx"] == 8192
+    assert call.kwargs["json"]["options"]["num_ctx"] == 4096
 
 
 def test_chat_raises_on_error_status():

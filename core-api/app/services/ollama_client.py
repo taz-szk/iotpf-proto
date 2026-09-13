@@ -1,6 +1,6 @@
 import httpx
 
-_NUM_CTX = 8192
+_NUM_CTX = 4096
 
 
 def embed(ollama_url: str, model: str, text: str) -> list[float]:
