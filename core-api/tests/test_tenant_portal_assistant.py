@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
+from pydantic import BaseModel
 from app.main import app
 from app.services.auth import create_access_token
 
@@ -117,6 +118,26 @@ def test_confirm_action_returns_409_when_tool_no_longer_registered():
             cookies=_tenant_cookie("admin"),
         )
     assert resp.status_code == 409
+
+
+def test_confirm_action_returns_422_when_tool_handler_raises_validation_error():
+    """ハンドラ内でのpydantic ValidationError（ValueErrorのサブクラス）は409ではなく422にマップされる。"""
+    class _Strict(BaseModel):
+        threshold: float
+
+    def _raise_validation_error(*args, **kwargs):
+        _Strict()  # 必須フィールド無しでValidationErrorを送出させる
+
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
+         patch("app.routers.tenant_portal.is_assistant_configured", return_value=True), \
+         patch("app.routers.tenant_portal.execute_pending_action", side_effect=_raise_validation_error):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            "/tenant-portal/me/assistant/confirm-action",
+            json={"pending_action_id": PENDING_ACTION_ID},
+            cookies=_tenant_cookie("admin"),
+        )
+    assert resp.status_code == 422
 
 
 def test_confirm_action_returns_422_for_invalid_pending_action_id_format():

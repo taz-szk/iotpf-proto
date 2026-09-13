@@ -1240,11 +1240,12 @@ def delete_device_group_portal(group_id: str, payload: dict = Depends(_require_a
 # 注意: rag_tools配下のモジュール（PF管理者向け・テナント向けどちらも）は本ファイルの
 # PanelConfigItem/create_alert_rule/create_token等を再importするため、循環importを避けるため
 # これらのシンボルが定義済みのファイル末尾でimportする
-# （ファイル先頭に置くと本ファイルの初期化途中で読み込まれ、まだ定義されていない属性の参照でImportErrorになる。
-#  さらにapp.services.rag_tools.tenant自体を先頭でimportすると、そのパッケージが自分自身の
-#  TENANT_TOOLSを組み立て終える前に本ファイル経由で再度呼び出される自己参照が生じるため、
-#  下記の2エンドポイント内でも関数呼び出し時に遅延importする。最終レビューで発見・修正）。
+# （ファイル先頭に置くと本ファイルの初期化途中で読み込まれ、まだ定義されていない属性の参照でImportErrorになる）。
+# なお、app.services.rag_tools（PF管理者向け）経由でapp.services.ragを単独import
+# （app.main非経由）した際に生じる別の循環importは、app.services.rag側でTOOLSの取得を
+# 呼び出し時まで遅延させる形で解消済み（最終レビューで発見・修正、rag.py参照）。
 from app.services.rag import answer_question, execute_pending_action  # noqa: E402
+from app.services.rag_tools.tenant import TENANT_TOOLS  # noqa: E402
 
 
 class AssistantChatBody(BaseModel):
@@ -1257,7 +1258,6 @@ class AssistantConfirmActionBody(BaseModel):
 
 @router.post("/me/assistant/chat")
 def chat_with_tenant_assistant(body: AssistantChatBody, payload: dict = Depends(_require_admin_or_operator)):
-    from app.services.rag_tools.tenant import TENANT_TOOLS
     with SessionLocal() as db:
         if not is_assistant_configured(db):
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI assistant is not configured")
@@ -1269,7 +1269,6 @@ def chat_with_tenant_assistant(body: AssistantChatBody, payload: dict = Depends(
 
 @router.post("/me/assistant/confirm-action")
 def confirm_tenant_assistant_action(body: AssistantConfirmActionBody, payload: dict = Depends(_require_admin_or_operator)):
-    from app.services.rag_tools.tenant import TENANT_TOOLS
     pending_action_id = _validate_uuid(body.pending_action_id, "pending_action_id")
     with SessionLocal() as db:
         if not is_assistant_configured(db):
