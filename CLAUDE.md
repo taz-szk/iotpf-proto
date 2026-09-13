@@ -104,7 +104,7 @@ docker compose restart nginx emqx
 
 | サービス | イメージ | 役割 |
 |----------|----------|------|
-| postgres | postgres:16-alpine | メタデータ DB（マルチテナント） |
+| postgres | `${POSTGRES_IMAGE:-postgres:16-alpine}` | メタデータ DB（マルチテナント）。AIアシスタント機能を有効にする場合は`.env`の`POSTGRES_IMAGE`を`pgvector/pgvector:pg16`にする（インストーラのy/nプロンプトで自動設定） |
 | influxdb | influxdb:2-alpine | 時系列テレメトリ |
 | emqx | emqx:5 | MQTT ブローカー（mTLS） |
 | step-ca | smallstep/step-ca | 内部 CA（デバイス証明書発行） |
@@ -115,6 +115,16 @@ docker compose restart nginx emqx
 | core-api | ./core-api | メイン API（FastAPI） |
 | ingestion-service | ./ingestion-service | MQTT テレメトリ取込 |
 | alert-service | ./alert-service | アラート評価・通知 |
+
+### AIアシスタント機能（選択制、Ollama別インスタンス前提）
+
+RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・確認フロー付き操作代行）は**デフォルト無効**の選択制機能。
+メインの`docker-compose.yml`にはOllamaを**同梱しない**（実機デプロイでOOM・ディスク不足に見舞われた経験から、
+リソース分離のため別インスタンス/別マシンで動かす設計に変更済み）。
+
+- 接続先（Ollama URL・チャット/埋め込みモデル名）はプラットフォーム設定画面から`assistant_settings`テーブル（DB）で管理する。環境変数ではない。`ollama_url`がNULLの間はUI・APIとも機能全体が無効。
+- ローカル開発で同居させたい場合のみ`docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d`を使う。
+- Ollama専用インスタンスを立てる場合は**ディスク40GB以上**を確保する（`ollama/ollama:latest`イメージ自体が9GB超あるため）。3Bモデル運用にはメモリ2GB以上が必要（詳細: `docs/install-guide.html`の「AIアシスタントの初期セットアップ」節、設計は`docs/superpowers/specs/2026-09-12-rag-assistant-design.md`）。
 
 ### ネットワーク
 
