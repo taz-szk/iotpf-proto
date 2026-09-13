@@ -120,7 +120,7 @@ body{background:var(--bg);color:var(--text-1);font-family:-apple-system,BlinkMac
 
 /* hero */
 .hero{margin-bottom:36px}
-.hero-title{font-size:26px;font-weight:700;margin-bottom:8px;line-height:1.2}
+.hero-title{font-size:26px;font-weight:700;margin:0 0 8px;line-height:1.2}
 .hero-sub{color:var(--text-2);font-size:14px;max-width:56ch}
 .tag{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;font-family:'Cascadia Code','Consolas',monospace;margin-right:6px;margin-bottom:4px}
 .tag-win{background:var(--tag-win);color:var(--win)}
@@ -180,6 +180,11 @@ pre .flag{color:#D2A8FF}
 @media(max-width:600px){.main{padding:20px 16px 60px}.hero-title{font-size:20px}.step{grid-template-columns:28px 1fr}}
 .home-link{color:var(--text-3);font-size:12px;font-family:'Cascadia Code','Consolas',monospace;text-decoration:none;white-space:nowrap;padding:4px 8px;border-radius:5px;border:1px solid transparent;transition:color .15s,border-color .15s}
 .home-link:hover{color:var(--accent);border-color:var(--border)}
+
+/* OS共通セクション */
+.common-section{border-top:1px solid var(--border);margin-top:8px;padding-top:36px}
+.common-section h2{font-size:22px;font-weight:700;color:var(--text-1);line-height:1.25;margin:0 0 8px}
+.common-section h3{font-size:15px;font-weight:700;color:var(--text-1);margin:0 0 8px}
 </style>
 </head>
 <body>
@@ -211,7 +216,7 @@ pre .flag{color:#D2A8FF}
 <!-- ==================== WINDOWS ==================== -->
 <div class="os-section active" id="os-win">
   <div class="hero">
-    <div class="hero-title">🪟 Windows インストール手順</div>
+    <h2 class="hero-title">🪟 Windows インストール手順</h2>
     <div class="hero-sub">Docker Desktop for Windows がインストール済みの前提です。PowerShell 5.1 以上で実行します。</div>
   </div>
 
@@ -427,7 +432,7 @@ docker compose down -v
 <!-- ==================== macOS ==================== -->
 <div class="os-section" id="os-mac">
   <div class="hero">
-    <div class="hero-title">🍎 macOS インストール手順</div>
+    <h2 class="hero-title">🍎 macOS インストール手順</h2>
     <div class="hero-sub">Docker Desktop for Mac がインストール済みの前提です。bash / zsh シェルで実行します。</div>
   </div>
 
@@ -544,7 +549,7 @@ docker compose down -v
 <!-- ==================== UBUNTU ==================== -->
 <div class="os-section" id="os-ubuntu">
   <div class="hero">
-    <div class="hero-title">🐧 Ubuntu インストール手順</div>
+    <h2 class="hero-title">🐧 Ubuntu インストール手順</h2>
     <div class="hero-sub">Docker Desktop for Linux がインストール済みの前提です。Ubuntu 22.04 LTS / 24.04 LTS で動作確認済みです。</div>
   </div>
 
@@ -692,6 +697,117 @@ docker compose down -v
 
   </div>
 </div><!-- /ubuntu -->
+
+<!-- ==================== AIアシスタント初期セットアップ（OS共通） ==================== -->
+<section class="common-section" id="setup-ai-assistant">
+  <h2>🤖 AIアシスタントの初期セットアップ</h2>
+  <div class="hero-sub" style="margin-bottom:24px">
+    AIアシスタント（ローカルLLMによるドキュメントQ&amp;A・操作代行）を使うには、
+    通常のインストール手順に加えて以下の4ステップが必要です。OS 共通の手順で、
+    プロジェクトルートで実行します。
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title">PostgreSQL イメージを pgvector 対応版に切り替える</div>
+        <div class="step-desc">
+          ドキュメントの埋め込みベクトルを保存するため、PostgreSQL に <code>pgvector</code> 拡張が必要です。
+          <code>docker-compose.yml</code> の <code>postgres</code> サービスのイメージを
+          <code>postgres:16-alpine</code> から <code>pgvector/pgvector:pg16</code> に変更します。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>  postgres:
+    <span class="cmt">#  image: postgres:16-alpine   ← 変更前</span>
+    image: pgvector/pgvector:pg16</pre>
+        </div>
+        <div class="callout callout-ok">
+          <span class="callout-icon">✅</span>
+          <span class="callout-body"><strong>既存ボリュームはそのまま使えます。</strong>
+          <code>pgvector/pgvector:pg16</code> は同じ PostgreSQL 16 系のため、既存の
+          <code>postgres_data</code> ボリュームと互換です。<strong>データ移行やダンプ・リストアは不要</strong>で、
+          イメージを差し替えて <code>docker compose up -d postgres</code> するだけで切り替わります。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title">Ollama コンテナを起動する</div>
+        <div class="step-desc">推論エンジンとして Ollama をコンテナで動かします。内部ネットワークのみに公開され、外部からは直接アクセスできません。</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose up -d ollama
+
+<span class="cmt"># 起動確認</span>
+docker compose ps ollama</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">3</div>
+      <div class="step-body">
+        <div class="step-title">LLM モデルを取得する</div>
+        <div class="step-desc">
+          チャット用モデルと埋め込み用モデルの 2 つを Ollama コンテナ内に取得します。
+          合計で約 2.5 GB のダウンロードが発生します。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># チャット（回答生成・ツール呼び出し）用</span>
+docker compose exec ollama ollama pull qwen2.5:3b
+
+<span class="cmt"># 埋め込み（ベクトル検索）用</span>
+docker compose exec ollama ollama pull nomic-embed-text
+
+<span class="cmt"># 取得済みモデルの確認</span>
+docker compose exec ollama ollama list</pre>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body">モデル取得は初回のみ必要です。<code>ollama_data</code> ボリュームに保存されるため、
+          <code>docker compose down</code> では消えません（<code>down -v</code> で消えます）。</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">4</div>
+      <div class="step-body">
+        <div class="step-title">ドキュメントを再インデックスする</div>
+        <div class="step-desc">
+          プラットフォーム管理コンソールの設定画面から「ドキュメント再インデックス」を実行します。
+          <code>docs/</code> 配下のドキュメントと <code>CLAUDE.md</code> が読み込まれ、
+          チャンクごとにベクトル化されて PostgreSQL に保存されます。
+        </div>
+        <table class="ep-table">
+          <tr><th>項目</th><th>内容</th></tr>
+          <tr><td>/iotairx-console/</td><td>プラットフォーム管理コンソール → 設定 → AIアシスタント</td></tr>
+          <tr><td>POST /platform/assistant/reindex</td><td>再インデックスAPI（管理コンソールのボタンから呼ばれます）</td></tr>
+        </table>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>チャンク件数が 0 件でないことを必ず確認してください。</strong>
+          0 件の場合は core-api コンテナに <code>docs/</code> と <code>CLAUDE.md</code> がマウントされていません
+          （<code>docker-compose.yml</code> の core-api の <code>volumes</code> に
+          <code>./docs:/docs:ro</code> と <code>./CLAUDE.md:/CLAUDE.md:ro</code> が必要）。
+          対象ファイルが 1 件も見つからない場合、API は既存インデックスを消さずに 500 エラーを返します。</span>
+        </div>
+        <div class="callout callout-info">
+          <span class="callout-icon">💡</span>
+          <span class="callout-body">ドキュメントを更新したときは、再度この再インデックスを実行してください。
+          インデックスは実行時点のファイル内容のスナップショットです。</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
 
 </main>
 </div><!-- /wrap -->

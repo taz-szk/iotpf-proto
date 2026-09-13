@@ -483,6 +483,9 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(8)">
       <span class="sb-label">BILL</span>料金積算
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(9)">
+      <span class="sb-label">AI</span>AIアシスタント
+    </button>
   </nav>
 </aside>
 
@@ -2275,6 +2278,64 @@ sequenceDiagram
       <li>確定済み(finalized)請求書の手動再集計「修正(corrected)」ワークフロー</li>
       <li>PF管理者向けの請求書確認UI画面（APIのみ実装済み、画面は未実装）</li>
     </ul>
+  </div>
+</section>
+
+<!-- ==================== TAB 9: AIアシスタント ==================== -->
+<section class="doc-section" id="tab-9">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">AIアシスタント機能 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0（Phase 1）</span><span>参照: docs/superpowers/specs/2026-09-12-rag-assistant-design.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>プラットフォーム管理者向けに、<strong>ローカルLLM（Ollama）によるドキュメントQ&amp;A</strong>と、<strong>確認フロー付きの操作代行</strong>を提供する。プラットフォームの設計書・インストールガイド・<code>CLAUDE.md</code> をベクトル検索（pgvector）で引き当て、その抜粋を根拠として日本語で回答する。加えて、ユーザーが操作の実行を依頼した場合は該当するツールを呼び出し、<strong>実行前に必ず管理者の確認を取ってから</strong>既存APIを内部呼び出しする。</p>
+    <p>外部のLLM APIは一切使わず、推論はすべて <code>ollama</code> コンテナ内で行う（チャット: <code>qwen2.5:3b</code>、埋め込み: <code>nomic-embed-text</code>）。テナント情報・ドキュメントが外部に送信されることはない。</p>
+    <div class="callout">
+      <strong>本機能はPF管理者専用（Platform JWT 必須）で、Phase 1 のスコープである。</strong>テナントユーザー向けの公開は Phase 1 では行わない。操作系ツールは <code>agent_pending_actions</code> に保存され、管理者が確認カードで「実行する」を押すまで実行されない（TTL 10分）。確認カードには呼び出すツール名と引数の全量が表示され、白紙委任にならないようにしている。
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>API エンドポイント</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST</code></td><td><code>/tenants/{tenant_id}/assistant/chat</code></td><td>質問を送信し回答を得る。読み取り専用ツールは即時実行され、操作系ツールは <code>pending_action</code> として確認待ちで返る</td><td>Platform JWT</td></tr>
+          <tr><td><code>POST</code></td><td><code>/tenants/{tenant_id}/assistant/confirm-action</code></td><td>確認待ちのアクションを実行する。期限切れ/未検出は404、ツール未登録は409、ID形式不正は400</td><td>Platform JWT</td></tr>
+          <tr><td><code>POST</code></td><td><code>/platform/assistant/reindex</code></td><td>対象ドキュメントを読み直して <code>doc_chunks</code> を再構築する。対象ファイルが0件なら既存インデックスを消さず500を返す</td><td>Platform JWT</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">CPU推論のため応答に時間がかかるため、nginx 側でこれらのパスのみ <code>proxy_read_timeout 300s</code> を適用している（他の <code>/api/</code> は 60s）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>Phase 1 の対応ドメイン（操作代行ツール）</h2></div>
+    <p>Phase 1 では以下の 3 ドメインを操作代行の対象とする。いずれも新しいビジネスロジックは書かず、既存のルーター関数をそのまま内部呼び出しする（権限・バリデーションを二重実装しない方針）。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>ドメイン</th><th>ツール名</th><th>read_only</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td>プロビジョニングトークン発行</td><td><code>provisioning_token_issue</code></td><td>いいえ（確認必須）</td><td>デバイス登録用トークンを発行する。引数省略時は既定値（100台 / 365日）を使う</td></tr>
+          <tr><td>ダッシュボード設定</td><td><code>dashboard_panel_config_set</code></td><td>いいえ（確認必須）</td><td>センサーごとのパネル種別を設定する</td></tr>
+          <tr><td>アラートルール作成</td><td><code>alert_rule_create</code></td><td>いいえ（確認必須）</td><td>閾値条件付きのアラートルールを作成する</td></tr>
+          <tr><td>（参照系）</td><td><code>tenant_list</code> / <code>tenant_stats_get</code> / <code>tenant_invoice_get</code> / <code>provisioning_token_list</code> / <code>dashboard_panel_config_list</code> / <code>alert_rule_list</code></td><td>はい（即時実行）</td><td>回答の根拠となる現在の状態を取得する</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <strong>テナントIDはモデルの出力を信用しない。</strong>ツールハンドラに渡す <code>tenant_id</code> は常にURLパス由来の値のみを使い、モデルが <code>tool_args</code> に混入させた <code>tenant_id</code> は <code>agent_pending_actions</code> への保存前に除去する（テナント越境防止）。
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>インデックス対象と分割方式</h2></div>
+    <p>対象は <code>docs/design.html</code>・<code>docs/device-guide.html</code>・<code>docs/install-guide.html</code>・<code>docs/superpowers/specs/*.md</code>・<code>CLAUDE.md</code>（<code>plans/</code> は対象外）。HTMLは <code>&lt;h2&gt;</code>/<code>&lt;h3&gt;</code> 単位、Markdownは <code># 〜 ###</code> 単位で分割し、1チャンクが 1200 文字を超える場合は段落境界（無理なら文字数）でさらに分割する。これによりLLMのコンテキスト長を1チャンクで食い潰さないようにしている。</p>
+    <p>core-api コンテナには <code>./docs:/docs:ro</code> と <code>./CLAUDE.md:/CLAUDE.md:ro</code> をバインドマウントする必要がある（マウント漏れのまま再インデックスしても、既存インデックスは消されず 500 エラーになる）。セットアップ手順は <a href="install-guide.html">インストールガイド</a> を参照。</p>
   </div>
 </section>
 

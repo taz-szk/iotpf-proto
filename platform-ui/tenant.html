@@ -821,6 +821,10 @@
                 <template x-if="msg.role === 'pending_action'">
                   <div class="inline-block bg-yellow-50 border border-yellow-300 rounded-lg px-3 py-2 text-sm">
                     <p x-text="msg.content"></p>
+                    <p class="text-xs text-gray-600 mt-1 font-medium" x-text="msg.tool_name"></p>
+                    <template x-for="(v, k) in msg.tool_args" :key="k">
+                      <p class="text-xs text-gray-700"><span x-text="k"></span>: <span class="font-medium" x-text="JSON.stringify(v)"></span></p>
+                    </template>
                     <div class="mt-2 flex gap-2" x-show="!msg.dismissed && !msg.resolved">
                       <button @click="confirmAssistantAction(msg)" :disabled="msg.executing" class="bg-blue-600 text-white text-xs px-3 py-1 rounded disabled:opacity-50">実行する</button>
                       <button @click="msg.dismissed = true" :disabled="msg.executing" class="text-gray-500 text-xs px-3 py-1 disabled:opacity-50">キャンセル</button>
@@ -1491,12 +1495,16 @@
           this.assistantLoading = true;
           try {
             const result = await api.request('POST', `/tenants/${tenantId}/assistant/chat`, { message: question });
-            this.assistantMessages.push({ role: 'assistant', content: result.answer, sources: result.sources });
             if (result.pending_action) {
               this.assistantMessages.push({
                 role: 'pending_action', content: result.answer,
-                pending_action_id: result.pending_action.pending_action_id, dismissed: false,
+                pending_action_id: result.pending_action.pending_action_id,
+                tool_name: result.pending_action.tool_name,
+                tool_args: result.pending_action.tool_args,
+                dismissed: false,
               });
+            } else {
+              this.assistantMessages.push({ role: 'assistant', content: result.answer, sources: result.sources });
             }
           } catch(e) {
             this.assistantMessages.push({ role: 'assistant', content: 'エラー: ' + e.message });
