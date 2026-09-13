@@ -2292,7 +2292,10 @@ sequenceDiagram
   <div class="section">
     <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
     <p>プラットフォーム管理者向けに、<strong>ローカルLLM（Ollama）によるドキュメントQ&amp;A</strong>と、<strong>確認フロー付きの操作代行</strong>を提供する。プラットフォームの設計書・インストールガイド・<code>CLAUDE.md</code> をベクトル検索（pgvector）で引き当て、その抜粋を根拠として日本語で回答する。加えて、ユーザーが操作の実行を依頼した場合は該当するツールを呼び出し、<strong>実行前に必ず管理者の確認を取ってから</strong>既存APIを内部呼び出しする。</p>
-    <p>外部のLLM APIは一切使わず、推論はすべて <code>ollama</code> コンテナ内で行う（チャット: <code>qwen2.5:3b</code>、埋め込み: <code>nomic-embed-text</code>）。テナント情報・ドキュメントが外部に送信されることはない。</p>
+    <p>外部のLLM APIは一切使わず、推論はすべてOllama（チャット: <code>qwen2.5:3b</code>、埋め込み: <code>nomic-embed-text</code>）で行う。テナント情報・ドキュメントが外部に送信されることはない。</p>
+    <div class="callout">
+      <strong>本機能は選択制（デフォルト無効）。</strong>Ollamaの実行には2GB以上のメモリが必要なため、<strong>メインの環境とは別インスタンスで動かすことを前提</strong>とし、docker-composeにはOllamaを同梱しない。プラットフォーム設定画面でOllamaの接続先URLを設定するまでAIアシスタント機能はUI上も非表示のまま。設定はDBの<code>assistant_settings</code>テーブルで管理し、環境変数ではない。
+    </div>
     <div class="callout">
       <strong>本機能はPF管理者専用（Platform JWT 必須）で、Phase 1 のスコープである。</strong>テナントユーザー向けの公開は Phase 1 では行わない。操作系ツールは <code>agent_pending_actions</code> に保存され、管理者が確認カードで「実行する」を押すまで実行されない（TTL 10分）。確認カードには呼び出すツール名と引数の全量が表示され、白紙委任にならないようにしている。
     </div>
@@ -2307,10 +2310,12 @@ sequenceDiagram
           <tr><td><code>POST</code></td><td><code>/tenants/{tenant_id}/assistant/chat</code></td><td>質問を送信し回答を得る。読み取り専用ツールは即時実行され、操作系ツールは <code>pending_action</code> として確認待ちで返る</td><td>Platform JWT</td></tr>
           <tr><td><code>POST</code></td><td><code>/tenants/{tenant_id}/assistant/confirm-action</code></td><td>確認待ちのアクションを実行する。期限切れ/未検出は404、ツール未登録は409、ID形式不正は400</td><td>Platform JWT</td></tr>
           <tr><td><code>POST</code></td><td><code>/platform/assistant/reindex</code></td><td>対象ドキュメントを読み直して <code>doc_chunks</code> を再構築する。対象ファイルが0件なら既存インデックスを消さず500を返す</td><td>Platform JWT</td></tr>
+          <tr><td><code>GET</code>/<code>PUT</code></td><td><code>/platform/assistant/settings</code></td><td>Ollama接続先URL・チャット/埋め込みモデル名の取得・更新。<code>ollama_url</code>が未設定(null)の間は機能全体が無効</td><td>Platform JWT</td></tr>
+          <tr><td><code>POST</code></td><td><code>/platform/assistant/settings/test-connection</code></td><td>指定したURLへの疎通確認（<code>/api/tags</code>を叩きモデル一覧を返す）</td><td>Platform JWT</td></tr>
         </tbody>
       </table>
     </div>
-    <p style="font-size:13px;color:var(--text-3)">CPU推論のため応答に時間がかかるため、nginx 側でこれらのパスのみ <code>proxy_read_timeout 300s</code> を適用している（他の <code>/api/</code> は 60s）。</p>
+    <p style="font-size:13px;color:var(--text-3)">CPU推論のため応答に時間がかかるため、nginx 側でこれらのパスのみ <code>proxy_read_timeout 300s</code> を適用している（他の <code>/api/</code> は 60s）。chat/confirm-action/reindexは<code>ollama_url</code>未設定時に503を返す。</p>
   </div>
 
   <div class="section">

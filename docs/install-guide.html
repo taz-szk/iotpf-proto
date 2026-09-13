@@ -702,9 +702,10 @@ docker compose down -v
 <section class="common-section" id="setup-ai-assistant">
   <h2>🤖 AIアシスタントの初期セットアップ</h2>
   <div class="hero-sub" style="margin-bottom:24px">
-    AIアシスタント（ローカルLLMによるドキュメントQ&amp;A・操作代行）を使うには、
-    通常のインストール手順に加えて以下の4ステップが必要です。OS 共通の手順で、
-    プロジェクトルートで実行します。
+    AIアシスタント（ローカルLLMによるドキュメントQ&amp;A・操作代行）は<strong>選択制の機能</strong>です。
+    Ollama（3B級モデル）の実行には2GB以上のメモリが必要なため、<strong>メインの環境とは別インスタンスで
+    Ollamaを動かすことを強く推奨します</strong>（小規模インスタンスに同居させるとメモリ不足で
+    不安定になります）。OS共通の手順で、プロジェクトルートで実行します。
   </div>
 
   <div class="steps">
@@ -712,24 +713,29 @@ docker compose down -v
     <div class="step">
       <div class="step-num step-num-win">1</div>
       <div class="step-body">
-        <div class="step-title">PostgreSQL イメージを pgvector 対応版に切り替える</div>
+        <div class="step-title">インストーラでAIアシスタントを有効にする（未実施の場合）</div>
         <div class="step-desc">
-          ドキュメントの埋め込みベクトルを保存するため、PostgreSQL に <code>pgvector</code> 拡張が必要です。
-          <code>docker-compose.yml</code> の <code>postgres</code> サービスのイメージを
-          <code>postgres:16-alpine</code> から <code>pgvector/pgvector:pg16</code> に変更します。
+          <code>install-mac.sh</code>・<code>install-ubuntu.sh</code>・<code>install-aws.sh</code>・
+          <code>install-windows.ps1</code>の初回実行時に「AIアシスタント機能を将来使う予定はありますか？」
+          と聞かれ、<code>y</code>と答えると<code>.env</code>の<code>POSTGRES_IMAGE</code>が
+          <code>pgvector/pgvector:pg16</code>に設定されます。既に<code>.env</code>を生成済みで
+          後から有効にしたい場合は、手動で編集してください。
         </div>
         <div class="code-block">
-          <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre>  postgres:
-    <span class="cmt">#  image: postgres:16-alpine   ← 変更前</span>
-    image: pgvector/pgvector:pg16</pre>
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="cmt"># .envに以下の行を追加/変更</span>
+POSTGRES_IMAGE=pgvector/pgvector:pg16
+
+<span class="cmt"># 反映</span>
+docker compose up -d --force-recreate postgres</pre>
         </div>
         <div class="callout callout-ok">
           <span class="callout-icon">✅</span>
           <span class="callout-body"><strong>既存ボリュームはそのまま使えます。</strong>
-          <code>pgvector/pgvector:pg16</code> は同じ PostgreSQL 16 系のため、既存の
-          <code>postgres_data</code> ボリュームと互換です。<strong>データ移行やダンプ・リストアは不要</strong>で、
-          イメージを差し替えて <code>docker compose up -d postgres</code> するだけで切り替わります。</span>
+          <code>pgvector/pgvector:pg16</code>は同じPostgreSQL 16系のため、既存の
+          <code>postgres_data</code>ボリュームと互換です。<strong>データ移行やダンプ・リストアは不要</strong>ですが、
+          alpine→debianのlibc差異によるコレーション互換性のため、切替後に一度
+          <code>REINDEX DATABASE</code>を実行することを推奨します。</span>
         </div>
       </div>
     </div>
@@ -737,14 +743,35 @@ docker compose down -v
     <div class="step">
       <div class="step-num step-num-win">2</div>
       <div class="step-body">
-        <div class="step-title">Ollama コンテナを起動する</div>
-        <div class="step-desc">推論エンジンとして Ollama をコンテナで動かします。内部ネットワークのみに公開され、外部からは直接アクセスできません。</div>
+        <div class="step-title">Ollama用インスタンスを用意する</div>
+        <div class="step-desc">
+          メインの環境とは<strong>別のマシン/インスタンス</strong>にOllamaを立てます。同一VPC/ネットワーク内であれば
+          プライベートIPで通信でき、公開する必要はありません。ローカル開発で同居させたいだけの場合は
+          <code>docker-compose.ollama.yml</code>を使う簡易手順（本ステップの末尾）もあります。
+        </div>
         <div class="code-block">
           <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre>docker compose up -d ollama
+          <pre><span class="cmt"># Ollama専用インスタンス上で実行</span>
+curl -fsSL https://get.docker.com | sudo sh
+docker run -d --name ollama -p 11434:11434 \
+  -v ollama_data:/root/.ollama --restart unless-stopped \
+  ollama/ollama:latest
 
-<span class="cmt"># 起動確認</span>
-docker compose ps ollama</pre>
+docker exec ollama ollama pull qwen2.5:3b
+docker exec ollama ollama pull nomic-embed-text
+docker exec ollama ollama list</pre>
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>セキュリティグループ/ファイアウォールで11434番ポートを
+          メインインスタンスからのみ許可してください。</strong>Ollamaには認証機構が無いため、
+          広く公開すると誰でも推論を実行できてしまいます。</span>
+        </div>
+        <div class="callout callout-info">
+          <span class="callout-icon">💡</span>
+          <span class="callout-body"><strong>ローカル開発で同居させたい場合</strong>は、専用インスタンスの
+          代わりに同一マシンで<code>docker compose -f docker-compose.yml -f docker-compose.ollama.yml up -d</code>
+          を実行し、接続先URLは<code>http://ollama:11434</code>を使ってください（次ステップ）。</span>
         </div>
       </div>
     </div>
@@ -752,26 +779,12 @@ docker compose ps ollama</pre>
     <div class="step">
       <div class="step-num step-num-win">3</div>
       <div class="step-body">
-        <div class="step-title">LLM モデルを取得する</div>
+        <div class="step-title">プラットフォーム設定画面でOllama接続先を設定する</div>
         <div class="step-desc">
-          チャット用モデルと埋め込み用モデルの 2 つを Ollama コンテナ内に取得します。
-          合計で約 2.5 GB のダウンロードが発生します。
-        </div>
-        <div class="code-block">
-          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre><span class="cmt"># チャット（回答生成・ツール呼び出し）用</span>
-docker compose exec ollama ollama pull qwen2.5:3b
-
-<span class="cmt"># 埋め込み（ベクトル検索）用</span>
-docker compose exec ollama ollama pull nomic-embed-text
-
-<span class="cmt"># 取得済みモデルの確認</span>
-docker compose exec ollama ollama list</pre>
-        </div>
-        <div class="callout callout-warn">
-          <span class="callout-icon">⚠️</span>
-          <span class="callout-body">モデル取得は初回のみ必要です。<code>ollama_data</code> ボリュームに保存されるため、
-          <code>docker compose down</code> では消えません（<code>down -v</code> で消えます）。</span>
+          プラットフォーム管理コンソール（<code>/iotairx-console/</code>）の設定画面「AIアシスタント接続設定」で、
+          手順2で用意したOllamaの接続先URL（例: <code>http://172.31.19.73:11434</code>）を入力し、
+          「接続テスト」で疎通を確認してから保存します。<strong>この設定を保存するまでAIアシスタント機能は
+          非表示のまま</strong>で、テナント画面にも影響しません。
         </div>
       </div>
     </div>
@@ -781,7 +794,7 @@ docker compose exec ollama ollama list</pre>
       <div class="step-body">
         <div class="step-title">ドキュメントを再インデックスする</div>
         <div class="step-desc">
-          プラットフォーム管理コンソールの設定画面から「ドキュメント再インデックス」を実行します。
+          同じ設定画面の「ドキュメント再インデックス」を実行します。
           <code>docs/</code> 配下のドキュメントと <code>CLAUDE.md</code> が読み込まれ、
           チャンクごとにベクトル化されて PostgreSQL に保存されます。
         </div>
