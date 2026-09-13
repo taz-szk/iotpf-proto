@@ -44,7 +44,7 @@ def test_answer_question_executes_read_only_tool_and_continues():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", side_effect=responses), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         read_tool = MagicMock(name="tenant_stats_get", read_only=True)
         read_tool.name = "tenant_stats_get"
         read_tool.handler = MagicMock(return_value={"device_count": 5})
@@ -65,7 +65,7 @@ def test_answer_question_creates_pending_action_for_action_tool():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", return_value={"role": "assistant", "content": None, "tool_calls": [tool_call]}), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         action_tool = MagicMock(read_only=False)
         action_tool.name = "alert_rule_create"
         action_tool.description = "アラートルールを作成する"
@@ -94,7 +94,7 @@ def test_execute_pending_action_runs_handler_and_deletes_record():
     mock_db = MagicMock()
     mock_db.query.return_value.filter.return_value.first.return_value = pending
 
-    with patch("app.services.rag.TOOLS") as mock_tools, \
+    with patch("app.services.rag_tools.TOOLS") as mock_tools, \
          patch("app.services.rag.write_audit_log") as mock_audit:
         action_tool = MagicMock()
         action_tool.name = "alert_rule_create"
@@ -145,7 +145,7 @@ def test_execute_pending_action_raises_when_tool_not_registered():
     mock_db = MagicMock()
     mock_db.query.return_value.filter.return_value.first.return_value = pending
 
-    with patch("app.services.rag.TOOLS") as mock_tools:
+    with patch("app.services.rag_tools.TOOLS") as mock_tools:
         mock_tools.__iter__.return_value = iter([])
 
         with pytest.raises(ValueError):
@@ -169,7 +169,7 @@ def test_answer_question_generates_final_answer_when_tool_rounds_exhausted():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", side_effect=responses), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         read_tool = MagicMock(read_only=True)
         read_tool.name = "tenant_stats_get"
         read_tool.handler = MagicMock(return_value={"device_count": 5})
@@ -194,7 +194,7 @@ def test_answer_question_continues_when_read_only_tool_raises():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", side_effect=responses), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         read_tool = MagicMock(read_only=True)
         read_tool.name = "tenant_invoice_get"
         read_tool.handler = MagicMock(side_effect=RuntimeError("Invoice not found"))
@@ -214,7 +214,7 @@ def test_answer_question_strips_tenant_id_from_tool_args_before_storing():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", return_value={"role": "assistant", "content": None, "tool_calls": [tool_call]}), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         action_tool = MagicMock(read_only=False)
         action_tool.name = "alert_rule_create"
         action_tool.description = "アラートルールを作成する"
@@ -240,7 +240,7 @@ def test_answer_question_includes_tool_call_id_in_tool_response_message():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", side_effect=responses) as mock_chat, \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         read_tool = MagicMock(read_only=True)
         read_tool.name = "tenant_stats_get"
         read_tool.handler = MagicMock(return_value={"device_count": 5})
@@ -337,7 +337,7 @@ def test_answer_question_omits_payload_kwarg_when_not_provided():
 
     with patch("app.services.rag.embed", return_value=[0.1] * 768), \
          patch("app.services.rag.chat", side_effect=responses), \
-         patch("app.services.rag.TOOLS") as mock_tools:
+         patch("app.services.rag_tools.TOOLS") as mock_tools:
         read_tool = MagicMock(read_only=True)
         read_tool.name = "tenant_stats_get"
         read_tool.handler = MagicMock(return_value={"device_count": 5})

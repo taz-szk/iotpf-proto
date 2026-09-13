@@ -9,7 +9,6 @@ from app.models.rag import AgentPendingAction
 from app.services.assistant_settings import get_assistant_settings
 from app.services.audit import write_audit_log
 from app.services.ollama_client import chat, embed
-from app.services.rag_tools import TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +68,15 @@ def _sanitize_tool_args(tool_args: dict) -> dict:
     return {k: v for k, v in tool_args.items() if k not in ("tenant_id", "payload")}
 
 
+def _default_tools() -> list:
+    """PF管理者向けのグローバルTOOLSを遅延importで取得する。
+    モジュールトップレベルでrag_toolsをimportすると、rag_tools側がtenant_portal.pyを
+    (直接・tenant経由の両方で)逆importする構造と組み合わさって循環importが発生するため、
+    呼び出し時まで遅延させる（最終レビューで発見・修正）。"""
+    from app.services.rag_tools import TOOLS
+    return TOOLS
+
+
 def answer_question(
     db: Session, tenant_id: str, message: str, requested_by: str,
     tools: list | None = None, payload: dict | None = None,
@@ -83,7 +91,7 @@ def answer_question(
     chat_model = ollama_settings.ollama_chat_model
     embed_model = ollama_settings.ollama_embed_model
 
-    tools = list(tools if tools is not None else TOOLS)
+    tools = list(tools if tools is not None else _default_tools())
     question_embedding = embed(ollama_url, embed_model, message)
     chunks = _search_chunks(db, question_embedding)
 
@@ -169,7 +177,7 @@ def execute_pending_action(
         db.commit()
         return None
 
-    tools = list(tools if tools is not None else TOOLS)
+    tools = list(tools if tools is not None else _default_tools())
     tool = _find_tool(tools, pending.tool_name)
     if tool is None:
         db.delete(pending)
