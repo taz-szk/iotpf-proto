@@ -230,6 +230,9 @@ TOOLS: list[AgentTool] = [
 6. ハンドラの単体テストを追加する（ラップ元のサービス関数の既存テストと同じモックの流儀を揃える）。
 7. 実装計画は「Task: ○○ドメインのツール追加」という1〜2タスク程度の小さい単位で切り出せる規模。Phase 1のような大掛かりなブレスト・設計フェーズは不要——本仕様書の8節・9節が設計の代わりになる。新規ブレストは、確認フローの仕組み自体を変える必要が生じた場合のみ行う。
 
+**テナント管理者向けドメインを追加する場合の分岐（2026-09-13追記）:**
+PF管理者向け（`app/services/rag_tools/<domain>.py`）とは別に、`app/services/rag_tools/tenant/<domain>.py`にテナント自己サービスAPI（`tenant_portal.py`）をラップするツールを追加する。ハンドラは`(tenant_id: str, payload: dict, **kwargs) -> dict`という統一シグネチャとし、`payload`（認証済みテナントJWTペイロード）をそのまま`tenant_portal.py`の関数に渡す（合成payloadは使わない）。`TENANT_TOOLS`（`app/services/rag_tools/tenant/__init__.py`）に追記する。詳細は`docs/superpowers/specs/2026-09-13-tenant-assistant-design.md`を参照。
+
 ---
 
 ## 9. ロードマップ（Phase 2以降の対象ドメイン、未実装）
