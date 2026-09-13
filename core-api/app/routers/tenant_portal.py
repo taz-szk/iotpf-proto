@@ -23,6 +23,7 @@ from app.services.billing import (
 )
 from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
+from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.audit import write_audit_log, log_audit
@@ -1234,3 +1235,49 @@ def delete_device_group_portal(group_id: str, payload: dict = Depends(_require_a
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "group_in_use", "alert_rules": e.rules})
     log_audit("tenant", payload["sub"], payload["email"], "delete_device_group",
               tenant_id=tenant_id, resource_type="device_group", resource_id=group_id)
+
+
+# 注意: rag_tools配下のモジュールは本ファイルのPanelConfigItem/create_alert_rule/create_token等を
+# 再importするため、循環importを避けるためこれらのシンボルが定義済みのファイル末尾でimportする
+# （ファイル先頭に置くと本ファイルの初期化途中で読み込まれ、まだ定義されていない属性の参照でImportErrorになる）。
+from app.services.rag import answer_question, execute_pending_action  # noqa: E402
+from app.services.rag_tools.tenant import TENANT_TOOLS  # noqa: E402
+
+
+class AssistantChatBody(BaseModel):
+    message: str
+
+
+class AssistantConfirmActionBody(BaseModel):
+    pending_action_id: str
+
+
+@router.post("/me/assistant/chat")
+def chat_with_tenant_assistant(body: AssistantChatBody, payload: dict = Depends(_require_admin_or_operator)):
+    with SessionLocal() as db:
+        if not is_assistant_configured(db):
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI assistant is not configured")
+        return answer_question(
+            db, tenant_id=payload["tenant_id"], message=body.message, requested_by=payload["email"],
+            tools=TENANT_TOOLS, payload=payload,
+        )
+
+
+@router.post("/me/assistant/confirm-action")
+def confirm_tenant_assistant_action(body: AssistantConfirmActionBody, payload: dict = Depends(_require_admin_or_operator)):
+    pending_action_id = _validate_uuid(body.pending_action_id, "pending_action_id")
+    with SessionLocal() as db:
+        if not is_assistant_configured(db):
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="AI assistant is not configured")
+        try:
+            result = execute_pending_action(
+                db, tenant_id=payload["tenant_id"], pending_action_id=pending_action_id,
+                tools=TENANT_TOOLS, payload=payload,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        except TypeError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    if result is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending action not found or expired")
+    return {"result": result}
