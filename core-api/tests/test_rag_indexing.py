@@ -1,5 +1,7 @@
 from unittest.mock import patch, mock_open, MagicMock
 
+import pytest
+
 from app.services.rag_indexing import DOCUMENT_GLOBS, reindex_all_documents
 
 
@@ -25,3 +27,11 @@ def test_reindex_all_documents_replaces_existing_chunks():
     assert count == mock_db.add.call_count
     mock_embed.assert_called()
     mock_db.commit.assert_called_once()
+
+
+def test_reindex_all_documents_raises_when_no_target_files_found():
+    mock_db = MagicMock()
+    with patch("app.services.rag_indexing._iter_target_files", return_value=[]):
+        with pytest.raises(RuntimeError):
+            reindex_all_documents(mock_db)
+    mock_db.query.return_value.delete.assert_not_called()

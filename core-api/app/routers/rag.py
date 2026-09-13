@@ -47,11 +47,14 @@ def chat_with_assistant(tenant_id: str, body: ChatMessage, payload: dict = Depen
 @router.post("/tenants/{tenant_id}/assistant/confirm-action")
 def confirm_assistant_action(tenant_id: str, body: ConfirmActionBody, payload: dict = Depends(_require_platform)):
     tenant_uuid = _parse_uuid(tenant_id, "tenant_id")
+    pending_uuid = _parse_uuid(body.pending_action_id, "pending_action_id")
     with SessionLocal() as db:
         try:
-            result = execute_pending_action(db, tenant_id=str(tenant_uuid), pending_action_id=body.pending_action_id)
+            result = execute_pending_action(db, tenant_id=str(tenant_uuid), pending_action_id=str(pending_uuid))
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
+        except TypeError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending action not found or expired")
     return {"result": result}
@@ -60,5 +63,8 @@ def confirm_assistant_action(tenant_id: str, body: ConfirmActionBody, payload: d
 @router.post("/platform/assistant/reindex")
 def reindex_documents(_: dict = Depends(_require_platform)):
     with SessionLocal() as db:
-        count = reindex_all_documents(db)
+        try:
+            count = reindex_all_documents(db)
+        except RuntimeError as e:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
     return {"chunk_count": count}

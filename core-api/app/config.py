@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     ollama_url: str = "http://ollama:11434"
     ollama_chat_model: str = "qwen2.5:3b"
     ollama_embed_model: str = "nomic-embed-text"
+    ollama_num_ctx: int = 8192
 
     class Config:
         env_file = ".env"

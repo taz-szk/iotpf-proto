@@ -5,6 +5,8 @@ from app.services.auth import create_access_token
 
 client = TestClient(app)
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
+PENDING_ACTION_ID = "22222222-2222-2222-2222-222222222222"
+MISSING_PENDING_ACTION_ID = "33333333-3333-3333-3333-333333333333"
 
 
 def _platform_token():
@@ -51,7 +53,7 @@ def test_confirm_action_executes_and_returns_result():
         mock_session.return_value = _session_ctx()
         resp = client.post(
             f"/tenants/{TENANT_ID}/assistant/confirm-action",
-            json={"pending_action_id": "pending-1"},
+            json={"pending_action_id": PENDING_ACTION_ID},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 200
@@ -65,7 +67,7 @@ def test_confirm_action_returns_404_when_not_found():
         mock_session.return_value = _session_ctx()
         resp = client.post(
             f"/tenants/{TENANT_ID}/assistant/confirm-action",
-            json={"pending_action_id": "missing"},
+            json={"pending_action_id": MISSING_PENDING_ACTION_ID},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 404
@@ -77,7 +79,7 @@ def test_confirm_action_returns_409_when_tool_no_longer_registered():
         mock_session.return_value = _session_ctx()
         resp = client.post(
             f"/tenants/{TENANT_ID}/assistant/confirm-action",
-            json={"pending_action_id": "pending-1"},
+            json={"pending_action_id": PENDING_ACTION_ID},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 409
@@ -100,3 +102,23 @@ def test_reindex_documents_returns_chunk_count():
     assert resp.status_code == 200
     assert resp.json() == {"chunk_count": 42}
     mock_reindex.assert_called_once_with(mock_db)
+
+
+def test_reindex_documents_returns_500_when_no_documents_found():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.reindex_all_documents", side_effect=RuntimeError("No target documents found")):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            "/platform/assistant/reindex",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 500
+
+
+def test_confirm_action_returns_400_for_invalid_pending_action_id_format():
+    resp = client.post(
+        f"/tenants/{TENANT_ID}/assistant/confirm-action",
+        json={"pending_action_id": "not-a-uuid"},
+        headers={"Authorization": f"Bearer {_platform_token()}"},
+    )
+    assert resp.status_code == 400

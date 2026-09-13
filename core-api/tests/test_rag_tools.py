@@ -48,6 +48,21 @@ def test_provisioning_token_issue_calls_existing_endpoint():
     assert call_args.kwargs["payload"].get("role") is None or call_args.kwargs["payload"].get("type") == "platform"
 
 
+def test_provisioning_token_issue_uses_default_values_when_args_omitted():
+    """引数を省略した場合、TokenCreateの既定値(100台/365日)が使われ、
+    Noneを明示的に渡して番兵値(無制限)を踏み抜かないことを検証する。"""
+    from app.services.rag_tools.provisioning import issue_provisioning_token
+
+    with patch("app.services.rag_tools.provisioning.create_provisioning_token") as mock_create:
+        mock_create.return_value = MagicMock(id="token-1")
+        issue_provisioning_token(tenant_id="tenant-1")
+
+    mock_create.assert_called_once()
+    body = mock_create.call_args.kwargs["body"]
+    assert body.max_devices == 100
+    assert body.expires_days == 365
+
+
 def test_alert_rule_create_calls_existing_endpoint():
     from app.services.rag_tools.alerts import create_alert_rule_tool
 

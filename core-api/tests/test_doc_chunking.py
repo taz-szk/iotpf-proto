@@ -63,3 +63,24 @@ def test_chunk_html_returns_single_chunk_when_no_headings():
     assert len(chunks) == 1
     assert chunks[0]["heading"] is None
     assert "見出しが全く無い本文です" in chunks[0]["content"]
+
+
+def test_chunk_html_splits_oversized_chunk():
+    paragraphs = [f"段落{i}のテキストです。" * 30 for i in range(10)]
+    body = "\n\n".join(paragraphs)
+    content = f"<h2>長いセクション</h2><p>{body}</p>"
+    chunks = chunk_html(content)
+    assert len(chunks) > 1
+    for c in chunks:
+        assert len(c["content"]) <= 1200
+    assert all(c["heading"].startswith("長いセクション") for c in chunks)
+
+
+def test_chunk_markdown_splits_oversized_chunk_by_paragraph():
+    paragraphs = [f"段落{i}のテキストです。" * 30 for i in range(10)]
+    body = "\n\n".join(paragraphs)
+    content = f"## 長いセクション\n\n{body}"
+    chunks = chunk_markdown(content)
+    assert len(chunks) > 1
+    for c in chunks:
+        assert len(c["content"]) <= 1200

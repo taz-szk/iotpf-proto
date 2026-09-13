@@ -26,11 +26,19 @@ def _iter_target_files() -> list[Path]:
 
 def reindex_all_documents(db: Session) -> int:
     """対象ドキュメント全てを読み直し、doc_chunksを全削除→再構築する。
-    戻り値は生成したチャンク数。"""
+    戻り値は生成したチャンク数。対象ファイルが1件も見つからない場合は、
+    既存の(正常な)インデックスを誤って消さないよう、削除前に例外を送出する。"""
+    target_files = _iter_target_files()
+    if not target_files:
+        raise RuntimeError(
+            f"No target documents found under {REPO_ROOT} (globs: {DOCUMENT_GLOBS}). "
+            "docs/ と CLAUDE.md がコンテナにマウントされているか確認してください。"
+        )
+
     db.query(DocChunk).delete()
 
     count = 0
-    for path in _iter_target_files():
+    for path in target_files:
         with open(path, encoding="utf-8") as f:
             content = f.read()
 

@@ -147,3 +147,119 @@ def test_execute_pending_action_raises_when_tool_not_registered():
             execute_pending_action(mock_db, tenant_id="tenant-1", pending_action_id="pending-1")
 
     mock_db.delete.assert_called_once_with(pending)
+
+
+def test_answer_question_generates_final_answer_when_tool_rounds_exhausted():
+    """往復上限(2回)に達した場合、ツール無しでもう一度chatを呼び最終回答を生成する(仕様§4.1.5)。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call_1 = {"id": "call-1", "function": {"name": "tenant_stats_get", "arguments": "{}"}}
+    tool_call_2 = {"id": "call-2", "function": {"name": "tenant_stats_get", "arguments": "{}"}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call_1]},
+        {"role": "assistant", "content": None, "tool_calls": [tool_call_2]},
+        {"role": "assistant", "content": "上限到達後の最終回答です", "tool_calls": None},
+    ]
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses), \
+         patch("app.services.rag.TOOLS") as mock_tools:
+        read_tool = MagicMock(read_only=True)
+        read_tool.name = "tenant_stats_get"
+        read_tool.handler = MagicMock(return_value={"device_count": 5})
+        mock_tools.__iter__.return_value = iter([read_tool])
+
+        result = answer_question(mock_db, tenant_id="tenant-1", message="統計は？", requested_by="admin@example.com")
+
+    assert result["answer"] == "上限到達後の最終回答です"
+    assert result["pending_action"] is None
+
+
+def test_answer_question_continues_when_read_only_tool_raises():
+    """read_onlyツールハンドラが例外を送出しても、チャット全体は落ちずエラー内容をモデルに渡して継続する。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-1", "function": {"name": "tenant_invoice_get", "arguments": '{"target_year_month": "2026-01"}'}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "請求書が見つかりませんでした", "tool_calls": None},
+    ]
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses), \
+         patch("app.services.rag.TOOLS") as mock_tools:
+        read_tool = MagicMock(read_only=True)
+        read_tool.name = "tenant_invoice_get"
+        read_tool.handler = MagicMock(side_effect=RuntimeError("Invoice not found"))
+        mock_tools.__iter__.return_value = iter([read_tool])
+
+        result = answer_question(mock_db, tenant_id="tenant-1", message="1月の請求書は？", requested_by="admin@example.com")
+
+    assert result["answer"] == "請求書が見つかりませんでした"
+
+
+def test_answer_question_strips_tenant_id_from_tool_args_before_storing():
+    """モデルがtool_argsにtenant_idを混入させても、pending_actionへの保存前に除去される。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-1", "function": {"name": "alert_rule_create", "arguments": '{"sensor_key": "temperature", "condition": "above", "tenant_id": "other-tenant"}'}}
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", return_value={"role": "assistant", "content": None, "tool_calls": [tool_call]}), \
+         patch("app.services.rag.TOOLS") as mock_tools:
+        action_tool = MagicMock(read_only=False)
+        action_tool.name = "alert_rule_create"
+        action_tool.description = "アラートルールを作成する"
+        mock_tools.__iter__.return_value = iter([action_tool])
+
+        result = answer_question(mock_db, tenant_id="tenant-1", message="アラート作って", requested_by="admin@example.com")
+
+    added = mock_db.add.call_args[0][0]
+    assert "tenant_id" not in added.tool_args
+    assert result["pending_action"]["tool_args"] == {"sensor_key": "temperature", "condition": "above"}
+
+
+def test_answer_question_includes_tool_call_id_in_tool_response_message():
+    """OpenAI互換のtoolロールメッセージにtool_call_idが付与される。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-abc", "function": {"name": "tenant_stats_get", "arguments": "{}"}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "回答です", "tool_calls": None},
+    ]
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses) as mock_chat, \
+         patch("app.services.rag.TOOLS") as mock_tools:
+        read_tool = MagicMock(read_only=True)
+        read_tool.name = "tenant_stats_get"
+        read_tool.handler = MagicMock(return_value={"device_count": 5})
+        mock_tools.__iter__.return_value = iter([read_tool])
+
+        answer_question(mock_db, tenant_id="tenant-1", message="統計は？", requested_by="admin@example.com")
+
+    second_call_messages = mock_chat.call_args_list[1].kwargs["messages"]
+    tool_messages = [m for m in second_call_messages if m["role"] == "tool"]
+    assert len(tool_messages) == 1
+    assert tool_messages[0]["tool_call_id"] == "call-abc"
+
+
+def test_execute_pending_action_returns_none_and_deletes_when_expired():
+    """期限切れのpending_actionはNoneを返し、レコードを削除する（仕様§10の明示要件）。"""
+    pending = MagicMock()
+    pending.tool_name = "alert_rule_create"
+    pending.expires_at.__gt__ = lambda self, other: False
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = pending
+
+    result = execute_pending_action(mock_db, tenant_id="tenant-1", pending_action_id="pending-1")
+
+    assert result is None
+    mock_db.delete.assert_called_once_with(pending)
+    mock_db.commit.assert_called_once()

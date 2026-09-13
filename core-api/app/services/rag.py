@@ -1,4 +1,5 @@
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import text
@@ -8,6 +9,8 @@ from app.models.rag import AgentPendingAction
 from app.services.audit import write_audit_log
 from app.services.ollama_client import chat, embed
 from app.services.rag_tools import TOOLS
+
+logger = logging.getLogger(__name__)
 
 _MAX_TOOL_ROUNDS = 2
 _TOP_K_CHUNKS = 5
@@ -57,6 +60,13 @@ def _find_tool(tools: list, name: str):
     return None
 
 
+def _sanitize_tool_args(tool_args: dict) -> dict:
+    """モデルが返したtool_argsから'tenant_id'キーを除去する。
+    ハンドラのtenant_idは常に呼び出し元のURLパス由来の値のみを使い、
+    モデルが返した値は信用しない（agent_pending_actionsへの永続化前にも適用する）。"""
+    return {k: v for k, v in tool_args.items() if k != "tenant_id"}
+
+
 def answer_question(db: Session, tenant_id: str, message: str, requested_by: str) -> dict:
     """質問に回答する。読み取り専用ツールは即実行し、アクション実行ツールは
     pending_actionとして保存し確認待ちにする。
@@ -82,19 +92,24 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
             return {"answer": response.get("content") or "", "sources": sources, "pending_action": None}
 
         tool_call = response["tool_calls"][0]
+        tool_call_id = tool_call.get("id")
         tool_name = tool_call["function"]["name"]
-        tool_args = json.loads(tool_call["function"]["arguments"] or "{}")
+        tool_args = _sanitize_tool_args(json.loads(tool_call["function"]["arguments"] or "{}"))
         tool = _find_tool(tools, tool_name)
 
         if tool is None:
-            messages.append({"role": "assistant", "content": None, "tool_calls": response["tool_calls"]})
-            messages.append({"role": "tool", "content": json.dumps({"error": "unknown tool"})})
+            messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
+            messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps({"error": "unknown tool"})})
             continue
 
         if tool.read_only:
-            result = tool.handler(tenant_id=tenant_id, **tool_args)
-            messages.append({"role": "assistant", "content": None, "tool_calls": response["tool_calls"]})
-            messages.append({"role": "tool", "content": json.dumps(result, default=str)})
+            try:
+                result = tool.handler(tenant_id=tenant_id, **tool_args)
+            except Exception as e:
+                logger.warning("assistant tool %s failed: %s", tool_name, e)
+                result = {"error": f"ツール実行に失敗しました: {type(e).__name__}"}
+            messages.append({"role": "assistant", "content": None, "tool_calls": [tool_call]})
+            messages.append({"role": "tool", "tool_call_id": tool_call_id, "content": json.dumps(result, default=str)})
             continue
 
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=_PENDING_ACTION_TTL_MINUTES)
@@ -115,7 +130,10 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
             },
         }
 
-    return {"answer": response.get("content") or "", "sources": sources, "pending_action": None}
+    # 往復上限に達した場合、ツールを渡さずもう一度呼んで最終回答を生成させる
+    # （仕様書§4.1.5: 「そこまでに得られた情報だけで最終回答を生成させる」）
+    final = chat(messages=messages)
+    return {"answer": final.get("content") or "", "sources": sources, "pending_action": None}
 
 
 def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
@@ -139,7 +157,8 @@ def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
         db.commit()
         raise ValueError(f"Tool '{pending.tool_name}' is no longer registered")
 
-    result = tool.handler(tenant_id=tenant_id, **pending.tool_args)
+    tool_args = _sanitize_tool_args(pending.tool_args)
+    result = tool.handler(tenant_id=tenant_id, **tool_args)
 
     write_audit_log(
         db, "platform", "00000000-0000-0000-0000-000000000000", pending.requested_by,

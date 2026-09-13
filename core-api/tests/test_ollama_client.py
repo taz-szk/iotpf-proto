@@ -46,6 +46,18 @@ def test_chat_includes_tools_when_provided():
     assert call.kwargs["json"]["tools"] == tools
 
 
+def test_chat_includes_num_ctx_option():
+    mock_resp = MagicMock(status_code=200)
+    mock_resp.json.return_value = {
+        "choices": [{"message": {"role": "assistant", "content": "回答です", "tool_calls": None}}]
+    }
+    with patch("app.services.ollama_client.httpx.post", return_value=mock_resp) as mock_post:
+        chat(messages=[{"role": "user", "content": "質問"}])
+
+    call = mock_post.call_args
+    assert call.kwargs["json"]["options"]["num_ctx"] == 8192
+
+
 def test_chat_raises_on_error_status():
     mock_resp = MagicMock(status_code=500)
     mock_resp.raise_for_status.side_effect = Exception("ollama down")

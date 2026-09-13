@@ -194,6 +194,8 @@ services:
     volumes:
       - ./certs/ca/root_ca.crt:/certs/ca/root_ca.crt:ro
       - step_ca_data:/home/step:ro
+      - ./docs:/docs:ro
+      - ./CLAUDE.md:/CLAUDE.md:ro
     environment:
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
       INFLUXDB_URL: "http://influxdb:8086"

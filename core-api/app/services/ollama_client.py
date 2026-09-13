@@ -17,7 +17,11 @@ def embed(text: str) -> list[float]:
 def chat(messages: list[dict], tools: list[dict] | None = None) -> dict:
     """OllamaのOpenAI互換チャットエンドポイントを呼び、assistantメッセージ部分を返す。
     戻り値の形: {"role": "assistant", "content": str | None, "tool_calls": list[dict] | None}"""
-    body = {"model": settings.ollama_chat_model, "messages": messages}
+    body = {
+        "model": settings.ollama_chat_model,
+        "messages": messages,
+        "options": {"num_ctx": settings.ollama_num_ctx},
+    }
     if tools:
         body["tools"] = tools
     resp = httpx.post(

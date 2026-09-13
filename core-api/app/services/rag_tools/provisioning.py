@@ -9,9 +9,18 @@ _SYSTEM_PAYLOAD = {"sub": "00000000-0000-0000-0000-000000000000", "email": "assi
 
 
 def issue_provisioning_token(tenant_id: str, max_devices: int | None = None, expires_days: int | None = None) -> dict:
+    # TokenCreateはmax_devices/expires_daysにNoneを明示的に渡すと「無制限」の
+    # 番兵値として扱う。引数省略時にNoneを渡すと意図せず無制限トークンが
+    # 発行されてしまうため、指定されたフィールドのみをTokenCreateに渡す
+    # （未指定ならTokenCreate自身のデフォルト値100/365日が使われる）。
+    body_kwargs: dict = {}
+    if max_devices is not None:
+        body_kwargs["max_devices"] = max_devices
+    if expires_days is not None:
+        body_kwargs["expires_days"] = expires_days
     token = create_provisioning_token(
         tenant_id=tenant_id,
-        body=TokenCreate(max_devices=max_devices, expires_days=expires_days),
+        body=TokenCreate(**body_kwargs),
         payload=_SYSTEM_PAYLOAD,
     )
     return token.model_dump() if hasattr(token, "model_dump") else dict(token)
