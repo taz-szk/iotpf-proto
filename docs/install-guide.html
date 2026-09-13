@@ -822,6 +822,88 @@ docker exec ollama ollama list</pre>
   </div>
 </section>
 
+<!-- ==================== 既存環境のアップグレード（v2.0.0以前→v2.0.1） ==================== -->
+<section class="common-section" id="upgrade-v201">
+  <h2>⬆️ 既存環境をv2.0.1にアップグレードする手順</h2>
+  <div class="hero-sub" style="margin-bottom:24px">
+    v2.0.0以前の環境で、AIアシスタント機能を<strong>Ollama同梱・環境変数ベース</strong>の旧構成で
+    先行導入していた場合の移行手順です。新規インストールの場合は上記「AIアシスタントの初期セットアップ」
+    をそのまま実施すればよく、本セクションは不要です。
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title">サーバー上の手動編集をリセットしてpullする</div>
+        <div class="step-desc">
+          旧構成のトラブルシューティングで<code>docker-compose.yml</code>・<code>nginx/conf.d/api.conf</code>・
+          <code>core-api/app/services/ollama_client.py</code>を直接編集していた場合、そのままでは
+          <code>git pull</code>が競合します。新しいリポジトリ版がこれらを正しく置き換えるため、
+          手動編集は破棄して問題ありません。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>cd ~/iotpf-proto
+git status
+git checkout -- docker-compose.yml nginx/conf.d/api.conf core-api/app/services/ollama_client.py
+git pull origin main</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title"><code>.env</code>に<code>POSTGRES_IMAGE</code>を追加する</div>
+        <div class="step-desc">
+          新しい<code>docker-compose.yml</code>は<code>${POSTGRES_IMAGE:-postgres:16-alpine}</code>という
+          書き方に変わっている。<code>.env</code>はgit管理外のため自動更新されない。
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>これを忘れると次の<code>docker compose up -d</code>で
+          postgresイメージが意図せず<code>postgres:16-alpine</code>（pgvector非対応）に巻き戻ります。</strong>
+          既にpgvector運用中の環境では必ず先に設定してください。</span>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>echo "POSTGRES_IMAGE=pgvector/pgvector:pg16" &gt;&gt; .env
+grep POSTGRES_IMAGE .env</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">3</div>
+      <div class="step-body">
+        <div class="step-title">反映する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose up -d
+docker compose up -d --build core-api
+docker compose ps postgres   <span class="cmt"># イメージがpgvector/pgvector:pg16のままか確認</span></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">4</div>
+      <div class="step-body">
+        <div class="step-title">Ollama接続先をプラットフォーム設定画面で再設定する</div>
+        <div class="step-desc">
+          旧構成の<code>OLLAMA_URL</code>等の環境変数は廃止された。プラットフォーム管理コンソール
+          （<code>/iotairx-console/</code>）の設定画面「AIアシスタント接続設定」で、Ollama専用インスタンスの
+          接続先URL・チャットモデル・埋め込みモデルを入力し、「接続テスト」で疎通確認後に保存する。
+          保存するまでAIアシスタントタブは非表示のまま。
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
 </main>
 </div><!-- /wrap -->
 
