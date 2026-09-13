@@ -126,3 +126,18 @@ def test_migrate_create_rag_tables_executes():
     assert "CREATE EXTENSION IF NOT EXISTS vector" in sql_calls
     assert "doc_chunks" in sql_calls and "VECTOR(768)" in sql_calls
     assert "agent_pending_actions" in sql_calls and "JSONB" in sql_calls
+
+
+def test_migrate_create_assistant_settings_executes():
+    from app.database import migrate_create_assistant_settings
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        migrate_create_assistant_settings()
+    sql_calls = _sql_text(mock_conn.execute.call_args_list)
+    assert "assistant_settings" in sql_calls
+    assert "ollama_url" in sql_calls
+    assert "ollama_chat_model" in sql_calls and "qwen2.5:3b" in sql_calls
+    assert "INSERT INTO assistant_settings" in sql_calls

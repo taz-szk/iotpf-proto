@@ -249,6 +249,26 @@ def test_answer_question_includes_tool_call_id_in_tool_response_message():
     assert tool_messages[0]["tool_call_id"] == "call-abc"
 
 
+def test_answer_question_passes_db_configured_ollama_url_and_models():
+    """assistant_settingsから取得したollama_url/モデル名がembed()/chat()に正しく渡される。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+    settings_row = MagicMock(
+        ollama_url="http://172.31.19.73:11434",
+        ollama_chat_model="qwen2.5:3b",
+        ollama_embed_model="nomic-embed-text",
+    )
+    mock_db.query.return_value.filter.return_value.first.return_value = settings_row
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768) as mock_embed, \
+         patch("app.services.rag.chat", return_value={"role": "assistant", "content": "回答です", "tool_calls": None}) as mock_chat:
+        answer_question(mock_db, tenant_id="tenant-1", message="質問です", requested_by="admin@example.com")
+
+    mock_embed.assert_called_once_with("http://172.31.19.73:11434", "nomic-embed-text", "質問です")
+    assert mock_chat.call_args.args[0] == "http://172.31.19.73:11434"
+    assert mock_chat.call_args.args[1] == "qwen2.5:3b"
+
+
 def test_execute_pending_action_returns_none_and_deletes_when_expired():
     """期限切れのpending_actionはNoneを返し、レコードを削除する（仕様§10の明示要件）。"""
     pending = MagicMock()

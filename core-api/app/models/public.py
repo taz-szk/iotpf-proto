@@ -46,6 +46,13 @@ class MfaSettings(Base):
     platform_required = Column(Boolean, nullable=False, default=False)
     tenant_required = Column(Boolean, nullable=False, default=False)
 
+class AssistantSettings(Base):
+    __tablename__ = "assistant_settings"
+    id = Column(Integer, primary_key=True, default=1)
+    ollama_url = Column(String(500), nullable=True)
+    ollama_chat_model = Column(String(100), nullable=False, default="qwen2.5:3b")
+    ollama_embed_model = Column(String(100), nullable=False, default="nomic-embed-text")
+
 class DashboardPanelConfig(Base):
     __tablename__ = "dashboard_panel_configs"
     id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

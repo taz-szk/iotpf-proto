@@ -487,6 +487,26 @@ def migrate_add_data_retention_columns() -> None:
         conn.commit()
 
 
+def migrate_create_assistant_settings() -> None:
+    """AIアシスタントのOllama接続設定テーブルを作成する（べき等）。
+    ollama_urlがNULLの間はアシスタント機能全体が未設定として無効化される。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS assistant_settings (
+                id                 INTEGER PRIMARY KEY DEFAULT 1,
+                ollama_url         VARCHAR(500),
+                ollama_chat_model  VARCHAR(100) NOT NULL DEFAULT 'qwen2.5:3b',
+                ollama_embed_model VARCHAR(100) NOT NULL DEFAULT 'nomic-embed-text',
+                CHECK (id = 1)
+            )
+        """))
+        conn.execute(text("""
+            INSERT INTO assistant_settings (id) VALUES (1)
+            ON CONFLICT (id) DO NOTHING
+        """))
+        conn.commit()
+
+
 def migrate_create_rag_tables() -> None:
     """RAGアシスタント機能用のテーブル（doc_chunks, agent_pending_actions）を
     作成する（べき等）。pgvector拡張の有効化も含む。"""

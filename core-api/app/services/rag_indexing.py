@@ -3,6 +3,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.models.rag import DocChunk
+from app.services.assistant_settings import get_assistant_settings
 from app.services.doc_chunking import chunk_html, chunk_markdown
 from app.services.ollama_client import embed
 
@@ -35,6 +36,10 @@ def reindex_all_documents(db: Session) -> int:
             "docs/ と CLAUDE.md がコンテナにマウントされているか確認してください。"
         )
 
+    settings = get_assistant_settings(db)
+    ollama_url = settings.ollama_url
+    embed_model = settings.ollama_embed_model
+
     db.query(DocChunk).delete()
 
     count = 0
@@ -49,7 +54,7 @@ def reindex_all_documents(db: Session) -> int:
 
         source_path = str(path.relative_to(REPO_ROOT))
         for chunk in chunks:
-            vector = embed(chunk["content"])
+            vector = embed(ollama_url, embed_model, chunk["content"])
             db.add(DocChunk(
                 source_path=source_path,
                 heading=chunk["heading"],

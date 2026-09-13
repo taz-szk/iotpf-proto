@@ -6,6 +6,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.rag import AgentPendingAction
+from app.services.assistant_settings import get_assistant_settings
 from app.services.audit import write_audit_log
 from app.services.ollama_client import chat, embed
 from app.services.rag_tools import TOOLS
@@ -71,8 +72,13 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
     """質問に回答する。読み取り専用ツールは即実行し、アクション実行ツールは
     pending_actionとして保存し確認待ちにする。
     戻り値: {"answer": str, "sources": list[dict], "pending_action": dict | None}"""
+    ollama_settings = get_assistant_settings(db)
+    ollama_url = ollama_settings.ollama_url
+    chat_model = ollama_settings.ollama_chat_model
+    embed_model = ollama_settings.ollama_embed_model
+
     tools = list(TOOLS)
-    question_embedding = embed(message)
+    question_embedding = embed(ollama_url, embed_model, message)
     chunks = _search_chunks(db, question_embedding)
 
     context_text = "\n\n".join(
@@ -86,7 +92,7 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
     ]
 
     for _ in range(_MAX_TOOL_ROUNDS):
-        response = chat(messages=messages, tools=_tool_schemas(tools))
+        response = chat(ollama_url, chat_model, messages=messages, tools=_tool_schemas(tools))
 
         if not response.get("tool_calls"):
             return {"answer": response.get("content") or "", "sources": sources, "pending_action": None}
@@ -132,7 +138,7 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
 
     # 往復上限に達した場合、ツールを渡さずもう一度呼んで最終回答を生成させる
     # （仕様書§4.1.5: 「そこまでに得られた情報だけで最終回答を生成させる」）
-    final = chat(messages=messages)
+    final = chat(ollama_url, chat_model, messages=messages)
     return {"answer": final.get("content") or "", "sources": sources, "pending_action": None}
 
 

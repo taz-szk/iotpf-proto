@@ -122,3 +122,102 @@ def test_confirm_action_returns_400_for_invalid_pending_action_id_format():
         headers={"Authorization": f"Bearer {_platform_token()}"},
     )
     assert resp.status_code == 400
+
+
+def test_chat_returns_503_when_not_configured():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.is_assistant_configured", return_value=False):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/assistant/chat",
+            json={"message": "質問"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 503
+
+
+def test_confirm_action_returns_503_when_not_configured():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.is_assistant_configured", return_value=False):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            f"/tenants/{TENANT_ID}/assistant/confirm-action",
+            json={"pending_action_id": PENDING_ACTION_ID},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 503
+
+
+def test_reindex_returns_503_when_not_configured():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.is_assistant_configured", return_value=False):
+        mock_session.return_value = _session_ctx()
+        resp = client.post(
+            "/platform/assistant/reindex",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 503
+
+
+def test_get_assistant_settings_requires_platform_auth():
+    resp = client.get("/platform/assistant/settings")
+    assert resp.status_code == 401
+
+
+def test_get_assistant_settings_returns_current_values():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.get_assistant_settings") as mock_get:
+        mock_get.return_value = MagicMock(ollama_url="http://172.31.19.73:11434", ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
+        mock_session.return_value = _session_ctx()
+        resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["ollama_url"] == "http://172.31.19.73:11434"
+    assert body["configured"] is True
+
+
+def test_get_assistant_settings_configured_false_when_url_none():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.get_assistant_settings") as mock_get:
+        mock_get.return_value = MagicMock(ollama_url=None, ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
+        mock_session.return_value = _session_ctx()
+        resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
+    assert resp.json()["configured"] is False
+
+
+def test_update_assistant_settings_requires_platform_auth():
+    resp = client.put("/platform/assistant/settings", json={"ollama_url": "http://x:11434"})
+    assert resp.status_code == 401
+
+
+def test_update_assistant_settings_saves_and_returns_result():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.update_assistant_settings", return_value={
+             "ollama_url": "http://172.31.19.73:11434", "ollama_chat_model": "qwen2.5:3b", "ollama_embed_model": "nomic-embed-text",
+         }) as mock_update:
+        mock_session.return_value = _session_ctx()
+        resp = client.put(
+            "/platform/assistant/settings",
+            json={"ollama_url": "http://172.31.19.73:11434"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["configured"] is True
+    mock_update.assert_called_once()
+
+
+def test_test_connection_requires_platform_auth():
+    resp = client.post("/platform/assistant/settings/test-connection", json={"ollama_url": "http://x:11434"})
+    assert resp.status_code == 401
+
+
+def test_test_connection_returns_ok_result():
+    with patch("app.routers.rag.test_ollama_connection", return_value={"ok": True, "models": ["qwen2.5:3b"]}) as mock_test:
+        resp = client.post(
+            "/platform/assistant/settings/test-connection",
+            json={"ollama_url": "http://172.31.19.73:11434"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"ok": True, "models": ["qwen2.5:3b"]}
+    mock_test.assert_called_once_with("http://172.31.19.73:11434")
