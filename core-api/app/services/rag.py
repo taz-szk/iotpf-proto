@@ -63,22 +63,27 @@ def _find_tool(tools: list, name: str):
 
 
 def _sanitize_tool_args(tool_args: dict) -> dict:
-    """モデルが返したtool_argsから'tenant_id'キーを除去する。
-    ハンドラのtenant_idは常に呼び出し元のURLパス由来の値のみを使い、
+    """モデルが返したtool_argsから'tenant_id'/'payload'キーを除去する。
+    ハンドラのtenant_id/payloadは常に呼び出し元の認証済みコンテキスト由来の値のみを使い、
     モデルが返した値は信用しない（agent_pending_actionsへの永続化前にも適用する）。"""
-    return {k: v for k, v in tool_args.items() if k != "tenant_id"}
+    return {k: v for k, v in tool_args.items() if k not in ("tenant_id", "payload")}
 
 
-def answer_question(db: Session, tenant_id: str, message: str, requested_by: str) -> dict:
+def answer_question(
+    db: Session, tenant_id: str, message: str, requested_by: str,
+    tools: list | None = None, payload: dict | None = None,
+) -> dict:
     """質問に回答する。読み取り専用ツールは即実行し、アクション実行ツールは
     pending_actionとして保存し確認待ちにする。
+    tools省略時はPF管理者向けのグローバルTOOLSを使う。payloadはテナント向け呼び出し時のみ
+    認証済みJWTペイロードを渡す（PF管理者向けはNoneのまま、ハンドラにpayloadキーワード自体を渡さない）。
     戻り値: {"answer": str, "sources": list[dict], "pending_action": dict | None}"""
     ollama_settings = get_assistant_settings(db)
     ollama_url = ollama_settings.ollama_url
     chat_model = ollama_settings.ollama_chat_model
     embed_model = ollama_settings.ollama_embed_model
 
-    tools = list(TOOLS)
+    tools = list(tools if tools is not None else TOOLS)
     question_embedding = embed(ollama_url, embed_model, message)
     chunks = _search_chunks(db, question_embedding)
 
@@ -110,8 +115,11 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
             continue
 
         if tool.read_only:
+            handler_kwargs = {"tenant_id": tenant_id, **tool_args}
+            if payload is not None:
+                handler_kwargs["payload"] = payload
             try:
-                result = tool.handler(tenant_id=tenant_id, **tool_args)
+                result = tool.handler(**handler_kwargs)
             except Exception as e:
                 logger.warning("assistant tool %s failed: %s", tool_name, e)
                 result = {"error": f"ツール実行に失敗しました: {type(e).__name__}"}
@@ -143,9 +151,13 @@ def answer_question(db: Session, tenant_id: str, message: str, requested_by: str
     return {"answer": final.get("content") or "", "sources": sources, "pending_action": None}
 
 
-def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
+def execute_pending_action(
+    db: Session, tenant_id: str, pending_action_id: str,
+    tools: list | None = None, payload: dict | None = None,
+):
     """未確認アクションを実行する。見つからない/期限切れならNoneを返す。
-    ツールがレジストリから削除/リネームされていて実行不能な場合はレコードを削除しValueErrorを送出する。"""
+    ツールがレジストリから削除/リネームされていて実行不能な場合はレコードを削除しValueErrorを送出する。
+    payload指定時（テナント向け）は監査ログをactor_type='tenant'・実sub/emailで記録する。"""
     pending = db.query(AgentPendingAction).filter(
         AgentPendingAction.id == pending_action_id,
         AgentPendingAction.tenant_id == tenant_id,
@@ -157,7 +169,7 @@ def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
         db.commit()
         return None
 
-    tools = list(TOOLS)
+    tools = list(tools if tools is not None else TOOLS)
     tool = _find_tool(tools, pending.tool_name)
     if tool is None:
         db.delete(pending)
@@ -165,10 +177,22 @@ def execute_pending_action(db: Session, tenant_id: str, pending_action_id: str):
         raise ValueError(f"Tool '{pending.tool_name}' is no longer registered")
 
     tool_args = _sanitize_tool_args(pending.tool_args)
-    result = tool.handler(tenant_id=tenant_id, **tool_args)
+    handler_kwargs = {"tenant_id": tenant_id, **tool_args}
+    if payload is not None:
+        handler_kwargs["payload"] = payload
+    result = tool.handler(**handler_kwargs)
+
+    if payload is not None:
+        actor_type = "tenant"
+        actor_id = payload.get("sub", "00000000-0000-0000-0000-000000000000")
+        actor_email = payload.get("email", pending.requested_by)
+    else:
+        actor_type = "platform"
+        actor_id = "00000000-0000-0000-0000-000000000000"
+        actor_email = pending.requested_by
 
     write_audit_log(
-        db, "platform", "00000000-0000-0000-0000-000000000000", pending.requested_by,
+        db, actor_type, actor_id, actor_email,
         f"ai_assistant_{pending.tool_name}",
         tenant_id=tenant_id, resource_type="ai_assistant_action",
         detail={"via": "ai_assistant", "confirmed_by": pending.requested_by, "tool_args": pending.tool_args},

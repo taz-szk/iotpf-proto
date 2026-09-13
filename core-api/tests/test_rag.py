@@ -2,7 +2,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.rag import answer_question, execute_pending_action
+from app.services.rag import answer_question, execute_pending_action, _sanitize_tool_args
+
+
+def test_sanitize_tool_args_removes_payload_key():
+    result = _sanitize_tool_args({"sensor_key": "temperature", "tenant_id": "other", "payload": {"role": "admin"}})
+    assert result == {"sensor_key": "temperature"}
 
 
 def _fake_chunk(source_path="docs/design.html", heading="見出し", content="本文", distance=0.1):
@@ -267,6 +272,114 @@ def test_answer_question_passes_db_configured_ollama_url_and_models():
     mock_embed.assert_called_once_with("http://172.31.19.73:11434", "nomic-embed-text", "質問です")
     assert mock_chat.call_args.args[0] == "http://172.31.19.73:11434"
     assert mock_chat.call_args.args[1] == "qwen2.5:3b"
+
+
+def test_answer_question_uses_custom_tools_registry_when_provided():
+    """toolsパラメータを渡すと、そのレジストリからツールが解決される（グローバルTOOLSは使われない）。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-1", "function": {"name": "tenant_only_tool", "arguments": "{}"}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "回答です", "tool_calls": None},
+    ]
+    custom_tool = MagicMock(read_only=True)
+    custom_tool.name = "tenant_only_tool"
+    custom_tool.handler = MagicMock(return_value={"ok": True})
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses):
+        result = answer_question(
+            mock_db, tenant_id="tenant-1", message="質問", requested_by="admin@example.com",
+            tools=[custom_tool],
+        )
+
+    assert result["answer"] == "回答です"
+    custom_tool.handler.assert_called_once_with(tenant_id="tenant-1")
+
+
+def test_answer_question_passes_payload_to_handler_when_provided():
+    """payloadパラメータを渡すと、read_onlyツールハンドラにそのままpayloadキーワードで渡される。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-1", "function": {"name": "tenant_only_tool", "arguments": "{}"}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "回答です", "tool_calls": None},
+    ]
+    custom_tool = MagicMock(read_only=True)
+    custom_tool.name = "tenant_only_tool"
+    custom_tool.handler = MagicMock(return_value={"ok": True})
+    fake_payload = {"sub": "user-1", "email": "admin@tenant.example", "role": "admin", "tenant_id": "tenant-1", "type": "tenant"}
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses):
+        answer_question(
+            mock_db, tenant_id="tenant-1", message="質問", requested_by="admin@tenant.example",
+            tools=[custom_tool], payload=fake_payload,
+        )
+
+    custom_tool.handler.assert_called_once_with(tenant_id="tenant-1", payload=fake_payload)
+
+
+def test_answer_question_omits_payload_kwarg_when_not_provided():
+    """payload未指定(PF管理者フロー)の場合、ハンドラにpayloadキーワード自体を渡さない。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+
+    tool_call = {"id": "call-1", "function": {"name": "tenant_stats_get", "arguments": "{}"}}
+    responses = [
+        {"role": "assistant", "content": None, "tool_calls": [tool_call]},
+        {"role": "assistant", "content": "回答です", "tool_calls": None},
+    ]
+
+    with patch("app.services.rag.embed", return_value=[0.1] * 768), \
+         patch("app.services.rag.chat", side_effect=responses), \
+         patch("app.services.rag.TOOLS") as mock_tools:
+        read_tool = MagicMock(read_only=True)
+        read_tool.name = "tenant_stats_get"
+        read_tool.handler = MagicMock(return_value={"device_count": 5})
+        mock_tools.__iter__.return_value = iter([read_tool])
+
+        answer_question(mock_db, tenant_id="tenant-1", message="統計は？", requested_by="admin@example.com")
+
+    read_tool.handler.assert_called_once_with(tenant_id="tenant-1")
+
+
+def test_execute_pending_action_passes_payload_and_uses_tenant_actor_for_audit():
+    """payload指定時、ハンドラにpayloadを渡し、監査ログもactor_type='tenant'・実sub/emailで記録する。"""
+    pending = MagicMock()
+    pending.id = "pending-1"
+    pending.tenant_id = "tenant-1"
+    pending.tool_name = "tenant_alert_rule_create"
+    pending.tool_args = {"sensor_key": "temperature", "condition": "above"}
+    pending.requested_by = "admin@tenant.example"
+    pending.expires_at.__gt__ = lambda self, other: True
+
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.first.return_value = pending
+    fake_payload = {"sub": "11111111-1111-1111-1111-111111111111", "email": "admin@tenant.example", "role": "admin", "tenant_id": "tenant-1", "type": "tenant"}
+
+    tenant_tool = MagicMock()
+    tenant_tool.name = "tenant_alert_rule_create"
+    tenant_tool.handler = MagicMock(return_value={"id": "rule-1"})
+
+    with patch("app.services.rag.write_audit_log") as mock_audit:
+        result = execute_pending_action(
+            mock_db, tenant_id="tenant-1", pending_action_id="pending-1",
+            tools=[tenant_tool], payload=fake_payload,
+        )
+
+    tenant_tool.handler.assert_called_once_with(
+        tenant_id="tenant-1", payload=fake_payload, sensor_key="temperature", condition="above",
+    )
+    assert result == {"id": "rule-1"}
+    audit_call = mock_audit.call_args
+    assert audit_call.args[1] == "tenant"
+    assert audit_call.args[2] == "11111111-1111-1111-1111-111111111111"
+    assert audit_call.args[3] == "admin@tenant.example"
 
 
 def test_execute_pending_action_returns_none_and_deletes_when_expired():
