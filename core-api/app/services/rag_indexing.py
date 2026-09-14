@@ -1,5 +1,7 @@
+from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.rag import DocChunk
@@ -23,6 +25,13 @@ def _iter_target_files() -> list[Path]:
     for pattern in DOCUMENT_GLOBS:
         files.extend(sorted(REPO_ROOT.glob(pattern)))
     return files
+
+
+def get_last_reindexed_at(db: Session) -> datetime | None:
+    """直近の再インデックス完了日時を返す（doc_chunksの最終created_at、1件も無ければNone）。
+    reindex_all_documentsは全削除→再構築を1トランザクションで行うため、
+    このMAX値がそのまま「最後に成功した再インデックスの日時」になる。"""
+    return db.query(func.max(DocChunk.created_at)).scalar()
 
 
 def reindex_all_documents(db: Session) -> int:

@@ -1,14 +1,28 @@
+from datetime import datetime, timezone
 from unittest.mock import patch, mock_open, MagicMock
 
 import pytest
 
-from app.services.rag_indexing import DOCUMENT_GLOBS, reindex_all_documents
+from app.services.rag_indexing import DOCUMENT_GLOBS, get_last_reindexed_at, reindex_all_documents
 
 
 def test_document_globs_excludes_plans_directory():
     globs_str = " ".join(DOCUMENT_GLOBS)
     assert "specs" in globs_str
     assert "plans" not in globs_str
+
+
+def test_get_last_reindexed_at_returns_max_created_at():
+    mock_db = MagicMock()
+    expected = datetime(2026, 9, 14, 1, 0, 0, tzinfo=timezone.utc)
+    mock_db.query.return_value.scalar.return_value = expected
+    assert get_last_reindexed_at(mock_db) == expected
+
+
+def test_get_last_reindexed_at_returns_none_when_no_chunks():
+    mock_db = MagicMock()
+    mock_db.query.return_value.scalar.return_value = None
+    assert get_last_reindexed_at(mock_db) is None
 
 
 def test_reindex_all_documents_replaces_existing_chunks():

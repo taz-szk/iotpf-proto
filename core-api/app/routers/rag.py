@@ -13,7 +13,7 @@ from app.services.assistant_settings import (
 )
 from app.services.auth import verify_token
 from app.services.rag import answer_question, execute_pending_action
-from app.services.rag_indexing import reindex_all_documents
+from app.services.rag_indexing import get_last_reindexed_at, reindex_all_documents
 
 router = APIRouter(tags=["assistant"])
 _bearer = HTTPBearer(auto_error=False)
@@ -65,11 +65,13 @@ class TestConnectionBody(BaseModel):
 def get_assistant_settings_endpoint(_: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         settings = get_assistant_settings(db)
+        last_reindexed_at = get_last_reindexed_at(db)
         return {
             "ollama_url": settings.ollama_url,
             "ollama_chat_model": settings.ollama_chat_model,
             "ollama_embed_model": settings.ollama_embed_model,
             "configured": bool(settings.ollama_url),
+            "last_reindexed_at": last_reindexed_at.isoformat() if last_reindexed_at else None,
         }
 
 

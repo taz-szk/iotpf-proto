@@ -166,7 +166,8 @@ def test_get_assistant_settings_requires_platform_auth():
 
 def test_get_assistant_settings_returns_current_values():
     with patch("app.routers.rag.SessionLocal") as mock_session, \
-         patch("app.routers.rag.get_assistant_settings") as mock_get:
+         patch("app.routers.rag.get_assistant_settings") as mock_get, \
+         patch("app.routers.rag.get_last_reindexed_at", return_value=None):
         mock_get.return_value = MagicMock(ollama_url="http://172.31.19.73:11434", ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
         mock_session.return_value = _session_ctx()
         resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
@@ -178,11 +179,34 @@ def test_get_assistant_settings_returns_current_values():
 
 def test_get_assistant_settings_configured_false_when_url_none():
     with patch("app.routers.rag.SessionLocal") as mock_session, \
-         patch("app.routers.rag.get_assistant_settings") as mock_get:
+         patch("app.routers.rag.get_assistant_settings") as mock_get, \
+         patch("app.routers.rag.get_last_reindexed_at", return_value=None):
         mock_get.return_value = MagicMock(ollama_url=None, ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
         mock_session.return_value = _session_ctx()
         resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
     assert resp.json()["configured"] is False
+
+
+def test_get_assistant_settings_returns_last_reindexed_at_when_available():
+    from datetime import datetime, timezone
+    last_reindexed = datetime(2026, 9, 14, 1, 0, 0, tzinfo=timezone.utc)
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.get_assistant_settings") as mock_get, \
+         patch("app.routers.rag.get_last_reindexed_at", return_value=last_reindexed):
+        mock_get.return_value = MagicMock(ollama_url="http://172.31.19.73:11434", ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
+        mock_session.return_value = _session_ctx()
+        resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
+    assert resp.json()["last_reindexed_at"] == last_reindexed.isoformat()
+
+
+def test_get_assistant_settings_last_reindexed_at_null_when_never_indexed():
+    with patch("app.routers.rag.SessionLocal") as mock_session, \
+         patch("app.routers.rag.get_assistant_settings") as mock_get, \
+         patch("app.routers.rag.get_last_reindexed_at", return_value=None):
+        mock_get.return_value = MagicMock(ollama_url="http://172.31.19.73:11434", ollama_chat_model="qwen2.5:3b", ollama_embed_model="nomic-embed-text")
+        mock_session.return_value = _session_ctx()
+        resp = client.get("/platform/assistant/settings", headers={"Authorization": f"Bearer {_platform_token()}"})
+    assert resp.json()["last_reindexed_at"] is None
 
 
 def test_update_assistant_settings_requires_platform_auth():

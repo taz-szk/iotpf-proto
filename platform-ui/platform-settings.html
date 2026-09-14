@@ -161,7 +161,12 @@
 
     <div x-show="!loading" class="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mt-6">
       <h2 class="text-base font-semibold text-gray-800 mb-1">AIアシスタント ドキュメント再インデックス</h2>
-      <p class="text-xs text-gray-400 mb-4">design.html・specs・CLAUDE.md等のドキュメントをAIアシスタントの検索対象として再取り込みします。ドキュメントを更新した後に実行してください。</p>
+      <p class="text-xs text-gray-400 mb-1">design.html・specs・CLAUDE.md等のドキュメントをAIアシスタントの検索対象として再取り込みします。ドキュメントを更新した後に実行してください。</p>
+      <p class="text-xs text-amber-600 mb-1">※ ドキュメント量やサーバー負荷によっては数分〜十数分かかることがあります。実行中にこのページを離れても処理自体は中断されません。完了後、下の「最終実行日時」が更新されているかで完了を確認できます。</p>
+      <p class="text-xs text-gray-400 mb-4">
+        最終実行日時:
+        <span x-text="assistantSettings.last_reindexed_at ? new Date(assistantSettings.last_reindexed_at).toLocaleString('ja-JP') : '未実行'"></span>
+      </p>
       <p x-show="!assistantSettings.ollama_url" class="mb-3 text-sm text-gray-400">Ollama接続先を設定すると実行できます。</p>
       <div x-show="reindexError" class="mb-3 text-sm text-red-600" x-text="reindexError"></div>
       <button @click="reindexDocuments()" :disabled="reindexing || !assistantSettings.ollama_url"
@@ -247,6 +252,7 @@
               ollama_url: r.ollama_url || '',
               ollama_chat_model: r.ollama_chat_model || 'qwen2.5:3b',
               ollama_embed_model: r.ollama_embed_model || 'nomic-embed-text',
+              last_reindexed_at: r.last_reindexed_at || null,
             };
           } catch(e) {
             this.assistantSettingsError = e.message;
@@ -356,6 +362,8 @@
           try {
             const result = await api.platform.reindexAssistantDocs();
             this.reindexResult = `${result.chunk_count}件のチャンクを再インデックスしました`;
+            const r = await api.platform.getAssistantSettings();
+            this.assistantSettings.last_reindexed_at = r.last_reindexed_at || null;
           } catch(e) { this.reindexError = e.message; }
           finally { this.reindexing = false; }
         },
