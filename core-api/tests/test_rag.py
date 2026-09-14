@@ -2,12 +2,21 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.rag import answer_question, execute_pending_action, _sanitize_tool_args
+from app.services.rag import answer_question, execute_pending_action, _sanitize_tool_args, _source_url
 
 
 def test_sanitize_tool_args_removes_payload_key():
     result = _sanitize_tool_args({"sensor_key": "temperature", "tenant_id": "other", "payload": {"role": "admin"}})
     assert result == {"sensor_key": "temperature"}
+
+
+def test_source_url_for_docs_path():
+    assert _source_url("docs/design.html") == "/docs/design.html"
+    assert _source_url("docs/superpowers/specs/2026-09-12-rag-assistant-design.md") == "/docs/superpowers/specs/2026-09-12-rag-assistant-design.md"
+
+
+def test_source_url_none_for_repo_root_files():
+    assert _source_url("CLAUDE.md") is None
 
 
 def _fake_chunk(source_path="docs/design.html", heading="見出し", content="本文", distance=0.1):
@@ -28,7 +37,7 @@ def test_answer_question_returns_direct_answer_when_no_tool_call():
         result = answer_question(mock_db, tenant_id="tenant-1", message="質問です", requested_by="admin@example.com")
 
     assert result["answer"] == "回答です"
-    assert result["sources"] == [{"source_path": "docs/design.html", "heading": "見出し"}]
+    assert result["sources"] == [{"source_path": "docs/design.html", "heading": "見出し", "url": "/docs/design.html"}]
     assert result["pending_action"] is None
 
 

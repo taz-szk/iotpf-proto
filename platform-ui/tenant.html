@@ -813,7 +813,14 @@
                     <p x-text="msg.content" class="whitespace-pre-line"></p>
                     <template x-if="msg.sources && msg.sources.length > 0">
                       <p class="text-xs text-gray-400 mt-1">
-                        出典: <template x-for="(s, i) in msg.sources" :key="i"><span x-text="s.source_path + (s.heading ? ' - ' + s.heading : '') + (i < msg.sources.length - 1 ? '、' : '')"></span></template>
+                        出典:
+                        <template x-for="(s, i) in msg.sources" :key="i">
+                          <span>
+                            <a x-show="s.url" :href="s.url" target="_blank" rel="noopener" class="text-blue-500 underline" x-text="s.source_path + (s.heading ? ' - ' + s.heading : '')"></a>
+                            <span x-show="!s.url" x-text="s.source_path + (s.heading ? ' - ' + s.heading : '')"></span>
+                            <span x-text="i < msg.sources.length - 1 ? '、' : ''"></span>
+                          </span>
+                        </template>
                       </p>
                     </template>
                   </div>

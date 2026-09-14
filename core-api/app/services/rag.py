@@ -23,7 +23,19 @@ _SYSTEM_PROMPT = (
     "ユーザーが操作の実行（トークン発行・設定変更・アラート作成等）を依頼した場合は、"
     "該当するツールを呼び出してください（実際の実行はユーザーの確認後に行われます）。"
     "手順や複数の項目を説明する場合は、改行や箇条書き（「- 」で始める等）を使って読みやすく整形してください。"
+    "資料のURL・リンクを聞かれた場合は、各出典の直後に記載された(URL: ...)の値をそのまま答えてください。"
+    "自分でURLを推測・生成してはいけません。(URL: 非公開)となっている資料は公開URLが無いので、"
+    "「この資料は公開ページとしては提供されていません」のように正直に答えてください。"
 )
+
+
+def _source_url(source_path: str) -> str | None:
+    """doc_chunksのsource_path（リポジトリ相対パス）から、実際にnginxで公開されているURLを返す。
+    docs/配下は`/docs/`としてそのまま公開されているが、CLAUDE.md等リポジトリ直下のファイルは
+    nginxにマウントされておらず公開URLが存在しない（Noneを返す）。"""
+    if source_path.startswith("docs/"):
+        return f"/{source_path}"
+    return None
 
 
 def _search_chunks(db: Session, question_embedding: list[float]) -> list:
@@ -96,9 +108,10 @@ def answer_question(
     chunks = _search_chunks(db, question_embedding)
 
     context_text = "\n\n".join(
-        f"[出典: {c.source_path} - {c.heading or '(見出しなし)'}]\n{c.content}" for c in chunks
+        f"[出典: {c.source_path} (URL: {_source_url(c.source_path) or '非公開'}) - {c.heading or '(見出しなし)'}]\n{c.content}"
+        for c in chunks
     )
-    sources = [{"source_path": c.source_path, "heading": c.heading} for c in chunks]
+    sources = [{"source_path": c.source_path, "heading": c.heading, "url": _source_url(c.source_path)} for c in chunks]
 
     messages = [
         {"role": "system", "content": _SYSTEM_PROMPT},
