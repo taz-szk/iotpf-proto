@@ -31,18 +31,35 @@ _FLUX_TELEMETRY = (
     '  |> yield(name: "mean")'
 )
 
+# 削除済みマーカー(Del_接頭辞を除く=元の名前のみ)を持つdevice_nameをデバイス一覧から
+# 除外するためのFlux前段。Del_接頭辞のアーカイブ名義自体は一覧に残す(登録状態パネルで
+# 「削除済み」として表示するため)。
+_FLUX_EXCLUDE_DELETED = (
+    'deletedNames = from(bucket: "telemetry")\n'
+    '  |> range(start: 0)\n'
+    '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
+    '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
+    '  |> keep(columns: ["device_name"])\n'
+    '  |> distinct(column: "device_name")\n'
+    '  |> findColumn(fn: (key) => true, column: "device_name")\n'
+    '\n'
+)
+
 _FLUX_DEVICE_VAR = (
+    _FLUX_EXCLUDE_DELETED +
     'from(bucket: "telemetry")\n'
     '  |> range(start: -30d)\n'
     '  |> filter(fn: (r) => r._measurement == "device_status")\n'
     '  |> filter(fn: (r) => r._field == "online")\n'
     '  |> group(columns: ["device_name"])\n'
     '  |> last()\n'
+    '  |> filter(fn: (r) => not contains(value: r.device_name, set: deletedNames))\n'
     '  |> map(fn: (r) => ({_value: r.device_name}))'
 )
 
 # テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む
 _FLUX_DEVICE_VAR_TENANT = (
+    _FLUX_EXCLUDE_DELETED +
     'from(bucket: "telemetry")\n'
     '  |> range(start: -30d)\n'
     '  |> filter(fn: (r) => r._measurement == "device_status")\n'
@@ -50,6 +67,7 @@ _FLUX_DEVICE_VAR_TENANT = (
     '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
     '  |> group(columns: ["device_name"])\n'
     '  |> last()\n'
+    '  |> filter(fn: (r) => not contains(value: r.device_name, set: deletedNames))\n'
     '  |> map(fn: (r) => ({_value: r.device_name}))'
 )
 
@@ -476,6 +494,33 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
         print(f"[retire_device] wrote deleted marker: {device_name}")
     except Exception as e:
         print(f"[retire_device] write marker FAILED: {device_name} err={e}")
+
+    # 4. アーカイブ名義(new_name)にも削除済みマーカーとオフライン状態を明示的に書き込む。
+    #   Grafanaのデバイス一覧からはnew_name（Del_接頭辞）を除外しない(登録状態パネルで
+    #   「削除済み」と表示させ続けるため)一方、接続状態パネルは削除直前の最後のonline値を
+    #   そのまま引き継いでしまう(コピー元データ次第で「オンライン」に見えてしまう)ため、
+    #   ここで明示的にoffline化しておく。
+    esc_new_lp = new_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
+    now_ns = int(time.time()) * 1_000_000_000
+    archive_lines = "\n".join([
+        f'device_deleted,device_name={esc_new_lp} deleted=1i {now_ns}',
+        f'device_status,device_name={esc_new_lp} online=false {now_ns}',
+    ])
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/write"
+            f"?orgID={influxdb_org_id}&bucket=telemetry&precision=ns",
+            headers={
+                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+            content=archive_lines.encode(),
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        print(f"[retire_device] wrote archive marker+offline: {new_name}")
+    except Exception as e:
+        print(f"[retire_device] write archive marker FAILED: {new_name} err={e}")
 
 def _admin_auth() -> tuple[str, str]:
     return (settings.grafana_admin_user, settings.grafana_admin_password)

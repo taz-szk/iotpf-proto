@@ -4,6 +4,7 @@ from app.services.grafana import (
     build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
     _flux_string_escape, retire_device_in_influxdb,
     build_group_variable, build_templating, sync_tenant_dashboard_groups,
+    _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -198,3 +199,26 @@ def test_retire_device_in_influxdb_writes_marker_after_deleting_old_data():
     marker_call = mock_httpx.post.call_args_list[2]
     assert "/api/v2/delete" in delete_call.args[0]
     assert "/api/v2/write" in marker_call.args[0]
+
+
+def test_retire_device_in_influxdb_writes_archive_marker_and_offline_for_new_name():
+    """アーカイブ名義(Del_接頭辞)にも削除済みマーカーと明示的なoffline状態を書き込む。
+    これにより「Del_dev01」がGrafana上で削除済み・オフラインとして固定表示される
+    （リネーム時にコピーされた最後のonline状態をそのまま引き継いで
+    「オンライン」に見えてしまう問題の対策）。"""
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        retire_device_in_influxdb("org-1", "dev01")
+    archive_call = mock_httpx.post.call_args_list[3]
+    line_protocol = archive_call.kwargs["content"].decode()
+    assert "device_deleted,device_name=Del_dev01 deleted=1i" in line_protocol
+    assert "device_status,device_name=Del_dev01 online=false" in line_protocol
+
+
+def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
+    """デバイス一覧変数のFluxクエリは、削除済みマーカーを持つ元の名前(Del_接頭辞を除く)を
+    除外しつつ、Del_接頭辞のアーカイブ名義自体は除外条件から除く(=一覧に残す)必要がある。"""
+    for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
+        assert 'r._measurement == "device_deleted"' in flux
+        assert 'not (r.device_name =~ /^Del_/)' in flux
+        assert 'not contains(value: r.device_name, set: deletedNames)' in flux
