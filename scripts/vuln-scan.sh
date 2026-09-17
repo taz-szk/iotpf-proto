@@ -35,6 +35,7 @@ for image in $IMAGES; do
     if ! docker run --rm \
         -v /var/run/docker.sock:/var/run/docker.sock \
         -v trivy-cache:/root/.cache/ \
+        -v "$TMPDIR:$TMPDIR" \
         aquasec/trivy image \
         --severity CRITICAL,HIGH --ignore-unfixed \
         --format json --quiet -o "$outfile" "$image"; then
