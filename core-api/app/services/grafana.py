@@ -32,44 +32,51 @@ _FLUX_TELEMETRY = (
 )
 
 # 削除済みマーカー(Del_接頭辞を除く=元の名前のみ)を持つdevice_nameをデバイス一覧から
-# 除外するためのFlux前段。Del_接頭辞のアーカイブ名義自体は一覧に残す(登録状態パネルで
-# 「削除済み」として表示するため)。
-_FLUX_EXCLUDE_DELETED = (
-    'deletedNames = from(bucket: "telemetry")\n'
-    '  |> range(start: 0)\n'
-    '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
-    '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
-    '  |> keep(columns: ["device_name"])\n'
-    '  |> group()\n'
-    '  |> distinct(column: "device_name")\n'
-    '  |> findColumn(fn: (key) => true, column: "device_name")\n'
-    '\n'
-)
+# 除外する。Del_接頭辞のアーカイブ名義自体は除外対象外(一覧に残し、登録状態パネルで
+# 「削除済み」として表示させる)。
+#
+# 注意: findColumn()で配列化しcontains()で絞り込む方式は、同一スクリプト内に
+# from(bucket:"telemetry")が複数回登場する場合に配列が空になる(実機で確認済みの
+# Flux/InfluxDB側の既知の癖)。union()+group()+reduce()によるテーブルベースの
+# 左反半結合(left anti-join)相当に置き換えて解消している。
+def _flux_exclude_deleted_devices(status_filter: str) -> str:
+    return (
+        'status = from(bucket: "telemetry")\n'
+        '  |> range(start: -30d)\n'
+        '  |> filter(fn: (r) => r._measurement == "device_status")\n'
+        '  |> filter(fn: (r) => r._field == "online")\n'
+        f'{status_filter}'
+        '  |> group(columns: ["device_name"])\n'
+        '  |> last()\n'
+        '  |> map(fn: (r) => ({device_name: r.device_name, src: "status"}))\n'
+        '\n'
+        'deleted = from(bucket: "telemetry")\n'
+        '  |> range(start: -30d)\n'
+        '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
+        '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
+        '  |> group(columns: ["device_name"])\n'
+        '  |> last()\n'
+        '  |> map(fn: (r) => ({device_name: r.device_name, src: "deleted"}))\n'
+        '\n'
+        'union(tables: [status, deleted])\n'
+        '  |> group(columns: ["device_name"])\n'
+        '  |> reduce(\n'
+        '       fn: (r, accumulator) => ({\n'
+        '         device_name: r.device_name,\n'
+        '         hasStatus: if r.src == "status" then true else accumulator.hasStatus,\n'
+        '         hasDeleted: if r.src == "deleted" then true else accumulator.hasDeleted,\n'
+        '       }),\n'
+        '       identity: {device_name: "", hasStatus: false, hasDeleted: false},\n'
+        '     )\n'
+        '  |> filter(fn: (r) => r.hasStatus and not r.hasDeleted)\n'
+        '  |> map(fn: (r) => ({_value: r.device_name}))'
+    )
 
-_FLUX_DEVICE_VAR = (
-    _FLUX_EXCLUDE_DELETED +
-    'from(bucket: "telemetry")\n'
-    '  |> range(start: -30d)\n'
-    '  |> filter(fn: (r) => r._measurement == "device_status")\n'
-    '  |> filter(fn: (r) => r._field == "online")\n'
-    '  |> group(columns: ["device_name"])\n'
-    '  |> last()\n'
-    '  |> filter(fn: (r) => not contains(value: r.device_name, set: deletedNames))\n'
-    '  |> map(fn: (r) => ({_value: r.device_name}))'
-)
+_FLUX_DEVICE_VAR = _flux_exclude_deleted_devices("")
 
 # テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む
-_FLUX_DEVICE_VAR_TENANT = (
-    _FLUX_EXCLUDE_DELETED +
-    'from(bucket: "telemetry")\n'
-    '  |> range(start: -30d)\n'
-    '  |> filter(fn: (r) => r._measurement == "device_status")\n'
-    '  |> filter(fn: (r) => r._field == "online")\n'
+_FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices(
     '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
-    '  |> group(columns: ["device_name"])\n'
-    '  |> last()\n'
-    '  |> filter(fn: (r) => not contains(value: r.device_name, set: deletedNames))\n'
-    '  |> map(fn: (r) => ({_value: r.device_name}))'
 )
 
 

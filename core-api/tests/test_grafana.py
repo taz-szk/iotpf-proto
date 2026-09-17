@@ -221,4 +221,6 @@ def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
     for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
         assert 'r._measurement == "device_deleted"' in flux
         assert 'not (r.device_name =~ /^Del_/)' in flux
-        assert 'not contains(value: r.device_name, set: deletedNames)' in flux
+        assert 'r.hasStatus and not r.hasDeleted' in flux
+    assert '${group}' in _FLUX_DEVICE_VAR_TENANT
+    assert '${group}' not in _FLUX_DEVICE_VAR
