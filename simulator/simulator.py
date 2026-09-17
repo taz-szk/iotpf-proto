@@ -798,7 +798,7 @@ class SimulatorApp(tk.Tk):
                     verify_resp.raise_for_status()
                 del_resp = session.delete(
                     f"{api_url}/tenant-portal/me/devices/{worker.device_id}",
-                    timeout=10, verify=verify,
+                    timeout=60, verify=verify,  # InfluxDB側の複数ステップ処理を待つため長めに確保
                 )
                 if del_resp.status_code == 204:
                     self._append_log(f"{worker.device_id}: PF側から削除完了", level="info")
