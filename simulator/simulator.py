@@ -755,6 +755,11 @@ class SimulatorApp(tk.Tk):
         ):
             return
 
+        # 削除処理中にデータを送り続けないよう、まずテレメトリ送信を止める
+        # （PF側の削除完了を待つ間、最終的なワーカー停止・UI除去より前に実施）
+        worker.stop_sending()
+        self._append_log(f"{worker.device_id}: データ送信を停止しました", level="info")
+
         # テナント自己サービスAPIでデバイスを削除（PF管理者権限は不要）
         cert_dir      = os.path.join(CERT_BASE, tenant_name, worker.device_id)
         tenant_id_path = os.path.join(cert_dir, "tenant_id")
@@ -770,6 +775,7 @@ class SimulatorApp(tk.Tk):
                     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 import requests as _req
                 session = _req.Session()
+                self._append_log(f"{worker.device_id}: PF側にログイン中...", level="info")
                 login_resp = session.post(
                     f"{api_url}/tenant-auth/login",
                     json={"tenant_slug": tenant_slug, "email": email, "password": password},
@@ -782,6 +788,7 @@ class SimulatorApp(tk.Tk):
                         "このユーザーはTOTPが未設定です。先にWeb管理画面でTOTP設定を完了してください。"
                     )
                 if login_data.get("status") == "totp_required":
+                    self._append_log(f"{worker.device_id}: TOTP認証が必要です", level="info")
                     code = simpledialog.askstring(
                         "TOTP認証",
                         f"{email} の6桁の認証コードを入力してください",
@@ -796,6 +803,11 @@ class SimulatorApp(tk.Tk):
                         timeout=10, verify=verify,
                     )
                     verify_resp.raise_for_status()
+                    self._append_log(f"{worker.device_id}: TOTP認証OK", level="info")
+                self._append_log(
+                    f"{worker.device_id}: PF側で削除処理中...（InfluxDB処理のため数十秒かかる場合があります）",
+                    level="info",
+                )
                 del_resp = session.delete(
                     f"{api_url}/tenant-portal/me/devices/{worker.device_id}",
                     timeout=60, verify=verify,  # InfluxDB側の複数ステップ処理を待つため長めに確保
