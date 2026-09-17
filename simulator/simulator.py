@@ -10,7 +10,7 @@ import sys
 import threading
 import tkinter as tk
 from datetime import datetime
-from tkinter import messagebox, scrolledtext, ttk
+from tkinter import messagebox, scrolledtext, simpledialog, ttk
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -776,6 +776,26 @@ class SimulatorApp(tk.Tk):
                     timeout=10, verify=verify,
                 )
                 login_resp.raise_for_status()
+                login_data = login_resp.json()
+                if login_data.get("status") == "totp_setup_required":
+                    raise RuntimeError(
+                        "このユーザーはTOTPが未設定です。先にWeb管理画面でTOTP設定を完了してください。"
+                    )
+                if login_data.get("status") == "totp_required":
+                    code = simpledialog.askstring(
+                        "TOTP認証",
+                        f"{email} の6桁の認証コードを入力してください",
+                        parent=self,
+                    )
+                    if not code:
+                        raise RuntimeError("TOTPコードが入力されませんでした")
+                    verify_resp = session.post(
+                        f"{api_url}/tenant-auth/totp/verify",
+                        json={"code": code},
+                        headers={"Authorization": f"Bearer {login_data['partial_token']}"},
+                        timeout=10, verify=verify,
+                    )
+                    verify_resp.raise_for_status()
                 del_resp = session.delete(
                     f"{api_url}/tenant-portal/me/devices/{worker.device_id}",
                     timeout=10, verify=verify,
