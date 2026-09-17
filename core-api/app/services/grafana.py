@@ -133,15 +133,21 @@ _FLUX_DELETED = (
     '  |> range(start: 0)\n'
     '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
     '  |> filter(fn: (r) => r.device_name =~ /^${device_name:regex}$/)\n'
+    '  |> group(columns: ["device_name"])\n'
     '  |> last()'
 )
 
+#  device_nameのみでgroup()してからlast()を取る。通常の書き込み(tenant_id/device_id/
+#  device_nameタグ付き)とアーカイブ名義への明示書き込み(device_nameタグのみ)でタグの
+#  組み合わせが異なり、group()が無いとInfluxDBが別系列として扱い2つの値が表示されてしまう
+#  （実機で確認済み）。
 _FLUX_STATUS = (
     'from(bucket: "telemetry")\n'
     '  |> range(start: -30d)\n'
     '  |> filter(fn: (r) => r._measurement == "device_status")\n'
     '  |> filter(fn: (r) => r._field == "online")\n'
     '  |> filter(fn: (r) => r.device_name =~ /^${device_name:regex}$/)\n'
+    '  |> group(columns: ["device_name"])\n'
     '  |> last()'
 )
 
