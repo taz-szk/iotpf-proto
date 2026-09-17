@@ -40,6 +40,7 @@ _FLUX_EXCLUDE_DELETED = (
     '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
     '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
     '  |> keep(columns: ["device_name"])\n'
+    '  |> group()\n'
     '  |> distinct(column: "device_name")\n'
     '  |> findColumn(fn: (key) => true, column: "device_name")\n'
     '\n'
