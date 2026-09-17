@@ -174,3 +174,15 @@ def test_retire_device_in_influxdb_escapes_dollar_in_flux_query():
     flux_query = copy_call.kwargs["json"]["query"]
     assert '\\${badExpr}' in flux_query
     assert flux_query.replace('\\$', '').count('$') == 0
+
+
+def test_retire_device_in_influxdb_writes_deleted_marker_under_original_name():
+    """Grafana側の削除判定(_FLUX_DELETED)は元のdevice_nameでdevice_deletedを検索するため、
+    マーカーはリネーム後の名前(Del_接頭辞)ではなく元の名前で書く必要がある。"""
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        retire_device_in_influxdb("org-1", "dev01")
+    marker_call = mock_httpx.post.call_args_list[1]
+    line_protocol = marker_call.kwargs["content"].decode()
+    assert line_protocol.startswith("device_deleted,device_name=dev01 ")
+    assert "Del_dev01" not in line_protocol

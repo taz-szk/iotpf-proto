@@ -430,8 +430,10 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
     except Exception as e:
         print(f"[retire_device] copy FAILED: {device_name} err={e}")
 
-    # 2. 削除済みマーカーを新しい名前で書き込む
-    esc_lp = new_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
+    # 2. 削除済みマーカーを元のdevice_nameで書き込む
+    # （Grafana側の削除判定クエリ_FLUX_DELETEDは元の名前でdevice_deletedを検索するため、
+    #   ここをnew_name（Del_接頭辞）で書くと永久に一致せず「削除済み」と判定されない）
+    esc_lp = device_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
     line = f'device_deleted,device_name={esc_lp} deleted=1i {int(time.time())}000000000'
     try:
         resp = httpx.post(
