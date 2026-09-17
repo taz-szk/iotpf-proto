@@ -904,6 +904,81 @@ docker compose ps postgres   <span class="cmt"># イメージがpgvector/pgvecto
   </div>
 </section>
 
+<!-- ==================== コンテナ脆弱性スキャン（Slack通知）の導入 ==================== -->
+<section class="common-section" id="vuln-scan">
+  <h2>🔒 コンテナ脆弱性スキャン（Slack通知）の導入手順</h2>
+  <div class="hero-sub" style="margin-bottom:24px">
+    稼働中のコンテナイメージ（自前ビルドのcore-api等・postgres/nginx等の既製イメージ）を
+    <a href="https://aquasecurity.github.io/trivy/" target="_blank" rel="noopener">Trivy</a>で定期的にスキャンし、
+    Critical/High・修正版ありの脆弱性のみをSlackへ通知する。GitHub Actions等の外部CIは使わず、
+    サーバー上のcronで実行するため追加コストは発生しない。本番稼働中のEC2インスタンスへの導入を想定した手順。
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title">最新版をpullする</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>cd ~/iotpf-proto
+git pull origin main</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title">SlackでIncoming Webhookを発行し、<code>.env</code>に追記する</div>
+        <div class="step-desc">
+          通知を送りたいSlackワークスペースで「Incoming Webhooks」アプリを追加し、通知先チャンネルを
+          選んでURLを発行する。<code>.env</code>はgit管理外のため、サーバーごとに手動で追記する。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>echo "VULN_SCAN_SLACK_WEBHOOK_URL=https://hooks.slack.com/services/xxx/yyy/zzz" &gt;&gt; .env</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">3</div>
+      <div class="step-body">
+        <div class="step-title">手動で1回実行し、Slackに通知が届くか確認する</div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body">初回実行時はTrivyの脆弱性DB（数百MB）をダウンロードするため数分かかる場合がある。
+          <code>trivy-cache</code>という名前付きDockerボリュームにキャッシュされるため、2回目以降は速くなる。</span>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>./scripts/vuln-scan.sh</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">4</div>
+      <div class="step-body">
+        <div class="step-title">crontabに定期実行を登録する</div>
+        <div class="step-desc">
+          検出0件でも「スキャンを実施した」証跡としてSlackへ通知が届く仕組みのため、通知が来なくなったこと自体が
+          異常のサインになる。実行間隔は運用に応じて調整してよい（例は毎週月曜7時）。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>crontab -e
+<span class="cmt"># 以下の1行を追記して保存</span>
+0 7 * * 1 /home/ubuntu/iotpf-proto/scripts/vuln-scan.sh &gt;&gt; /home/ubuntu/iotpf-proto/vuln-scan.log 2&gt;&amp;1</pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
 </main>
 </div><!-- /wrap -->
 
