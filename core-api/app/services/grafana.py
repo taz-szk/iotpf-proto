@@ -430,27 +430,11 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
     except Exception as e:
         print(f"[retire_device] copy FAILED: {device_name} err={e}")
 
-    # 2. 削除済みマーカーを元のdevice_nameで書き込む
-    # （Grafana側の削除判定クエリ_FLUX_DELETEDは元の名前でdevice_deletedを検索するため、
-    #   ここをnew_name（Del_接頭辞）で書くと永久に一致せず「削除済み」と判定されない）
-    esc_lp = device_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
-    line = f'device_deleted,device_name={esc_lp} deleted=1i {int(time.time())}000000000'
-    try:
-        resp = httpx.post(
-            f"{settings.influxdb_url}/api/v2/write"
-            f"?orgID={influxdb_org_id}&bucket=telemetry&precision=ns",
-            headers={
-                "Authorization": f"Token {settings.influxdb_admin_token}",
-                "Content-Type": "text/plain; charset=utf-8",
-            },
-            content=line.encode(),
-            timeout=5.0,
-        )
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"[retire_device] write marker FAILED: {new_name} err={e}")
-
-    # 3. 元の device_name のデータを削除
+    # 2. 元の device_name のデータを削除
+    # （削除済みマーカーの書き込みより先に行う必要がある。この削除predicateは
+    #   measurementを指定せずdevice_name一致の全measurementを消すため、後から
+    #   同じdevice_nameでマーカーを書くと、その次にこの削除を実行した場合に
+    #   マーカー自体も消えてしまう。順序を逆にすることで解消する。）
     esc_pred = _flux_string_escape(device_name)
     try:
         resp = httpx.post(
@@ -471,6 +455,27 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
         print(f"[retire_device] deleted old data: {device_name}")
     except Exception as e:
         print(f"[retire_device] delete FAILED: {device_name} err={e}")
+
+    # 3. 削除済みマーカーを元のdevice_nameで書き込む（削除の後に書くこと。
+    #   Grafana側の削除判定クエリ_FLUX_DELETEDは元の名前でdevice_deletedを検索するため、
+    #   ここをnew_name（Del_接頭辞）で書くと永久に一致せず「削除済み」と判定されない）
+    esc_lp = device_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
+    line = f'device_deleted,device_name={esc_lp} deleted=1i {int(time.time())}000000000'
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/write"
+            f"?orgID={influxdb_org_id}&bucket=telemetry&precision=ns",
+            headers={
+                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+            content=line.encode(),
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        print(f"[retire_device] wrote deleted marker: {device_name}")
+    except Exception as e:
+        print(f"[retire_device] write marker FAILED: {device_name} err={e}")
 
 def _admin_auth() -> tuple[str, str]:
     return (settings.grafana_admin_user, settings.grafana_admin_password)

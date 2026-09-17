@@ -182,7 +182,19 @@ def test_retire_device_in_influxdb_writes_deleted_marker_under_original_name():
     with patch("app.services.grafana.httpx") as mock_httpx:
         mock_httpx.post.return_value = _mock_resp(200)
         retire_device_in_influxdb("org-1", "dev01")
-    marker_call = mock_httpx.post.call_args_list[1]
+    marker_call = mock_httpx.post.call_args_list[2]
     line_protocol = marker_call.kwargs["content"].decode()
     assert line_protocol.startswith("device_deleted,device_name=dev01 ")
     assert "Del_dev01" not in line_protocol
+
+
+def test_retire_device_in_influxdb_writes_marker_after_deleting_old_data():
+    """削除済みマーカーの書き込みは、同名device_nameの全measurement削除より後でなければならない。
+    順序を誤ると、削除predicate(measurement指定なし)がマーカー自身も一緒に消してしまう。"""
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        retire_device_in_influxdb("org-1", "dev01")
+    delete_call = mock_httpx.post.call_args_list[1]
+    marker_call = mock_httpx.post.call_args_list[2]
+    assert "/api/v2/delete" in delete_call.args[0]
+    assert "/api/v2/write" in marker_call.args[0]
