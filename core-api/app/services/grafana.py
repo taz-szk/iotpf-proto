@@ -512,7 +512,7 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
     now_ns = int(time.time()) * 1_000_000_000
     archive_lines = "\n".join([
         f'device_deleted,device_name={esc_new_lp} deleted=1i {now_ns}',
-        f'device_status,device_name={esc_new_lp} online=false {now_ns}',
+        f'device_status,device_name={esc_new_lp} online=0i {now_ns}',
     ])
     try:
         resp = httpx.post(

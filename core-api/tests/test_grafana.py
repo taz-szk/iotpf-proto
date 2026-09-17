@@ -212,7 +212,7 @@ def test_retire_device_in_influxdb_writes_archive_marker_and_offline_for_new_nam
     archive_call = mock_httpx.post.call_args_list[3]
     line_protocol = archive_call.kwargs["content"].decode()
     assert "device_deleted,device_name=Del_dev01 deleted=1i" in line_protocol
-    assert "device_status,device_name=Del_dev01 online=false" in line_protocol
+    assert "device_status,device_name=Del_dev01 online=0i" in line_protocol
 
 
 def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
