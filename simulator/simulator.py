@@ -66,8 +66,9 @@ class TenantDialog(tk.Toplevel):
         self._host_var   = tk.StringVar(value=d.get("broker_host", "localhost"))
         self._port_var   = tk.IntVar(value=d.get("broker_port", 8883))
         self._ssl_var    = tk.BooleanVar(value=d.get("ssl_verify", True))
-        self._email_var  = tk.StringVar(value=d.get("platform_email", ""))
-        self._passwd_var = tk.StringVar(value=d.get("platform_password", ""))
+        self._slug_var   = tk.StringVar(value=d.get("tenant_slug", ""))
+        self._email_var  = tk.StringVar(value=d.get("tenant_email", ""))
+        self._passwd_var = tk.StringVar(value=d.get("tenant_password", ""))
 
         f = ttk.Frame(self, padding=12)
         f.pack(fill=tk.BOTH, expand=True)
@@ -113,20 +114,22 @@ class TenantDialog(tk.Toplevel):
         ttk.Button(f, text="+ トークン追加", command=self._add_token_row).grid(
             row=7, column=0, columnspan=2, sticky=tk.W, pady=(0, 4))
 
-        # ── 管理者情報 ──
+        # ── テナント管理者情報 ──
         ttk.Separator(f, orient=tk.HORIZONTAL).grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(4, 4))
-        ttk.Label(f, text="管理者メール", foreground="gray").grid(row=9, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=9, column=1, sticky=tk.W)
-        ttk.Label(f, text="管理者パスワード", foreground="gray").grid(row=10, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=10, column=1, sticky=tk.W)
-        ttk.Label(f, text="↑ デバイス削除時にPF側APIを呼ぶために使用",
-                  foreground="gray", font=("", 8)).grid(row=11, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text="テナントSlug", foreground="gray").grid(row=9, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._slug_var, width=36).grid(row=9, column=1, sticky=tk.W)
+        ttk.Label(f, text="テナント管理者メール", foreground="gray").grid(row=10, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=10, column=1, sticky=tk.W)
+        ttk.Label(f, text="テナント管理者パスワード", foreground="gray").grid(row=11, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=11, column=1, sticky=tk.W)
+        ttk.Label(f, text="↑ デバイス削除時にテナント自己サービスAPIを呼ぶために使用（PF管理者権限は不要）",
+                  foreground="gray", font=("", 8)).grid(row=12, column=0, columnspan=2, sticky=tk.W)
 
         ttk.Checkbutton(f, text="SSL証明書を検証する（オフ=自己署名証明書を許可）",
-                        variable=self._ssl_var).grid(row=12, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
+                        variable=self._ssl_var).grid(row=13, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
 
         bf = ttk.Frame(f)
-        bf.grid(row=13, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
+        bf.grid(row=14, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
         ttk.Button(bf, text="OK",       command=self._ok,      width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="キャンセル", command=self.destroy, width=8).pack(side=tk.LEFT)
 
@@ -171,8 +174,9 @@ class TenantDialog(tk.Toplevel):
             "broker_port": self._port_var.get(),
             "bootstrap_tokens": tokens,
             "ssl_verify": self._ssl_var.get(),
-            "platform_email": self._email_var.get().strip(),
-            "platform_password": self._passwd_var.get(),
+            "tenant_slug": self._slug_var.get().strip(),
+            "tenant_email": self._email_var.get().strip(),
+            "tenant_password": self._passwd_var.get(),
         }
         self.destroy()
 
@@ -755,31 +759,29 @@ class SimulatorApp(tk.Tk):
         ):
             return
 
-        # PF 側 API でデバイスを削除
+        # テナント自己サービスAPIでデバイスを削除（PF管理者権限は不要）
         cert_dir      = os.path.join(CERT_BASE, tenant_name, worker.device_id)
         tenant_id_path = os.path.join(cert_dir, "tenant_id")
         if tenant_cfg and os.path.exists(tenant_id_path):
-            with open(tenant_id_path) as fp:
-                tenant_id = fp.read().strip()
-            api_url  = tenant_cfg["api_url"]
-            verify   = tenant_cfg.get("ssl_verify", True)
-            email    = tenant_cfg.get("platform_email", "")
-            password = tenant_cfg.get("platform_password", "")
+            api_url       = tenant_cfg["api_url"]
+            verify        = tenant_cfg.get("ssl_verify", True)
+            tenant_slug   = tenant_cfg.get("tenant_slug", "")
+            email         = tenant_cfg.get("tenant_email", "")
+            password      = tenant_cfg.get("tenant_password", "")
             try:
                 import urllib3
                 if not verify:
                     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
                 import requests as _req
-                login_resp = _req.post(
-                    f"{api_url}/auth/login",
-                    json={"email": email, "password": password},
+                session = _req.Session()
+                login_resp = session.post(
+                    f"{api_url}/tenant-auth/login",
+                    json={"tenant_slug": tenant_slug, "email": email, "password": password},
                     timeout=10, verify=verify,
                 )
                 login_resp.raise_for_status()
-                token = login_resp.json()["access_token"]
-                del_resp = _req.delete(
-                    f"{api_url}/tenants/{tenant_id}/devices/{worker.device_id}",
-                    headers={"Authorization": f"Bearer {token}"},
+                del_resp = session.delete(
+                    f"{api_url}/tenant-portal/me/devices/{worker.device_id}",
                     timeout=10, verify=verify,
                 )
                 if del_resp.status_code == 204:

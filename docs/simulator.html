@@ -337,8 +337,9 @@ pip install -r requirements.txt</pre>
           <tr><td>MQTT ホスト</td><td>EMQX ブローカーのホスト</td><td>localhost</td></tr>
           <tr><td>MQTT ポート</td><td>TLS ポート（デフォルト 8883）</td><td>8883</td></tr>
           <tr><td>Bootstrap Token</td><td>プロビジョニングトークン（管理画面から発行）</td><td>bsp_xxxxxxxxxxxx</td></tr>
-          <tr><td>管理者メール</td><td>デバイス削除時に使用（任意）</td><td>admin@example.com</td></tr>
-          <tr><td>管理者パスワード</td><td>デバイス削除時に使用（任意）</td><td>—</td></tr>
+          <tr><td>テナントSlug</td><td>デバイス削除時に使用（任意）</td><td>corp-aaa</td></tr>
+          <tr><td>テナント管理者メール</td><td>デバイス削除時に使用（任意、PF管理者権限は不要）</td><td>admin@example.com</td></tr>
+          <tr><td>テナント管理者パスワード</td><td>デバイス削除時に使用（任意）</td><td>—</td></tr>
           <tr><td>SSL 証明書を検証する</td><td>オフにすると自己署名証明書を許可</td><td>ローカル環境ではオフ推奨</td></tr>
         </tbody>
       </table>
@@ -456,7 +457,7 @@ pip install -r requirements.txt</pre>
     <p>デバイス行の <strong>✕</strong> ボタンで削除します。以下の3つを同時に実行します:</p>
     <ul style="margin-left:20px;color:var(--text-2);font-size:13.5px;line-height:2">
       <li>シミュレータからデバイス除外</li>
-      <li>プラットフォーム側 API でデバイス登録を削除（管理者メール/パスワードが設定されている場合）</li>
+      <li>テナント自己サービス API でデバイス登録を削除（テナントSlug/メール/パスワードが設定されている場合、PF管理者権限は不要）</li>
       <li>ローカルの mTLS 証明書ディレクトリを削除</li>
     </ul>
     <div class="callout callout-warn">
