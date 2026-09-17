@@ -332,13 +332,12 @@ pip install -r requirements.txt</pre>
       <table>
         <thead><tr><th>項目</th><th>説明</th><th>例</th></tr></thead>
         <tbody>
-          <tr><td>テナント名 *</td><td>識別用の任意名称</td><td>My Tenant</td></tr>
+          <tr><td>テナント名 * (=テナントSlug)</td><td>管理画面のテナントSlugと一致させる（デバイス削除時にも使用）</td><td>corp-aaa</td></tr>
           <tr><td>API URL</td><td>core-api のベース URL</td><td>https://localhost/api</td></tr>
           <tr><td>MQTT ホスト</td><td>EMQX ブローカーのホスト</td><td>localhost</td></tr>
           <tr><td>MQTT ポート</td><td>TLS ポート（デフォルト 8883）</td><td>8883</td></tr>
           <tr><td>Bootstrap Token</td><td>プロビジョニングトークン（管理画面から発行）</td><td>bsp_xxxxxxxxxxxx</td></tr>
-          <tr><td>テナントSlug</td><td>デバイス削除時に使用（任意）</td><td>corp-aaa</td></tr>
-          <tr><td>テナント管理者メール</td><td>デバイス削除時に使用（任意、PF管理者権限は不要）</td><td>admin@example.com</td></tr>
+          <tr><td>テナント管理者メール</td><td>デバイス削除時に使用（任意）</td><td>admin@example.com</td></tr>
           <tr><td>テナント管理者パスワード</td><td>デバイス削除時に使用（任意）</td><td>—</td></tr>
           <tr><td>SSL 証明書を検証する</td><td>オフにすると自己署名証明書を許可</td><td>ローカル環境ではオフ推奨</td></tr>
         </tbody>

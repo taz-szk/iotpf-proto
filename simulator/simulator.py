@@ -66,7 +66,6 @@ class TenantDialog(tk.Toplevel):
         self._host_var   = tk.StringVar(value=d.get("broker_host", "localhost"))
         self._port_var   = tk.IntVar(value=d.get("broker_port", 8883))
         self._ssl_var    = tk.BooleanVar(value=d.get("ssl_verify", True))
-        self._slug_var   = tk.StringVar(value=d.get("tenant_slug", ""))
         self._email_var  = tk.StringVar(value=d.get("tenant_email", ""))
         self._passwd_var = tk.StringVar(value=d.get("tenant_password", ""))
 
@@ -74,7 +73,7 @@ class TenantDialog(tk.Toplevel):
         f.pack(fill=tk.BOTH, expand=True)
 
         fields = [
-            ("テナント名 *",  self._name_var,   False, 36),
+            ("テナント名 * (=テナントSlug)", self._name_var, False, 36),
             ("API URL",      self._api_var,    False, 36),
             ("MQTTホスト",   self._host_var,   False, 24),
         ]
@@ -116,20 +115,18 @@ class TenantDialog(tk.Toplevel):
 
         # ── テナント管理者情報 ──
         ttk.Separator(f, orient=tk.HORIZONTAL).grid(row=8, column=0, columnspan=2, sticky=tk.EW, pady=(4, 4))
-        ttk.Label(f, text="テナントSlug", foreground="gray").grid(row=9, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._slug_var, width=36).grid(row=9, column=1, sticky=tk.W)
-        ttk.Label(f, text="テナント管理者メール", foreground="gray").grid(row=10, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=10, column=1, sticky=tk.W)
-        ttk.Label(f, text="テナント管理者パスワード", foreground="gray").grid(row=11, column=0, sticky=tk.W, pady=3, padx=(0, 6))
-        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=11, column=1, sticky=tk.W)
-        ttk.Label(f, text="↑ デバイス削除時にテナント自己サービスAPIを呼ぶために使用（PF管理者権限は不要）",
-                  foreground="gray", font=("", 8)).grid(row=12, column=0, columnspan=2, sticky=tk.W)
+        ttk.Label(f, text="テナント管理者メール", foreground="gray").grid(row=9, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._email_var, width=36).grid(row=9, column=1, sticky=tk.W)
+        ttk.Label(f, text="テナント管理者パスワード", foreground="gray").grid(row=10, column=0, sticky=tk.W, pady=3, padx=(0, 6))
+        ttk.Entry(f, textvariable=self._passwd_var, width=36, show="*").grid(row=10, column=1, sticky=tk.W)
+        ttk.Label(f, text="↑ デバイス削除時にテナント自己サービスAPIを呼ぶために使用",
+                  foreground="gray", font=("", 8)).grid(row=11, column=0, columnspan=2, sticky=tk.W)
 
         ttk.Checkbutton(f, text="SSL証明書を検証する（オフ=自己署名証明書を許可）",
-                        variable=self._ssl_var).grid(row=13, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
+                        variable=self._ssl_var).grid(row=12, column=0, columnspan=2, sticky=tk.W, pady=(6, 0))
 
         bf = ttk.Frame(f)
-        bf.grid(row=14, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
+        bf.grid(row=13, column=0, columnspan=2, pady=(12, 0), sticky=tk.E)
         ttk.Button(bf, text="OK",       command=self._ok,      width=8).pack(side=tk.LEFT, padx=4)
         ttk.Button(bf, text="キャンセル", command=self.destroy, width=8).pack(side=tk.LEFT)
 
@@ -174,7 +171,6 @@ class TenantDialog(tk.Toplevel):
             "broker_port": self._port_var.get(),
             "bootstrap_tokens": tokens,
             "ssl_verify": self._ssl_var.get(),
-            "tenant_slug": self._slug_var.get().strip(),
             "tenant_email": self._email_var.get().strip(),
             "tenant_password": self._passwd_var.get(),
         }
@@ -765,7 +761,7 @@ class SimulatorApp(tk.Tk):
         if tenant_cfg and os.path.exists(tenant_id_path):
             api_url       = tenant_cfg["api_url"]
             verify        = tenant_cfg.get("ssl_verify", True)
-            tenant_slug   = tenant_cfg.get("tenant_slug", "")
+            tenant_slug   = tenant_cfg.get("name", "")
             email         = tenant_cfg.get("tenant_email", "")
             password      = tenant_cfg.get("tenant_password", "")
             try:
