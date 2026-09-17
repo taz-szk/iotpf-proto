@@ -755,11 +755,6 @@ class SimulatorApp(tk.Tk):
         ):
             return
 
-        # 削除処理中にデータを送り続けないよう、まずテレメトリ送信を止める
-        # （PF側の削除完了を待つ間、最終的なワーカー停止・UI除去より前に実施）
-        worker.stop_sending()
-        self._append_log(f"{worker.device_id}: データ送信を停止しました", level="info")
-
         # テナント自己サービスAPIでデバイスを削除（PF管理者権限は不要）
         cert_dir      = os.path.join(CERT_BASE, tenant_name, worker.device_id)
         tenant_id_path = os.path.join(cert_dir, "tenant_id")
@@ -852,6 +847,9 @@ class SimulatorApp(tk.Tk):
         row = self._device_rows.pop(wid, None)
         if row:
             row.destroy()
+
+        self._append_log(f"{worker.device_id}: 削除処理が完了しました", level="info")
+        messagebox.showinfo("削除完了", f'"{worker.device_id}" の削除処理が完了しました。', parent=self)
 
     # ─── テレメトリ送信 ───────────────────────────────────────────────────────
 
