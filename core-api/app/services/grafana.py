@@ -83,8 +83,8 @@ _FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices(
     '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
 )
 
-# アーカイブ(Del_接頭辞)専用のデバイス一覧変数。退役デバイスが増え続けると現役用の
-# device_name一覧が埋まって分かりにくくなるため、現役側からは完全に除外し、
+# アーカイブ(Del_接頭辞)専用のデバイス一覧変数。削除済みデバイスが増え続けると稼働中用の
+# device_name一覧が埋まって分かりにくくなるため、稼働中側からは完全に除外し、
 # 過去データを見たい時だけ使う別のドロップダウンとして分離する。
 _FLUX_DEVICE_VAR_ARCHIVED = (
     'from(bucket: "telemetry")\n'
@@ -320,7 +320,7 @@ _DEFAULT_DASHBOARD = {
                 },
             },
             # アーカイブ(削除済み)デバイス行 — archived_device_nameでリピート。
-            # 退役デバイスが増えても現役のdevice_name一覧を埋めないよう分離した別枠。
+            # 削除済みデバイスが増えても稼働中のdevice_name一覧を埋めないよう分離した別枠。
             # 初期表示では折りたたむ(collapsed: true)ため、子パネルは行自身の
             # "panels"配列に入れ子にする(Grafanaの折りたたみ行のスキーマ要件)。
             {
@@ -549,7 +549,7 @@ def build_dashboard_panels(configs: list[dict]) -> list[dict]:
     stat_deleted = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][1])  # id=2
     stat_status  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][2])  # id=4
     fallback_ts  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][3])  # id=3
-    # アーカイブ(削除済み)行。現役デバイスの行より下に来るよう、後段でyを詰め直す。
+    # アーカイブ(削除済み)行。稼働中デバイスの行より下に来るよう、後段でyを詰め直す。
     # アーカイブ行(id=101, collapsed=true)。子パネル(登録状態/接続状態/テレメトリ)は
     # 折りたたみ行の仕様上、row_archived自身の"panels"に入れ子になっている。
     row_archived = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][4])  # id=101

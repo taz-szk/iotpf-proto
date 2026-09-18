@@ -74,7 +74,7 @@ def test_build_dashboard_panels_empty_configs_returns_fallback():
     assert ts_panel["id"] == 3
 
 def test_build_dashboard_panels_includes_archived_row():
-    """現役デバイス行の下に、archived_device_nameでリピートするアーカイブ行が追加される。
+    """稼働中デバイス行の下に、archived_device_nameでリピートするアーカイブ行が追加される。
     初期表示は折りたたみ(collapsed)なので、子パネルは行自身のpanelsに入れ子になる。"""
     panels = build_dashboard_panels([])
     archived_row = next(p for p in panels if p.get("id") == 101)
@@ -85,11 +85,11 @@ def test_build_dashboard_panels_includes_archived_row():
     assert child_ids == {102, 103, 104}
     # 折りたたみ行なので、子パネルはトップレベルには出てこない
     assert not any(p.get("id") in (102, 103, 104) for p in panels)
-    # アーカイブ行は現役行(y=0〜9)より下に配置される
+    # アーカイブ行は稼働中行(y=0〜9)より下に配置される
     assert archived_row["gridPos"]["y"] > 9
 
 def test_build_dashboard_panels_archived_row_below_configs_sensor_panels():
-    """センサーパネル数が多いほど現役行の占有高さが増えるため、アーカイブ行もそれに応じて下がる。"""
+    """センサーパネル数が多いほど稼働中行の占有高さが増えるため、アーカイブ行もそれに応じて下がる。"""
     configs_few = [{"sensor_key": "temperature", "panel_type": "gauge"}]
     configs_many = [
         {"sensor_key": f"sensor{i}", "panel_type": "gauge"} for i in range(6)
@@ -269,8 +269,8 @@ def test_device_var_flux_only_treats_latest_value_1_as_deleted():
 
 
 def test_device_var_flux_excludes_del_prefixed_names_entirely():
-    """現役デバイス一覧からはDel_接頭辞のアーカイブ名義そのものを問答無用で除外する
-    (device_statusデータがあっても現役側の一覧には出さず、アーカイブ専用変数に分離する)。"""
+    """稼働中デバイス一覧からはDel_接頭辞のアーカイブ名義そのものを問答無用で除外する
+    (device_statusデータがあっても稼働中側の一覧には出さず、アーカイブ専用変数に分離する)。"""
     for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
         final_filter = flux.rsplit('|> filter', 1)[-1]
         assert 'not (r.device_name =~ /^Del_/)' in final_filter

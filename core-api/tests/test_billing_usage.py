@@ -156,7 +156,7 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
     assert usage == {
         "base_fee": 1,
         "data_points": 100,
-        "retained_data_points": 300,  # 320(全体) - 20(退役)
+        "retained_data_points": 300,  # 320(全体) - 20(削除済み)
         "retired_data_points": 20,
         "retired_device_count": 2,
         "device_count": 5,
@@ -166,8 +166,8 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
 
 
 def test_aggregate_monthly_usage_retained_data_points_never_negative():
-    """全体件数と退役件数は別々のスナップショットクエリなので、タイミングのずれで
-    退役 > 全体になっても現役分が負の数にならないようにする。"""
+    """全体件数と削除済み件数は別々のスナップショットクエリなので、タイミングのずれで
+    削除済み > 全体になっても稼働中分が負の数にならないようにする。"""
     mock_db = MagicMock()
     with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=10), \
          patch("app.services.billing_usage._count_total_retained_points", return_value=5), \

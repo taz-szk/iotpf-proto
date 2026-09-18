@@ -1279,11 +1279,11 @@
         // 単価設定
         billingItems: [
           { key: 'base_fee', label: '基本料金', unit: '月額' },
-          { key: 'data_points', label: 'データポイント数', unit: '件あたり' },
-          { key: 'retained_data_points', label: '保持データポイント数（現役）', unit: '件あたり（現在保持中のスナップショット）' },
-          { key: 'retired_data_points', label: '保持データポイント数（退役）', unit: '件あたり（削除済みデバイスのアーカイブ分、通常より低単価を想定）' },
-          { key: 'retired_device_count', label: '退役デバイス数', unit: '台あたり（削除済みでアーカイブ中のデバイス数）' },
-          { key: 'device_count', label: '登録デバイス数（現役）', unit: '台あたり（現在登録中、重複なしのスナップショット）' },
+          { key: 'data_points', label: 'データポイント数', unit: '件あたり（当月のカレンダー月内に新しく取り込まれた件数）' },
+          { key: 'retained_data_points', label: '保持データポイント数（稼働中）', unit: '件あたり（今日から保持日数分遡った直近期間のスナップショット。データポイント数とは対象期間が異なる）' },
+          { key: 'retired_data_points', label: '保持データポイント数（削除済み）', unit: '件あたり（削除済みデバイスのアーカイブ分。直近保持日数分のスナップショットで、通常より低単価を想定）' },
+          { key: 'retired_device_count', label: '削除済みデバイス数', unit: '台あたり（削除済みでアーカイブ中のデバイス数）' },
+          { key: 'device_count', label: '登録デバイス数（稼働中）', unit: '台あたり（現在登録中、重複なしのスナップショット）' },
           { key: 'provisionable_devices', label: 'プロビジョニング可能数', unit: '台あたり' },
           { key: 'alert_events', label: 'アラートイベント数', unit: '件あたり' },
         ],

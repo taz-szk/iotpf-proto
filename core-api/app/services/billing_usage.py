@@ -43,7 +43,7 @@ def _count_influxdb_points_for_month(influxdb_org_id: str, token: str, year: int
 
 
 def _count_total_retained_points(influxdb_org_id: str, token: str, retention_days: int) -> int:
-    """現在(スナップショット時点)保持されているテレメトリ点数の全体(現役+退役)。
+    """現在(スナップショット時点)保持されているテレメトリ点数の全体(稼働中+削除済み)。
     device_nameによる絞り込みを行わないので高速。"""
     query = (
         'from(bucket: "telemetry")\n'
@@ -68,10 +68,10 @@ def _count_total_retained_points(influxdb_org_id: str, token: str, retention_day
 
 
 def _count_retired_retained_points(influxdb_org_id: str, token: str, retention_days: int) -> int:
-    """現在(スナップショット時点)保持されているテレメトリ点数のうち、退役デバイス
+    """現在(スナップショット時点)保持されているテレメトリ点数のうち、削除済みデバイス
     (device_nameがDel_接頭辞のアーカイブ)分。device_name =~ /^Del_/ は肯定regexで
     InfluxDBのタグインデックスを使えるため高速(否定regexは大量データで遅い/タイムアウト
-    しうることが実機で確認済み。not (...)は使わず、全体からこの値を引いて現役分を
+    しうることが実機で確認済み。not (...)は使わず、全体からこの値を引いて稼働中分を
     求める方式にしている)。"""
     query = (
         'from(bucket: "telemetry")\n'
@@ -97,7 +97,7 @@ def _count_retired_retained_points(influxdb_org_id: str, token: str, retention_d
 
 
 def _count_retired_devices(influxdb_org_id: str, token: str, retention_days: int) -> int:
-    """現在アーカイブされている(Del_接頭辞の)退役デバイスの台数(スナップショット時点)。"""
+    """現在アーカイブされている(Del_接頭辞の)削除済みデバイスの台数(スナップショット時点)。"""
     query = (
         'from(bucket: "telemetry")\n'
         f'  |> range(start: -{retention_days}d)\n'
@@ -150,11 +150,17 @@ def aggregate_monthly_usage(
     usage dictを返す。provisionable_devices・retained_data_points・retired_data_points・
     retired_device_count・device_countは「現在時点」のスナップショットなので、
     finalized済みの月に対しては呼び出し側が絶対に呼ばないこと。
-    retained_data_points/retired_data_pointsは「今まさにInfluxDBに保持されている
-    テレメトリ点数」を、device_nameがDel_接頭辞(退役デバイスのアーカイブ)かどうかで
-    分けたもの。退役デバイスは強制削除せずリテンションで自然に消えるまで保持され続けるため、
-    現役分とは別単価で課金できるようにするための指標。
-    device_count/retired_device_countも同様に「現在の登録デバイス数」「現在の退役
+
+    data_pointsとretained_data_points/retired_data_pointsは対象期間が異なる点に注意:
+    - data_points: 対象年月のカレンダー月内(月初〜翌月初)に新しく取り込まれた件数(フロー)
+    - retained_data_points/retired_data_points: 「今日から実効保持日数(retention_days)分
+      遡った日」〜「今日」までの移動窓(スライディングウィンドウ)で、今もInfluxDBに
+      残っている件数のスナップショット(在庫)。日が経つごとに窓自体が動くため、両者は
+      一致しない(むしろ保持日数が1ヶ月を超える場合、在庫の方が単月フローより大きくなるのが普通)。
+    retained_data_points/retired_data_pointsは、device_nameがDel_接頭辞(削除済みデバイスの
+    アーカイブ)かどうかで分けたもの。削除済みデバイスは強制削除せずリテンションで自然に
+    消えるまで保持され続けるため、稼働中分とは別単価で課金できるようにするための指標。
+    device_count/retired_device_countも同様に「現在の登録デバイス数」「現在の削除済み
     (アーカイブ)デバイス数」という重複のないスナップショットで、対になっている。"""
     provisionable_devices, _has_unlimited = _calc_provisionable_devices(db, tenant_id, schema)
     data_points = _count_influxdb_points_for_month(influxdb_org_id, influxdb_token, year, month)
