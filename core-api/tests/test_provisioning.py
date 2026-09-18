@@ -14,17 +14,20 @@ def _make_token(tenant_id):
 def test_provision_success(client):
     tenant_id = str(uuid.uuid4())
     mock_token = _make_token(tenant_id)
+    mock_tenant = MagicMock()
+    mock_tenant.influxdb_org_id = "org-1"
     mock_cert_pem = "-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----"
     mock_key_pem = "-----BEGIN EC PRIVATE KEY-----\nMOCK\n-----END EC PRIVATE KEY-----"
 
     with patch("app.routers.provisioning.SessionLocal") as mock_session, \
-         patch("app.routers.provisioning.issue_device_cert_for_tenant", return_value=(mock_cert_pem, mock_key_pem)):
+         patch("app.routers.provisioning.issue_device_cert_for_tenant", return_value=(mock_cert_pem, mock_key_pem)), \
+         patch("app.routers.provisioning.revive_device_in_influxdb") as mock_revive:
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
         mock_db.__exit__ = MagicMock(return_value=False)
         mock_session.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_token
+        mock_db.query.return_value.filter.return_value.first.side_effect = [mock_token, mock_tenant]
         mock_db.execute.return_value.first.return_value = None
 
         resp = client.post("/provision", json={
@@ -37,6 +40,7 @@ def test_provision_success(client):
     assert "certificate" in data
     assert "private_key" in data
     assert data["tenant_id"] == tenant_id
+    mock_revive.assert_called_once_with("org-1", "device-serial-001")
 
 def test_provision_invalid_token(client):
     with patch("app.routers.provisioning.SessionLocal") as mock_session:
@@ -115,17 +119,20 @@ def test_provision_with_valid_group_id(client):
     tenant_id = str(uuid.uuid4())
     group_id = str(uuid.uuid4())
     mock_token = _make_token(tenant_id)
+    mock_tenant = MagicMock()
+    mock_tenant.influxdb_org_id = "org-1"
     mock_cert_pem = "-----BEGIN CERTIFICATE-----\nMOCK\n-----END CERTIFICATE-----"
     mock_key_pem = "-----BEGIN EC PRIVATE KEY-----\nMOCK\n-----END EC PRIVATE KEY-----"
 
     with patch("app.routers.provisioning.SessionLocal") as mock_session, \
-         patch("app.routers.provisioning.issue_device_cert_for_tenant", return_value=(mock_cert_pem, mock_key_pem)):
+         patch("app.routers.provisioning.issue_device_cert_for_tenant", return_value=(mock_cert_pem, mock_key_pem)), \
+         patch("app.routers.provisioning.revive_device_in_influxdb"):
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
         mock_db.__exit__ = MagicMock(return_value=False)
         mock_session.return_value = mock_db
-        mock_db.query.return_value.filter.return_value.first.return_value = mock_token
+        mock_db.query.return_value.filter.return_value.first.side_effect = [mock_token, mock_tenant]
         # 1回目: グループ存在確認 -> 存在する, 2回目: 既存デバイスチェック -> なし
         mock_db.execute.return_value.first.side_effect = [MagicMock(), None]
 

@@ -2,7 +2,7 @@ from unittest.mock import patch, MagicMock
 from app.services.grafana import (
     create_grafana_org, setup_grafana_datasource, create_default_dashboard,
     build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
-    _flux_string_escape, retire_device_in_influxdb,
+    _flux_string_escape, retire_device_in_influxdb, revive_device_in_influxdb,
     build_group_variable, build_templating, sync_tenant_dashboard_groups,
     _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT,
 )
@@ -224,3 +224,33 @@ def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
         assert 'r.hasStatus and not r.hasDeleted' in flux
     assert '${group}' in _FLUX_DEVICE_VAR_TENANT
     assert '${group}' not in _FLUX_DEVICE_VAR
+
+
+def test_device_var_flux_only_treats_latest_value_1_as_deleted():
+    """device_deletedマーカーは存在するだけでなく、last()で得られる最新の値が1の場合のみ
+    削除済みとして扱う必要がある。再登録時にrevive_device_in_influxdb()がdeleted=0の
+    新しいマーカーを書き込んだ場合、last()はそちらを返すためdevice_nameが復活する。"""
+    for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
+        deleted_block = flux.split('deleted = from')[1]
+        assert 'last()\n' in deleted_block
+        assert 'r._value == 1' in deleted_block
+
+
+def test_revive_device_in_influxdb_writes_deleted_zero_marker():
+    """再登録されたdevice_nameを復活させるため、deleted=0の新しいマーカーを
+    元のdevice_name名義で書き込む。"""
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        revive_device_in_influxdb("org-1", "dev01")
+    write_call = mock_httpx.post.call_args
+    assert "/api/v2/write" in write_call.args[0]
+    line_protocol = write_call.kwargs["content"].decode()
+    assert line_protocol.startswith("device_deleted,device_name=dev01 deleted=0i")
+
+
+def test_revive_device_in_influxdb_escapes_special_characters():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        revive_device_in_influxdb("org-1", "dev 01,x=y")
+    line_protocol = mock_httpx.post.call_args.kwargs["content"].decode()
+    assert line_protocol.startswith(r"device_deleted,device_name=dev\ 01\,x\=y deleted=0i")

@@ -31,9 +31,11 @@ _FLUX_TELEMETRY = (
     '  |> yield(name: "mean")'
 )
 
-# 削除済みマーカー(Del_接頭辞を除く=元の名前のみ)を持つdevice_nameをデバイス一覧から
-# 除外する。Del_接頭辞のアーカイブ名義自体は除外対象外(一覧に残し、登録状態パネルで
-# 「削除済み」として表示させる)。
+# 削除済みマーカー(Del_接頭辞を除く=元の名前のみ)の最新値が1(削除中)のdevice_nameを
+# デバイス一覧から除外する。同名で再登録されrevive_device_in_influxdb()がdeleted=0の
+# 新しいマーカーを書き込んだ場合は、last()がそちらを返すため除外対象から外れる
+# (=再登録後は改めてデバイス一覧に出力される)。Del_接頭辞のアーカイブ名義自体は
+# 除外対象外(一覧に残し、登録状態パネルで「削除済み」として表示させる)。
 #
 # 注意: findColumn()で配列化しcontains()で絞り込む方式は、同一スクリプト内に
 # from(bucket:"telemetry")が複数回登場する場合に配列が空になる(実機で確認済みの
@@ -56,6 +58,7 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
         '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
         '  |> group(columns: ["device_name"])\n'
         '  |> last()\n'
+        '  |> filter(fn: (r) => r._value == 1)\n'
         '  |> map(fn: (r) => ({device_name: r.device_name, src: "deleted"}))\n'
         '\n'
         'union(tables: [status, deleted])\n'
@@ -195,7 +198,8 @@ _DEFAULT_DASHBOARD = {
                             {
                                 "type": "value",
                                 "options": {
-                                    "1": {"text": "削除済み", "index": 0},
+                                    "0": {"text": "稼働中", "index": 0},
+                                    "1": {"text": "削除済み", "index": 1},
                                 },
                             }
                         ],
@@ -424,6 +428,33 @@ def mark_device_deleted(influxdb_org_id: str, device_name: str) -> None:
         print(f"[mark_device_deleted] OK: {device_name} org={influxdb_org_id}")
     except Exception as e:
         print(f"[mark_device_deleted] FAILED: {device_name} org={influxdb_org_id} err={e}")
+
+
+def revive_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
+    """過去に削除済みマーカー(deleted=1)が書かれたdevice_nameが再登録された際、
+    deleted=0の新しいマーカーを書き込んでdevice_nameを復活させる。
+    device_deletedはlast()で判定されるため、これより後の値としてdeleted=0を
+    書けば以降は「削除済み」ではなく「稼働中」として扱われる(マーカーの削除・
+    上書きはできないため新しい値を追記する形で無効化する)。
+    削除歴が無い(通常の新規登録の)device_nameに対しても無害に呼び出せる。"""
+    import time
+    escaped = device_name.replace(",", r"\,").replace(" ", r"\ ").replace("=", r"\=")
+    line = f'device_deleted,device_name={escaped} deleted=0i {int(time.time())}000000000'
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/write"
+            f"?orgID={influxdb_org_id}&bucket=telemetry&precision=ns",
+            headers={
+                "Authorization": f"Token {settings.influxdb_admin_token}",
+                "Content-Type": "text/plain; charset=utf-8",
+            },
+            content=line.encode(),
+            timeout=5.0,
+        )
+        resp.raise_for_status()
+        print(f"[revive_device] OK: {device_name} org={influxdb_org_id}")
+    except Exception as e:
+        print(f"[revive_device] FAILED: {device_name} org={influxdb_org_id} err={e}")
 
 
 def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
@@ -819,7 +850,9 @@ _PLATFORM_DASHBOARD = {
                 "fieldConfig": {
                     "defaults": {
                         "noValue": "稼働中",
-                        "mappings": [{"type": "value", "options": {"1": {"text": "削除済み", "index": 0}}}],
+                        "mappings": [{"type": "value", "options": {
+                            "0": {"text": "稼働中", "index": 0},
+                            "1": {"text": "削除済み", "index": 1}}}],
                         "thresholds": {"mode": "absolute", "steps": [
                             {"value": None, "color": "green"}, {"value": 1, "color": "red"}]},
                         "color": {"mode": "thresholds"},

@@ -10,10 +10,11 @@ from sqlalchemy import text
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models.public import ProvisioningToken
+from app.models.public import ProvisioningToken, Tenant
 from app.schemas.device import ProvisionRequest, ProvisionOut, ProvisionGroupsRequest
 from app.schemas.device_group import GroupOut
 from app.services.provisioning import issue_device_cert_for_tenant
+from app.services.grafana import revive_device_in_influxdb
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -50,6 +51,7 @@ def provision(req: ProvisionRequest):
 
         tenant_id = str(token.tenant_id)
         schema = f"tenant_{tenant_id.replace('-', '_')}"
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
 
         if req.group_id is not None:
             group_row = db.execute(
@@ -87,6 +89,9 @@ def provision(req: ProvisionRequest):
              "tok_id": str(token.id), "cert_not_after": cert_not_after, "group_id": req.group_id}
         )
         db.commit()
+
+    if tenant and tenant.influxdb_org_id:
+        revive_device_in_influxdb(tenant.influxdb_org_id, device_name)
 
     try:
         with open(settings.step_ca_root) as f:
