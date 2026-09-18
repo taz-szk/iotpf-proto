@@ -29,8 +29,15 @@ def run_flux(org_id, query):
     return resp.status_code, resp.text
 
 
+print(f"対象テナント数: {len(tenant_infos)}")
 for tenant_id, name, org_id, retention_days in tenant_infos:
-    device_list = "|".join(TARGET_DEVICE_NAMES)
+    print(f"  - {name} org_id={org_id} retention_days={retention_days}")
+
+device_list = "|".join(TARGET_DEVICE_NAMES)
+
+for tenant_id, name, org_id, retention_days in tenant_infos:
+    print(f"\n########## tenant={name} org_id={org_id} retention_days={retention_days} ##########")
+
     status, csv_check = run_flux(org_id, f'''
 from(bucket: "telemetry")
   |> range(start: -{retention_days}d)
@@ -39,13 +46,10 @@ from(bucket: "telemetry")
   |> filter(fn: (r) => r.device_name =~ /^({device_list})$/)
   |> sort(columns: ["_time"])
 ''')
-    if "_result" not in csv_check:
-        continue
-    print(f"\n########## tenant={name} org_id={org_id} retention_days={retention_days} ##########")
     print(f"=== 対象device_nameのdevice_status(online)全履歴 (status={status}) ===")
-    print(csv_check)
+    print(repr(csv_check))
 
-    _, csv_group = run_flux(org_id, f'''
+    status2, csv_group = run_flux(org_id, f'''
 from(bucket: "telemetry")
   |> range(start: -{retention_days}d)
   |> filter(fn: (r) => r._measurement == "device_status")
@@ -54,5 +58,5 @@ from(bucket: "telemetry")
   |> group(columns: ["device_name"])
   |> last()
 ''')
-    print("=== group(device_name)+last()適用後(GrafanaのhasStatus判定と同じ条件、直近30d外でも見えるようrange拡大版) ===")
-    print(csv_group)
+    print(f"=== group(device_name)+last()適用後 (status={status2}) ===")
+    print(repr(csv_group))
