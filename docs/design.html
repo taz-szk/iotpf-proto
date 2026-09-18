@@ -1079,7 +1079,7 @@ td code { font-size: 12px; }
           <tbody>
             <tr><td><code>id</code></td><td>UUID PK</td><td>レコード ID</td></tr>
             <tr><td><code>tenant_id</code></td><td>UUID FK</td><td>対象テナント（tenants 参照）</td></tr>
-            <tr><td><code>item_key</code></td><td>VARCHAR(50)</td><td>base_fee / data_points / device_count / provisionable_devices / alert_events</td></tr>
+            <tr><td><code>item_key</code></td><td>VARCHAR(50)</td><td>base_fee / data_points / retained_data_points / retired_data_points / retired_device_count / device_count / provisionable_devices / alert_events（8種類。詳細は「料金積算」タブ参照）</td></tr>
             <tr><td><code>unit_price</code></td><td>NUMERIC(12,4)</td><td>単価</td></tr>
             <tr><td><code>effective_from</code></td><td>DATE</td><td>適用開始日（常に月初日。翌月以降のみ設定可）</td></tr>
           </tbody>
@@ -1096,7 +1096,7 @@ td code { font-size: 12px; }
             <tr><td><code>id</code></td><td>UUID PK</td><td>請求書 ID</td></tr>
             <tr><td><code>tenant_id</code></td><td>UUID FK</td><td>対象テナント</td></tr>
             <tr><td><code>target_year_month</code></td><td>VARCHAR(7)</td><td>対象年月（"YYYY-MM"）</td></tr>
-            <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>draft / finalized / corrected（corrected は未実装）</td></tr>
+            <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>draft / finalized / corrected（同一対象月に複数行を許容し、一覧・明細APIで合算表示する）</td></tr>
             <tr><td><code>subtotal</code></td><td>INTEGER</td><td>小計（円、明細行合計）</td></tr>
             <tr><td><code>tax_amount</code></td><td>INTEGER</td><td>消費税額（10%固定、円未満切り捨て）</td></tr>
             <tr><td><code>total_amount</code></td><td>INTEGER</td><td>合計金額</td></tr>
@@ -2203,7 +2203,7 @@ sequenceDiagram
   <div class="doc-header">
     <div class="doc-eyebrow">Feature Design</div>
     <h1 class="doc-title">料金積算機能 設計書</h1>
-    <div class="doc-meta"><span>版: 1.0（Phase 1 + Phase 2）</span><span>参照: docs/superpowers/specs/2026-09-10-billing-calculation-design.md · 同 phase2-design.md</span></div>
+    <div class="doc-meta"><span>版: 1.1（Phase 1 + Phase 2 + 退役デバイス別課金）</span><span>参照: docs/superpowers/specs/2026-09-10-billing-calculation-design.md · 同 phase2-design.md（末尾に2026-09-18追記あり）</span></div>
   </div>
 
   <div class="section">
@@ -2218,14 +2218,23 @@ sequenceDiagram
         <thead><tr><th>item_key</th><th>内容</th><th>算出方法</th></tr></thead>
         <tbody>
           <tr><td><code>base_fee</code></td><td>基本料金</td><td>常に数量 1（単価そのものが月額基本料金）</td></tr>
-          <tr><td><code>data_points</code></td><td>当月データポイント数</td><td>InfluxDBの月範囲クエリ（<code>range(start: 月初, stop: 翌月初)</code>）で合計</td></tr>
-          <tr><td><code>device_count</code></td><td>当月ユニーク通信デバイス数</td><td>InfluxDBの月範囲クエリでユニーク <code>device_name</code> 数を集計</td></tr>
+          <tr><td><code>data_points</code></td><td>当月データポイント数</td><td>InfluxDBの月範囲クエリ（<code>range(start: 月初, stop: 翌月初)</code>）で合計。「フロー」指標（当月に新しく取り込まれた件数）</td></tr>
+          <tr><td><code>retained_data_points</code></td><td>保持データポイント数（稼働中）</td><td>今日から実効保持日数分遡った移動窓で、稼働中デバイス（<code>device_name</code>が<code>Del_</code>接頭辞でないもの）が<strong>今も保持している</strong>件数の「在庫」スナップショット。<code>全体件数（絞り込み無し） − 退役件数（肯定regexのみ）</code>で算出する</td></tr>
+          <tr><td><code>retired_data_points</code></td><td>保持データポイント数（削除済み）</td><td>同じ移動窓で、削除済み（<code>Del_</code>接頭辞のアーカイブ）デバイスが保持している件数。強制削除せずリテンションで自然消滅させる運用のため、稼働中より低い単価を想定</td></tr>
+          <tr><td><code>retired_device_count</code></td><td>デバイス数（削除済み）</td><td>現在アーカイブされている削除済みデバイスの台数（重複なしスナップショット、<code>device_deleted</code>測定のDel_接頭辞distinct件数）</td></tr>
+          <tr><td><code>device_count</code></td><td>デバイス数（稼働中）</td><td><code>devices</code>テーブルの行数（現在の登録デバイス数、重複なしスナップショット）</td></tr>
           <tr><td><code>provisionable_devices</code></td><td>プロビジョニング可能数</td><td>既存の <code>_calc_provisionable_devices()</code> を再利用（現在時点のスナップショット。無制限トークンは合計から除外し、課金上も特別扱いしない）</td></tr>
           <tr><td><code>alert_events</code></td><td>当月アラート発報件数</td><td>Postgres の月範囲クエリで集計</td></tr>
         </tbody>
       </table>
     </div>
     <p style="font-size:13px;color:var(--text-3)">無制限プロビジョニングトークンのみを持つテナントは <code>provisionable_devices</code> が 0 として請求される（既存API仕様どおりの意図した挙動）。</p>
+    <div class="callout">
+      <strong>「フロー」と「在庫」の違いに注意。</strong><code>data_points</code>は対象年月のカレンダー月内フロー（月初リセット）だが、<code>retained_data_points</code>/<code>retired_data_points</code>/<code>retired_device_count</code>/<code>device_count</code>は<code>provisionable_devices</code>と同じ「現在時点」のスナップショット（実効保持日数分の移動窓）で、確定済み(finalized)の過去月には呼び出し側が再現できない。保持日数が1ヶ月を超える場合、在庫合計が単月フローより大きくなるのは仕様どおり。
+    </div>
+    <div class="callout">
+      <strong>削除済みデバイスのデータは、テナント管理者(admin権限)が保持期限を待たずに即時完全削除できる。</strong><code>POST /tenant-portal/me/devices/archived/purge</code>（確認テキスト<code>DELETE</code>必須、Del_接頭辞以外は拒否）。削除すると次回バッチから<code>retired_data_points</code>/<code>retired_device_count</code>に反映される。強制削除は必須ではなく、既定ではInfluxDBのリテンションルールで自然に消える。
+    </div>
   </div>
 
   <div class="section">
@@ -2270,13 +2279,11 @@ sequenceDiagram
   </div>
 
   <div class="section">
-    <div class="section-title"><span class="section-num">06</span><h2>今後の課題（Phase 3・未着手）</h2></div>
+    <div class="section-title"><span class="section-num">06</span><h2>今後の課題</h2></div>
+    <p style="font-size:13px;color:var(--text-3)">以下は2026-09-11までに全て解決済み: 欠落月バックフィル（<code>_backfill_missing_months()</code>）・ビルショック通知（閾値設定+メール通知、実装済み）・消費税率のマスタ化（<code>billing_settings</code>テーブル）・修正(corrected)ワークフロー（<code>correct_invoice()</code>）・PF管理者向け請求書確認UI（<code>platform-ui/tenant.html</code>）。</p>
     <ul class="checklist">
-      <li>バッチが長期間停止していた場合の欠落月バックフィル（現状は「対象月が変わった時点で見つかったdraft」のみをfinalize。バッチが1ヶ月間丸ごと動かないと、その月の請求書は一切作られない）</li>
-      <li>ビルショック対策（想定利用量の閾値通知）— 閾値をテナントごとに画面設定できるようにする方針は決定済みだが、デフォルト値・通知実装は未着手</li>
-      <li>消費税率のマスタ化（現状ハードコード10%）</li>
-      <li>確定済み(finalized)請求書の手動再集計「修正(corrected)」ワークフロー</li>
-      <li>PF管理者向けの請求書確認UI画面（APIのみ実装済み、画面は未実装）</li>
+      <li>個別デバイス単位の異常検知（現状はテナント単位の総量のみを見ており、特定デバイスの異常な送信量による偏りは検知しない）</li>
+      <li>ビルショック通知の頻度調整（同じ閾値超えで毎日通知が飛ぶ等、通知頻度自体のチューニングは未着手）</li>
     </ul>
   </div>
 </section>
