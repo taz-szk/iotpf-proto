@@ -921,7 +921,9 @@
                               <tbody>
                                 <template x-for="li in invoiceDetail.line_items" :key="li.item_key">
                                   <tr class="border-t border-blue-100">
-                                    <td class="py-1.5 pr-6 font-medium text-gray-700" x-text="invoiceItemLabel(li.item_key)"></td>
+                                    <td class="py-1.5 pr-6 font-medium text-gray-700 cursor-help"
+                                        x-text="invoiceItemLabel(li.item_key)"
+                                        :title="invoiceItemDescription(li.item_key)"></td>
                                     <td class="py-1.5 pr-6 text-gray-600" x-text="li.quantity.toLocaleString()"></td>
                                     <td class="py-1.5 pr-6 text-gray-500" x-text="Number(li.unit_price).toString()"></td>
                                     <td class="py-1.5 text-gray-800" x-text="li.amount.toLocaleString() + ' 円'"></td>
@@ -2007,6 +2009,19 @@ function portalApp() {
         provisionable_devices: 'プロビジョニング可能数', alert_events: 'アラートイベント',
       };
       return labels[key] || key;
+    },
+    invoiceItemDescription(key) {
+      const descriptions = {
+        base_fee: '固定の基本料金',
+        data_points: '当月のカレンダー月内に新しく取り込まれたテレメトリの件数',
+        retained_data_points: '今日から保持日数分遡った直近期間に、稼働中デバイスのデータとして今も保持されている件数のスナップショット(データポイントとは対象期間が異なります)',
+        retired_data_points: '今日から保持日数分遡った直近期間に、削除済み(アーカイブ)デバイスのデータとして今も保持されている件数のスナップショット',
+        retired_device_count: '現在アーカイブされている削除済みデバイスの台数',
+        device_count: '現在登録されている稼働中デバイスの台数',
+        provisionable_devices: '追加でプロビジョニング可能なデバイス数(現在時点)',
+        alert_events: '当月に発報されたアラートイベント数',
+      };
+      return descriptions[key] || '';
     },
     async loadDevices() {
       this.devicesLoading = true;
