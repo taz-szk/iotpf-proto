@@ -52,6 +52,11 @@ def provision(req: ProvisionRequest):
         tenant_id = str(token.tenant_id)
         schema = f"tenant_{tenant_id.replace('-', '_')}"
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        # db.commit()でtenantインスタンスの属性がexpireされ、with文を抜けて
+        # セッションが閉じた後にtenant.influxdb_org_idへアクセスすると
+        # DetachedInstanceErrorになるため、コミット前に値をプリミティブとして
+        # 確保しておく。
+        influxdb_org_id = tenant.influxdb_org_id if tenant else None
 
         if req.group_id is not None:
             group_row = db.execute(
@@ -90,8 +95,8 @@ def provision(req: ProvisionRequest):
         )
         db.commit()
 
-    if tenant and tenant.influxdb_org_id:
-        revive_device_in_influxdb(tenant.influxdb_org_id, device_name)
+    if influxdb_org_id:
+        revive_device_in_influxdb(influxdb_org_id, device_name)
 
     try:
         with open(settings.step_ca_root) as f:
