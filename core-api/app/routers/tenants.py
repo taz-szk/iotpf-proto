@@ -218,7 +218,7 @@ def update_tenant_data_retention(tenant_id: str, body: DataRetentionSet, payload
             try:
                 tenant.data_retention_days = validate_retention_days(body.retention_days)
             except InvalidUnitPriceError as e:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
         new_days = tenant.data_retention_days
         write_audit_log(db, "platform", payload["sub"], payload["email"],

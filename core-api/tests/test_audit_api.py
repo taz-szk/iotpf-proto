@@ -10,7 +10,7 @@ def _make_token(client, user_id="user-1", email="admin@example.com"):
 
 def test_list_audit_logs_requires_auth(client):
     resp = client.get("/audit-logs")
-    assert resp.status_code == 403  # no Bearer token
+    assert resp.status_code == 401  # no Bearer token
 
 
 def test_list_audit_logs_empty(client):

@@ -68,7 +68,7 @@ def test_create_tenant_user_unauthorized():
         "/tenants/22222222-2222-2222-2222-222222222222/users",
         json={"email": "x@x.com", "password": "x", "role": "viewer"},
     )
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 def test_list_tenant_users_success():
     tenant = _make_tenant()

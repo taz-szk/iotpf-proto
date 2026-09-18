@@ -85,7 +85,7 @@ def _schema(tenant_id: str) -> str:
 
 def _validate_uuid(value: str, field: str = "id") -> str:
     if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value.lower()):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid {field}")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=f"Invalid {field}")
     return value.lower()
 
 
@@ -672,7 +672,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         final_device_id = updates.get("device_id", row.device_id)
         final_group_id = updates.get("group_id", row.group_id)
         if final_device_id and final_group_id:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="device_id and group_id are mutually exclusive")
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="device_id and group_id are mutually exclusive")
         if updates.get("group_id") is not None and not group_exists(schema, updates["group_id"]):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
         set_clauses = ", ".join(
@@ -818,7 +818,7 @@ def update_my_data_retention(body: DataRetentionSet, payload: dict = Depends(_re
             try:
                 tenant.data_retention_days = validate_retention_days(body.retention_days)
             except InvalidUnitPriceError as e:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
         new_days = tenant.data_retention_days
         write_audit_log(db, "tenant", payload["sub"], payload["email"],
@@ -921,7 +921,7 @@ def dispatch_ota(device_id: str, body: _OtaDispatchBody, payload: dict = Depends
     schema = _schema(tenant_id)
     firmware_id = body.firmware_id
     if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', firmware_id.lower()):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid firmware_id")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid firmware_id")
     with SessionLocal() as db:
         row = db.execute(text(f'''
             SELECT minio_key, version, checksum, file_size
@@ -1086,7 +1086,7 @@ def put_panel_configs(
     # Validate: no duplicate sensor_keys
     sensor_keys = [item.sensor_key for item in items]
     if len(sensor_keys) != len(set(sensor_keys)):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Duplicate sensor_key values")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Duplicate sensor_key values")
 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -1282,7 +1282,7 @@ def confirm_tenant_assistant_action(body: AssistantConfirmActionBody, payload: d
                 tools=TENANT_TOOLS, payload=payload,
             )
         except ValidationError as e:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
         except TypeError as e:

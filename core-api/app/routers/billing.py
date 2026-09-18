@@ -38,7 +38,7 @@ def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
 
 def _validate_uuid(value: str) -> str:
     if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value.lower()):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid tenant_id")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid tenant_id")
     return value.lower()
 
 
@@ -64,7 +64,7 @@ def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_re
     try:
         unit_price = validate_unit_price(body.unit_price)
     except InvalidUnitPriceError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -73,7 +73,7 @@ def create_price(tenant_id: str, body: UnitPriceSet, payload: dict = Depends(_re
         try:
             row = set_unit_price(db, tenant_id, body.item_key, unit_price, body.effective_from)
         except InvalidEffectiveDateError as e:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
         result = {
             "item_key": row.item_key,
             "unit_price": str(row.unit_price),
@@ -162,7 +162,7 @@ def update_tenant_bill_shock_threshold(tenant_id: str, body: BillShockThresholdS
     try:
         amount = validate_bill_shock_threshold(body.threshold_amount or "")
     except InvalidUnitPriceError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()

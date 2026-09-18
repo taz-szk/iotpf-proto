@@ -99,12 +99,12 @@ def update_billing_default_prices(body: list[DefaultPriceItem], payload: dict = 
     validated: dict[str, Decimal] = {}
     for item in body:
         if item.item_key not in ITEM_KEYS:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                                  detail=f"Unknown item_key: {item.item_key}")
         try:
             validated[item.item_key] = validate_unit_price(item.unit_price)
         except InvalidUnitPriceError as e:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         set_default_unit_prices(db, validated)
@@ -129,7 +129,7 @@ def update_billing_tax_rate(body: TaxRateItem, payload: dict = Depends(_require_
     try:
         rate = validate_tax_rate(body.tax_rate)
     except InvalidUnitPriceError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         set_tax_rate(db, rate)
@@ -154,7 +154,7 @@ def update_billing_bill_shock_threshold(body: BillShockThresholdItem, payload: d
     try:
         amount = validate_bill_shock_threshold(body.default_threshold_amount or "")
     except InvalidUnitPriceError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         set_default_bill_shock_threshold(db, amount)
@@ -179,7 +179,7 @@ def update_platform_data_retention(body: DataRetentionItem, payload: dict = Depe
     try:
         days = validate_retention_days(body.default_retention_days)
     except InvalidUnitPriceError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
 
     with SessionLocal() as db:
         set_default_retention_days(db, days)

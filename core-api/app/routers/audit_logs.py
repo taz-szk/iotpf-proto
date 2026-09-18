@@ -32,7 +32,7 @@ def list_audit_logs(
     _: dict = Depends(_require_platform),
 ):
     if tenant_id and not _UUID_RE.fullmatch(tenant_id.lower()):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid tenant_id")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid tenant_id")
     with SessionLocal() as db:
         q = db.query(AuditLog)
         if tenant_id:

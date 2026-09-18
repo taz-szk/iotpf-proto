@@ -25,7 +25,7 @@ def _require_platform(creds: HTTPAuthorizationCredentials = Depends(_bearer)):
 
 def _validate_uuid(value: str) -> str:
     if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', value.lower()):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid UUID")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid UUID")
     return value.lower()
 
 

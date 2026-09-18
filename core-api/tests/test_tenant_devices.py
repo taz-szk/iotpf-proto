@@ -61,7 +61,7 @@ def test_list_tenant_devices_returns_rows():
 
 def test_list_tenant_devices_unauthorized():
     resp = client.get("/tenants/33333333-3333-3333-3333-333333333333/devices")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 def test_list_tenant_devices_schema_name():
     """スキーマ名変換（UUID のダッシュ→アンダースコア）を検証する"""

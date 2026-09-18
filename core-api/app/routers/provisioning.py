@@ -57,7 +57,7 @@ def provision(req: ProvisionRequest):
                 {"gid": req.group_id}
             ).first()
             if not group_row:
-                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid group_id")
+                raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid group_id")
 
         existing = db.execute(
             text(f'SELECT id FROM "{schema}".devices WHERE device_id = :did'),

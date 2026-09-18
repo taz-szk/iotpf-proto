@@ -115,7 +115,7 @@ def test_portal_delete_group_rejects_invalid_group_id_format():
 
 def test_platform_groups_requires_auth():
     resp = client.get(f"/tenants/{TENANT_ID}/groups")
-    assert resp.status_code == 403
+    assert resp.status_code == 401
 
 
 def test_portal_list_groups_empty():
