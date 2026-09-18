@@ -66,12 +66,34 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
     with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=100), \
          patch("app.services.billing_usage._count_unique_devices_for_month", return_value=5), \
          patch("app.services.billing_usage._count_alert_events_for_month", return_value=2), \
-         patch("app.services.billing_usage._calc_provisionable_devices", return_value=(40, False)):
+         patch("app.services.billing_usage._calc_provisionable_devices", return_value=(40, False)), \
+         patch("app.services.billing_usage.get_effective_retention_days", return_value=365):
         usage = aggregate_monthly_usage(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 9)
     assert usage == {
         "base_fee": 1,
         "data_points": 100,
+        "data_point_days": 36500,
         "device_count": 5,
         "provisionable_devices": 40,
         "alert_events": 2,
     }
+
+
+def test_aggregate_monthly_usage_data_point_days_scales_with_retention():
+    """保持日数が長いテナントほど、同じデータポイント数でもdata_point_daysが大きくなる。"""
+    mock_db = MagicMock()
+    with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=10), \
+         patch("app.services.billing_usage._count_unique_devices_for_month", return_value=1), \
+         patch("app.services.billing_usage._count_alert_events_for_month", return_value=0), \
+         patch("app.services.billing_usage._calc_provisionable_devices", return_value=(1, False)), \
+         patch("app.services.billing_usage.get_effective_retention_days", return_value=60):
+        usage_short = aggregate_monthly_usage(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 9)
+    with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=10), \
+         patch("app.services.billing_usage._count_unique_devices_for_month", return_value=1), \
+         patch("app.services.billing_usage._count_alert_events_for_month", return_value=0), \
+         patch("app.services.billing_usage._calc_provisionable_devices", return_value=(1, False)), \
+         patch("app.services.billing_usage.get_effective_retention_days", return_value=730):
+        usage_long = aggregate_monthly_usage(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 9)
+    assert usage_short["data_point_days"] == 600
+    assert usage_long["data_point_days"] == 7300
+    assert usage_long["data_point_days"] > usage_short["data_point_days"]

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.billing import BillingDefaultUnitPrice, BillingInvoice, BillingLineItem, BillingSettings, BillingUnitPrice
 
-ITEM_KEYS = ("base_fee", "data_points", "device_count", "provisionable_devices", "alert_events")
+ITEM_KEYS = ("base_fee", "data_points", "data_point_days", "device_count", "provisionable_devices", "alert_events")
 
 DEFAULT_TAX_RATE = Decimal("0.10")
 

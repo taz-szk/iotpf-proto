@@ -2,7 +2,9 @@ from datetime import datetime, timezone
 import httpx
 
 from app.config import settings
+from app.models.public import Tenant
 from app.routers.stats import _parse_influx_csv_scalar, _calc_provisionable_devices
+from app.services.billing import get_effective_retention_days
 
 
 def _month_range_rfc3339(year: int, month: int) -> tuple[str, str]:
@@ -84,11 +86,18 @@ def aggregate_monthly_usage(
 ) -> dict[str, int]:
     """対象年月の利用量を集計し、app.services.billing.calculate_invoice()に渡せる
     usage dictを返す。provisionable_devicesは「現在時点」のスナップショットなので、
-    finalized済みの月に対しては呼び出し側が絶対に呼ばないこと。"""
+    finalized済みの月に対しては呼び出し側が絶対に呼ばないこと。
+    data_point_daysは「その月のデータポイント数 × テナントの実効保持日数」で、
+    保持期間が長いほど同じ取り込み量でも課金額が伸びるようにするための指標
+    （実際のストレージコストが データ量×保持期間 に比例することを反映）。"""
     provisionable_devices, _has_unlimited = _calc_provisionable_devices(db, tenant_id, schema)
+    data_points = _count_influxdb_points_for_month(influxdb_org_id, influxdb_token, year, month)
+    tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    retention_days = get_effective_retention_days(db, tenant)
     return {
         "base_fee": 1,
-        "data_points": _count_influxdb_points_for_month(influxdb_org_id, influxdb_token, year, month),
+        "data_points": data_points,
+        "data_point_days": data_points * retention_days,
         "device_count": _count_unique_devices_for_month(influxdb_org_id, influxdb_token, year, month),
         "provisionable_devices": provisionable_devices,
         "alert_events": _count_alert_events_for_month(db, schema, year, month),
