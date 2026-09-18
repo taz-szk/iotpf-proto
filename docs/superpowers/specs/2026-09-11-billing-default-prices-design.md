@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS billing_default_unit_prices (
 );
 ```
 
-`item_key`は既存の`app.services.billing.ITEM_KEYS`（`base_fee`/`data_points`/`device_count`/`provisionable_devices`/`alert_events`）のいずれか。`unit_price`のみを保持し、履歴（`effective_from`）は持たない — PF管理者が値を変更すると、その時点で以後の新規テナント開通に即座に反映される（既存テナントには影響しない。§2参照）。
+`item_key`は既存の`app.services.billing.ITEM_KEYS`のいずれか（策定当時は`base_fee`/`data_points`/`device_count`/`provisionable_devices`/`alert_events`の5項目だったが、2026-09-18に`retained_data_points`/`retired_data_points`/`retired_device_count`が追加され8項目に拡張されている。詳細は`2026-09-10-billing-calculation-phase2-design.md`の追記参照）。`unit_price`のみを保持し、履歴（`effective_from`）は持たない — PF管理者が値を変更すると、その時点で以後の新規テナント開通に即座に反映される（既存テナントには影響しない。§2参照）。
 
 SQLAlchemyモデルは `core-api/app/models/billing.py` に追加:
 
@@ -98,7 +98,7 @@ PUT /platform/billing/default-prices
 `platform-ui/platform-settings.html`に新しいセクションを追加（既存の「多要素認証（TOTP）設定」セクションと並ぶ2つ目のセクション）。
 
 - 見出し「デフォルト料金テーブル（新規テナント開通時の初期単価）」
-- `ITEM_KEYS`5項目それぞれについて、日本語ラベル＋単価入力欄（テキスト入力、既存の`/tenants/{tenant_id}/billing/prices`タブの入力パターンを踏襲）
+- `ITEM_KEYS`各項目（策定当時5項目、2026-09-18以降は8項目）それぞれについて、日本語ラベル＋単価入力欄（テキスト入力、既存の`/tenants/{tenant_id}/billing/prices`タブの入力パターンを踏襲）
 - 「保存」ボタン → `PUT /platform/billing/default-prices`
 - ページロード時に`GET /platform/billing/default-prices`で現在値を取得し、未設定の項目は空欄表示
 - 保存成功時に既存のMFA設定セクションと同様の成功メッセージ表示パターンを踏襲

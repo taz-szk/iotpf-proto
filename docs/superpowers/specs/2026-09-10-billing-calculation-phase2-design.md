@@ -116,3 +116,24 @@ GET /tenants/{tenant_id}/billing/invoices
 - 消費税率のマスタ化 → `billing_settings`テーブル（シングルトン行）+ `GET/PUT /platform/billing/tax-rate` + `platform-settings.html`のUIで実装。ハードコードのDEFAULT_TAX_RATEはフォールバックとして残す。
 - バックフィル → `_backfill_missing_months()`を実装。既存の請求書と現在の対象月の間に抜けている月があればfinalizedとして遡って生成する。provisionable_devicesは直近の既存請求書の値を引き継ぐ（過去のスナップショットは再現できないため）。
 - 修正(corrected)機能 → `correct_invoice()`（`billing_batch.py`）を実装。差額（アジャストメント）方式：finalized請求書1件に対しPF管理者がAPI+UI（`platform-ui/tenant.html`の「再集計する」ボタン）で手動トリガーし、最新利用量で再計算した金額と現在の確定金額（finalized＋既存corrected行の合計）との差分のみを`status='corrected'`行として追加する（明細行も同様に差分で保持）。差額が0なら行を作らない。provisionable_devicesはfinalized行の値をそのまま引き継ぐ。一覧・明細APIは同一対象月の複数行（finalized＋corrected）を合算して1件の請求書として返す（`list_invoices_aggregated`/`get_invoice_detail_aggregated`、`app/services/billing.py`）ため、既存のレスポンス形式・UIは変更不要（`correction_count`フィールドと明細の`corrections`履歴のみ追加）。
+
+**追記（2026-09-18・退役デバイス別課金機能）:**
+
+`ITEM_KEYS`は当初の5項目から8項目に拡張された。§1の集計表は現在は以下の通り（`device_count`の算出方法が変更され、`data_point_days`という指標が一度追加された後に廃止されている）:
+
+| item_key | 算出方法 |
+|---|---|
+| `base_fee` | 常に`1`（変更なし） |
+| `data_points` | 当月のカレンダー月内に新しく取り込まれたテレメトリ件数（変更なし。あくまで「フロー」指標） |
+| `retained_data_points` | 今日から実効保持日数分遡った移動窓で、稼働中デバイス（`device_name`が`Del_`接頭辞でないもの）が今も保持しているテレメトリ件数の**スナップショット**（在庫）。`provisionable_devices`と同様、finalized済みの過去月には呼び出せない |
+| `retired_data_points` | 同じ移動窓で、削除済み（`Del_`接頭辞のアーカイブ）デバイスが保持している件数のスナップショット。強制削除せずリテンションで自然消滅させる運用のため、稼働中より低い単価を想定 |
+| `retired_device_count` | 現在アーカイブされている削除済みデバイスの台数（重複なしスナップショット） |
+| `device_count` | ~~当月にテレメトリを送信したユニークdevice_name数~~ → **`devices`テーブルの行数（現在の登録デバイス数、重複なしスナップショット）に変更**。旧定義は、同一device_idを削除→復活を繰り返すと同月内でDel_接頭辞コピーと復活後の再送信が別device_nameとして二重カウントされ、実態より大幅に膨れ上がる不具合があったため |
+| `provisionable_devices` | 変更なし |
+| `alert_events` | 変更なし |
+
+`retained_data_points`/`retired_data_points`の実装では、`not (r.device_name =~ /^Del_/)`という否定regexが大量データでInfluxDBのタグインデックスを使えず15秒タイムアウトすることが実機で確認されたため、「全体件数（絞り込み無し）− 退役件数（肯定regexのみ）」という減算方式で現役件数を求めている（`_count_total_retained_points`/`_count_retired_retained_points`、`app/services/billing_usage.py`）。
+
+用語は「現役/退役」から、Grafanaの登録状態パネルの表示と揃えて「稼働中/削除済み」に統一した。
+
+関連: 削除済みデバイスのInfluxDBデータを即時に完全削除できる機能（テナント管理者・admin限定、確認テキスト"DELETE"必須）も同時期に追加された（`GET/POST /tenant-portal/me/devices/archived`系）。これは請求集計そのものには影響しないが、削除済みデータの保持期間をユーザー側で早期に終わらせる手段として関連する。

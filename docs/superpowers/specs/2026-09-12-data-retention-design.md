@@ -68,6 +68,8 @@ def validate_retention_days(value_str: str) -> int:
     空文字列は許可しない（保持期間の無効化はできない）。"""
 ```
 
+**追記（2026-09-18）:** `get_effective_retention_days`は本来InfluxDBネイティブretention ruleの同期用だったが、2026-09-18の退役デバイス別課金機能で`retained_data_points`/`retired_data_points`の集計窓（`range(start: -{retention_days}d)`）にも使われるようになった。「今日から実効保持日数分遡った移動窓」というスナップショットの範囲を決める共通パラメータとして、リテンション同期と課金集計の両方で同じ値を参照している。詳細は`2026-09-10-billing-calculation-phase2-design.md`末尾の追記を参照。
+
 ---
 
 ## 4. InfluxDBへの反映
