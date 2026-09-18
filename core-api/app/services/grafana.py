@@ -741,6 +741,91 @@ def retire_device_in_influxdb(influxdb_org_id: str, device_name: str) -> None:
     except Exception as e:
         print(f"[retire_device] write archive marker FAILED: {new_name} err={e}")
 
+
+def _parse_archived_devices_csv(csv_text: str) -> list[dict]:
+    """device_deletedのCSV応答からdevice_name/_time列を取り出し、
+    [{"device_name": "Del_dev-001", "original_name": "dev-001", "deleted_at": "..."}]の形にする。"""
+    lines = csv_text.strip().splitlines()
+    header = next((l for l in lines if l.startswith(",result,")), None)
+    if not header:
+        return []
+    cols = header.split(",")
+    try:
+        time_idx = cols.index("_time")
+        name_idx = cols.index("device_name")
+    except ValueError:
+        return []
+    results = []
+    for line in lines:
+        if not line.startswith(",_result,"):
+            continue
+        parts = line.split(",")
+        if len(parts) <= max(time_idx, name_idx):
+            continue
+        device_name = parts[name_idx].strip()
+        results.append({
+            "device_name": device_name,
+            "original_name": device_name[len("Del_"):] if device_name.startswith("Del_") else device_name,
+            "deleted_at": parts[time_idx].strip(),
+        })
+    return results
+
+
+def list_archived_devices(influxdb_org_id: str, token: str) -> list[dict]:
+    """テナントの削除済み(Del_接頭辞)デバイス一覧を、削除マーカーの最終更新時刻付きで返す。"""
+    query = (
+        'from(bucket: "telemetry")\n'
+        '  |> range(start: 0)\n'
+        '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
+        '  |> filter(fn: (r) => r.device_name =~ /^Del_/)\n'
+        '  |> group(columns: ["device_name"])\n'
+        '  |> last()\n'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={
+                "Authorization": f"Token {token}",
+                "Content-Type": "application/json",
+                "Accept": "application/csv",
+            },
+            json={"query": query, "type": "flux"},
+            timeout=15.0,
+        )
+        if resp.status_code != 200:
+            return []
+        return _parse_archived_devices_csv(resp.text)
+    except Exception:
+        return []
+
+
+def purge_archived_device_from_influxdb(influxdb_org_id: str, device_name: str) -> None:
+    """削除済み(Del_接頭辞)デバイスのInfluxDBデータを完全に削除する(復元不可)。
+    device_deleted/device_status/telemetryを含む全measurementが対象。
+    誤って稼働中デバイスを消してしまう事故を防ぐため、Del_接頭辞以外の
+    device_nameは呼び出し元の実装ミスとして例外にする(呼び出し側で握り潰さない)。"""
+    if not device_name.startswith("Del_"):
+        raise ValueError(
+            f"purge_archived_device_from_influxdb: device_name must start with 'Del_' (got {device_name!r})"
+        )
+    esc_pred = _flux_string_escape(device_name)
+    resp = httpx.post(
+        f"{settings.influxdb_url}/api/v2/delete"
+        f"?orgID={influxdb_org_id}&bucket=telemetry",
+        headers={
+            "Authorization": f"Token {settings.influxdb_admin_token}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "start": "1970-01-01T00:00:00Z",
+            "stop": "2099-12-31T00:00:00Z",
+            "predicate": f'device_name="{esc_pred}"',
+        },
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+
+
 def _admin_auth() -> tuple[str, str]:
     return (settings.grafana_admin_user, settings.grafana_admin_password)
 

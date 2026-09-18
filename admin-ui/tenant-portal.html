@@ -351,67 +351,158 @@
           <!-- ===== デバイス ===== -->
           <div x-show="activeTab === 'devices'">
             <div class="flex items-center justify-between mb-4">
-              <h3 class="font-medium text-gray-700">登録デバイス</h3>
-              <button @click="loadDevices()" :disabled="devicesLoading"
+              <div class="flex gap-1 bg-gray-100 rounded p-0.5">
+                <button @click="deviceSubTab = 'active'"
+                        :class="deviceSubTab === 'active' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'"
+                        class="text-sm px-3 py-1 rounded">稼働中</button>
+                <button @click="deviceSubTab = 'archived'; loadArchivedDevices()"
+                        :class="deviceSubTab === 'archived' ? 'bg-white shadow-sm text-gray-800' : 'text-gray-500'"
+                        class="text-sm px-3 py-1 rounded">アーカイブ</button>
+              </div>
+              <button x-show="deviceSubTab === 'active'" @click="loadDevices()" :disabled="devicesLoading"
                       class="text-sm text-amber-600 hover:text-amber-800 disabled:text-amber-200">
                 <span x-show="!devicesLoading">↻ 更新</span>
                 <span x-show="devicesLoading">更新中...</span>
               </button>
+              <button x-show="deviceSubTab === 'archived'" @click="loadArchivedDevices()" :disabled="archivedDevicesLoading"
+                      class="text-sm text-amber-600 hover:text-amber-800 disabled:text-amber-200">
+                <span x-show="!archivedDevicesLoading">↻ 更新</span>
+                <span x-show="archivedDevicesLoading">更新中...</span>
+              </button>
             </div>
-            <div class="bg-white rounded shadow-sm border border-gray-200">
-              <div x-show="!devicesLoading && devices.length === 0" class="py-8 text-center text-gray-400 text-sm">デバイスが登録されていません</div>
-              <div class="overflow-x-auto">
-                <table x-show="devices.length > 0" class="w-full text-sm">
-                  <thead class="bg-gray-50 border-b border-gray-100">
-                    <tr>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス名</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイスID</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終通信</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">FWバージョン</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">グループ</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
-                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
-                      <th class="px-4 py-3"></th>
-                    </tr>
-                  </thead>
-                  <tbody class="divide-y divide-gray-100">
-                    <template x-for="d in devices" :key="d.id">
+
+            <div x-show="deviceSubTab === 'active'">
+              <div class="bg-white rounded shadow-sm border border-gray-200">
+                <div x-show="!devicesLoading && devices.length === 0" class="py-8 text-center text-gray-400 text-sm">デバイスが登録されていません</div>
+                <div class="overflow-x-auto">
+                  <table x-show="devices.length > 0" class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-100">
                       <tr>
-                        <td class="px-4 py-3 font-medium" x-text="d.device_name || d.device_id"></td>
-                        <td class="px-4 py-3 font-mono text-xs text-gray-400" x-text="d.device_id"></td>
-                        <td class="px-4 py-3">
-                          <span class="text-xs px-2 py-0.5 rounded font-medium"
-                                :class="{'bg-green-100 text-green-700': d.connection_status === 'online', 'bg-red-100 text-red-700': d.connection_status === 'offline', 'bg-gray-100 text-gray-500': d.connection_status === 'unknown'}"
-                                x-text="d.connection_status"></span>
-                        </td>
-                        <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.last_seen_at)"></td>
-                        <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
-                        <td class="px-4 py-3">
-                          <select x-show="canEdit"
-                                  @change="assignDeviceGroup(d, $event.target.value || null)"
-                                  class="text-xs border border-gray-300 rounded px-1.5 py-1">
-                            <option value="" :selected="!d.group_id">未所属</option>
-                            <template x-for="g in groups" :key="g.id">
-                              <option :value="g.id" :selected="d.group_id === g.id" x-text="g.name"></option>
-                            </template>
-                          </select>
-                          <span x-show="!canEdit" class="text-xs text-gray-500" x-text="groupName(d.group_id) || '未所属'"></span>
-                        </td>
-                        <td class="px-4 py-3" :class="certClass(d.cert_not_after)"
-                            x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
-                        <td class="px-4 py-3 text-gray-400" x-text="d.created_at ? new Date(d.created_at).toLocaleDateString('ja-JP') : '-'"></td>
-                        <td class="px-4 py-3 text-right">
-                          <button x-show="canEdit" @click="deleteDevice(d.device_id)"
-                                  class="text-red-500 hover:text-red-700 text-xs">削除</button>
-                        </td>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス名</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイスID</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">最終通信</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">FWバージョン</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">グループ</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
+                        <th class="px-4 py-3"></th>
                       </tr>
-                    </template>
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <template x-for="d in devices" :key="d.id">
+                        <tr>
+                          <td class="px-4 py-3 font-medium" x-text="d.device_name || d.device_id"></td>
+                          <td class="px-4 py-3 font-mono text-xs text-gray-400" x-text="d.device_id"></td>
+                          <td class="px-4 py-3">
+                            <span class="text-xs px-2 py-0.5 rounded font-medium"
+                                  :class="{'bg-green-100 text-green-700': d.connection_status === 'online', 'bg-red-100 text-red-700': d.connection_status === 'offline', 'bg-gray-100 text-gray-500': d.connection_status === 'unknown'}"
+                                  x-text="d.connection_status"></span>
+                          </td>
+                          <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.last_seen_at)"></td>
+                          <td class="px-4 py-3 text-gray-500" x-text="d.fw_version ?? '-'"></td>
+                          <td class="px-4 py-3">
+                            <select x-show="canEdit"
+                                    @change="assignDeviceGroup(d, $event.target.value || null)"
+                                    class="text-xs border border-gray-300 rounded px-1.5 py-1">
+                              <option value="" :selected="!d.group_id">未所属</option>
+                              <template x-for="g in groups" :key="g.id">
+                                <option :value="g.id" :selected="d.group_id === g.id" x-text="g.name"></option>
+                              </template>
+                            </select>
+                            <span x-show="!canEdit" class="text-xs text-gray-500" x-text="groupName(d.group_id) || '未所属'"></span>
+                          </td>
+                          <td class="px-4 py-3" :class="certClass(d.cert_not_after)"
+                              x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
+                          <td class="px-4 py-3 text-gray-400" x-text="d.created_at ? new Date(d.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                          <td class="px-4 py-3 text-right">
+                            <button x-show="canEdit" @click="deleteDevice(d.device_id)"
+                                    class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                          </td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <p class="text-xs text-gray-400 mt-2 text-right">30秒ごとに自動更新</p>
+            </div>
+
+            <div x-show="deviceSubTab === 'archived'">
+              <p class="text-xs text-gray-500 mb-2">
+                削除済みデバイスのデータは、リテンション設定の保持日数が過ぎると自動的に消えます。
+                今すぐ完全に削除したい場合のみ、下から選択して削除してください（元に戻せません）。
+              </p>
+              <div class="bg-white rounded shadow-sm border border-gray-200">
+                <div x-show="!archivedDevicesLoading && archivedDevices.length === 0" class="py-8 text-center text-gray-400 text-sm">削除済みデバイスはありません</div>
+                <div class="overflow-x-auto">
+                  <table x-show="archivedDevices.length > 0" class="w-full text-sm">
+                    <thead class="bg-gray-50 border-b border-gray-100">
+                      <tr>
+                        <th class="px-4 py-3 w-8">
+                          <input type="checkbox" :checked="archivedAllSelected()" @change="archivedToggleAll($event.target.checked)" class="rounded">
+                        </th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">デバイス名</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">削除日時</th>
+                      </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                      <template x-for="d in archivedDevices" :key="d.device_name">
+                        <tr>
+                          <td class="px-4 py-3">
+                            <input type="checkbox" :checked="!!archivedSelected[d.device_name]"
+                                   @change="archivedSelected[d.device_name] = $event.target.checked" class="rounded">
+                          </td>
+                          <td class="px-4 py-3 font-medium" x-text="d.original_name"></td>
+                          <td class="px-4 py-3 text-gray-500" x-text="timeAgo(d.deleted_at)"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div x-show="isAdmin && archivedDevices.length > 0" class="flex justify-end mt-2">
+                <button @click="openArchivedPurgeModal()" :disabled="archivedSelectedCount() === 0"
+                        class="text-sm text-red-500 hover:text-red-700 disabled:text-gray-300">
+                  選択したデバイスのデータを完全に削除 (<span x-text="archivedSelectedCount()"></span>)
+                </button>
               </div>
             </div>
-            <p class="text-xs text-gray-400 mt-2 text-right">30秒ごとに自動更新</p>
+
+            <!-- アーカイブ完全削除の確認ダイアログ -->
+            <div x-show="archivedPurgeModalOpen" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+              <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
+                <h3 class="font-medium text-red-600 mb-1">データを完全に削除します</h3>
+                <p class="text-xs text-gray-500 mb-3">この操作は元に戻せません。以下のデバイスのデータを完全に削除します。</p>
+                <ul class="text-sm text-gray-700 mb-3 max-h-32 overflow-y-auto list-disc pl-5">
+                  <template x-for="name in archivedPurgeTargets()" :key="name">
+                    <li x-text="archivedOriginalName(name)"></li>
+                  </template>
+                </ul>
+                <label class="block text-xs font-medium text-gray-600 mb-1">
+                  確認のため <span class="font-mono font-bold">DELETE</span> と入力してください
+                </label>
+                <input type="text" x-model="archivedPurgeConfirmText"
+                       class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3" placeholder="DELETE">
+                <div x-show="archivedPurgeResults.length > 0" class="mb-3 space-y-1">
+                  <template x-for="r in archivedPurgeResults" :key="r.device_name">
+                    <div class="text-xs px-2 py-1 rounded"
+                         :class="r.status === 'ok' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'"
+                         x-text="archivedOriginalName(r.device_name) + ': ' + (r.status === 'ok' ? '削除完了' : ('削除失敗 (' + r.detail + ')'))"></div>
+                  </template>
+                </div>
+                <div class="flex justify-end gap-2">
+                  <button @click="archivedPurgeModalOpen = false" :disabled="archivedPurgeSubmitting"
+                          class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                  <button @click="submitArchivedPurge()"
+                          :disabled="archivedPurgeConfirmText !== 'DELETE' || archivedPurgeSubmitting"
+                          class="bg-red-500 disabled:bg-red-200 text-white text-sm px-3 py-1.5 rounded">
+                    <span x-show="!archivedPurgeSubmitting">完全に削除</span>
+                    <span x-show="archivedPurgeSubmitting">削除中...</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- ===== アラートルール ===== -->
@@ -1472,6 +1563,9 @@ function portalApp() {
     expandedInvoiceMonth: null, invoiceDetail: null, invoiceDetailLoading: false,
     // デバイス
     devices: [], devicesLoading: false, _devTimer: null,
+    deviceSubTab: 'active',
+    archivedDevices: [], archivedDevicesLoading: false, archivedSelected: {},
+    archivedPurgeModalOpen: false, archivedPurgeConfirmText: '', archivedPurgeSubmitting: false, archivedPurgeResults: [],
     // グループ管理
     groups: [], showGroupForm: false, editingGroupId: null,
     groupForm: { name: '', description: '' }, groupError: '',
@@ -2039,6 +2133,52 @@ function portalApp() {
         await portalFetch('DELETE', `/me/devices/${deviceId}`);
         this.devices = this.devices.filter(d => d.device_id !== deviceId);
       } catch(e) { this.error = e.message; }
+    },
+
+    async loadArchivedDevices() {
+      this.archivedDevicesLoading = true;
+      try {
+        this.archivedDevices = await portalFetch('GET', '/me/devices/archived') || [];
+        this.archivedSelected = {};
+      } catch(e) { this.error = e.message; } finally { this.archivedDevicesLoading = false; }
+    },
+    archivedSelectedCount() {
+      return Object.values(this.archivedSelected).filter(Boolean).length;
+    },
+    archivedAllSelected() {
+      return this.archivedDevices.length > 0 && this.archivedDevices.every(d => this.archivedSelected[d.device_name]);
+    },
+    archivedToggleAll(checked) {
+      const next = {};
+      if (checked) this.archivedDevices.forEach(d => { next[d.device_name] = true; });
+      this.archivedSelected = next;
+    },
+    archivedPurgeTargets() {
+      return Object.keys(this.archivedSelected).filter(k => this.archivedSelected[k]);
+    },
+    archivedOriginalName(deviceName) {
+      const found = this.archivedDevices.find(d => d.device_name === deviceName);
+      return found ? found.original_name : deviceName;
+    },
+    openArchivedPurgeModal() {
+      this.archivedPurgeConfirmText = '';
+      this.archivedPurgeResults = [];
+      this.archivedPurgeModalOpen = true;
+    },
+    async submitArchivedPurge() {
+      if (this.archivedPurgeConfirmText !== 'DELETE') return;
+      this.archivedPurgeSubmitting = true;
+      this.archivedPurgeResults = [];
+      try {
+        const targets = this.archivedPurgeTargets();
+        const results = await portalFetch('POST', '/me/devices/archived/purge', {
+          device_names: targets, confirm: this.archivedPurgeConfirmText,
+        });
+        this.archivedPurgeResults = results || [];
+        const purged = new Set((results || []).filter(r => r.status === 'ok').map(r => r.device_name));
+        this.archivedDevices = this.archivedDevices.filter(d => !purged.has(d.device_name));
+        this.archivedSelected = {};
+      } catch(e) { this.error = e.message; } finally { this.archivedPurgeSubmitting = false; }
     },
 
     // ----- ダッシュボード設定 -----

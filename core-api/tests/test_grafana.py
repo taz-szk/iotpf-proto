@@ -1,4 +1,5 @@
 from unittest.mock import patch, MagicMock
+import pytest
 from app.services.grafana import (
     create_grafana_org, setup_grafana_datasource, create_default_dashboard,
     build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
@@ -6,6 +7,7 @@ from app.services.grafana import (
     build_group_variable, build_templating, sync_tenant_dashboard_groups,
     _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT, _FLUX_DEVICE_VAR_ARCHIVED,
     _FLUX_TELEMETRY_ARCHIVED, _FLUX_DELETED_ARCHIVED, _FLUX_STATUS_ARCHIVED,
+    list_archived_devices, purge_archived_device_from_influxdb,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -309,3 +311,56 @@ def test_revive_device_in_influxdb_escapes_special_characters():
         revive_device_in_influxdb("org-1", "dev 01,x=y")
     line_protocol = mock_httpx.post.call_args.kwargs["content"].decode()
     assert line_protocol.startswith(r"device_deleted,device_name=dev\ 01\,x\=y deleted=0i")
+
+
+_ARCHIVED_DEVICES_CSV = (
+    ",result,table,_start,_stop,_time,_value,_field,_measurement,device_name\n"
+    ",_result,0,2026-01-01T00:00:00Z,2026-12-31T00:00:00Z,2026-09-17T12:54:18Z,1,deleted,device_deleted,Del_dev01\n"
+    ",_result,1,2026-01-01T00:00:00Z,2026-12-31T00:00:00Z,2026-09-18T03:51:19Z,1,deleted,device_deleted,Del_dev-001\n"
+)
+
+
+def test_list_archived_devices_parses_device_name_and_deleted_at():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        mock_httpx.post.return_value.text = _ARCHIVED_DEVICES_CSV
+        result = list_archived_devices("org-1", "tok")
+    assert result == [
+        {"device_name": "Del_dev01", "original_name": "dev01", "deleted_at": "2026-09-17T12:54:18Z"},
+        {"device_name": "Del_dev-001", "original_name": "dev-001", "deleted_at": "2026-09-18T03:51:19Z"},
+    ]
+    query = mock_httpx.post.call_args.kwargs["json"]["query"]
+    assert 'r.device_name =~ /^Del_/' in query
+
+
+def test_list_archived_devices_returns_empty_on_error_status():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(500)
+        result = list_archived_devices("org-1", "tok")
+    assert result == []
+
+
+def test_purge_archived_device_from_influxdb_sends_delete_predicate():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = _mock_resp(200)
+        purge_archived_device_from_influxdb("org-1", "Del_dev-001")
+    call = mock_httpx.post.call_args
+    assert "/api/v2/delete" in call.args[0]
+    assert call.kwargs["json"]["predicate"] == 'device_name="Del_dev-001"'
+
+
+def test_purge_archived_device_from_influxdb_rejects_non_del_prefixed_names():
+    """稼働中デバイスを誤って完全削除してしまう事故を防ぐための安全策。"""
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        with pytest.raises(ValueError):
+            purge_archived_device_from_influxdb("org-1", "dev-001")
+    mock_httpx.post.assert_not_called()
+
+
+def test_purge_archived_device_from_influxdb_raises_on_http_error():
+    mock_resp = _mock_resp(500)
+    mock_resp.raise_for_status.side_effect = Exception("boom")
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.post.return_value = mock_resp
+        with pytest.raises(Exception):
+            purge_archived_device_from_influxdb("org-1", "Del_dev-001")

@@ -25,7 +25,7 @@ from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
-from app.services.grafana import retire_device_in_influxdb
+from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.audit import write_audit_log, log_audit
 from app.routers.stats import _count_influxdb_points, _calc_provisionable_devices
 from app.services.device_groups import (
@@ -247,6 +247,57 @@ def update_device(device_id: str, body: DeviceUpdateBody, payload: dict = Depend
         "created_at": row.created_at.isoformat() if row.created_at else None,
         "group_id": str(row.group_id) if row.group_id else None,
     }
+
+
+@router.get("/me/devices/archived")
+def list_archived_devices_portal(payload: dict = Depends(_require_tenant)):
+    """自テナントの削除済み(Del_接頭辞)デバイス一覧を返す。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant or not tenant.influxdb_org_id:
+        return []
+    return list_archived_devices(tenant.influxdb_org_id, tenant.influxdb_token or "")
+
+
+class ArchivedDevicesPurgeBody(BaseModel):
+    device_names: list[str] = Field(min_length=1)
+    confirm: str
+
+
+_PURGE_CONFIRM_PHRASE = "DELETE"
+
+
+@router.post("/me/devices/archived/purge")
+def purge_archived_devices_portal(body: ArchivedDevicesPurgeBody, payload: dict = Depends(_require_admin)):
+    """自テナントの削除済み(Del_接頭辞)デバイスのInfluxDBデータを完全に削除する
+    (復元不可)。confirmは"DELETE"と完全一致する必要がある。admin権限のみ許可。"""
+    if body.confirm != _PURGE_CONFIRM_PHRASE:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f'confirm must be exactly "{_PURGE_CONFIRM_PHRASE}"',
+        )
+    for device_name in body.device_names:
+        if not device_name.startswith("Del_"):
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                                 detail=f"Invalid device_name: {device_name}")
+
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant or not tenant.influxdb_org_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant InfluxDB not configured")
+
+    results = []
+    for device_name in body.device_names:
+        try:
+            purge_archived_device_from_influxdb(tenant.influxdb_org_id, device_name)
+            log_audit("tenant", payload["sub"], payload["email"], "purge_archived_device",
+                      tenant_id=tenant_id, resource_type="device", resource_id=device_name)
+            results.append({"device_name": device_name, "status": "ok"})
+        except Exception as e:
+            results.append({"device_name": device_name, "status": "error", "detail": str(e)})
+    return results
 
 
 # ---------------------------------------------------------------------------
