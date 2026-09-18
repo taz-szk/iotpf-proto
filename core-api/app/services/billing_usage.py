@@ -42,6 +42,61 @@ def _count_influxdb_points_for_month(influxdb_org_id: str, token: str, year: int
         return 0
 
 
+def _count_influxdb_retained_points(influxdb_org_id: str, token: str, retention_days: int, archived: bool) -> int:
+    """現在(スナップショット時点)保持されているテレメトリ点数。
+    archived=Falseなら現役デバイス(device_nameがDel_接頭辞でないもの)、
+    archived=Trueなら退役デバイス(Del_接頭辞のアーカイブ)のみを対象にする。"""
+    name_filter = 'r.device_name =~ /^Del_/' if archived else 'not (r.device_name =~ /^Del_/)'
+    query = (
+        'from(bucket: "telemetry")\n'
+        f'  |> range(start: -{retention_days}d)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        f'  |> filter(fn: (r) => {name_filter})\n'
+        '  |> group()\n'
+        '  |> count()\n'
+        '  |> sum()\n'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={"Authorization": f"Token {token}", "Content-Type": "application/json"},
+            json={"query": query, "type": "flux"},
+            timeout=15.0,
+        )
+        if resp.status_code != 200:
+            return 0
+        return _parse_influx_csv_scalar(resp.text)
+    except Exception:
+        return 0
+
+
+def _count_retired_devices(influxdb_org_id: str, token: str, retention_days: int) -> int:
+    """現在アーカイブされている(Del_接頭辞の)退役デバイスの台数(スナップショット時点)。"""
+    query = (
+        'from(bucket: "telemetry")\n'
+        f'  |> range(start: -{retention_days}d)\n'
+        '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
+        '  |> filter(fn: (r) => r.device_name =~ /^Del_/)\n'
+        '  |> keep(columns: ["device_name"])\n'
+        '  |> group()\n'
+        '  |> distinct(column: "device_name")\n'
+        '  |> group()\n'
+        '  |> count()\n'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={"Authorization": f"Token {token}", "Content-Type": "application/json"},
+            json={"query": query, "type": "flux"},
+            timeout=15.0,
+        )
+        if resp.status_code != 200:
+            return 0
+        return _parse_influx_csv_scalar(resp.text)
+    except Exception:
+        return 0
+
+
 def _count_unique_devices_for_month(influxdb_org_id: str, token: str, year: int, month: int) -> int:
     """対象年月にテレメトリを送信したユニークdevice_name数。"""
     start, stop = _month_range_rfc3339(year, month)
@@ -85,11 +140,13 @@ def aggregate_monthly_usage(
     year: int, month: int,
 ) -> dict[str, int]:
     """対象年月の利用量を集計し、app.services.billing.calculate_invoice()に渡せる
-    usage dictを返す。provisionable_devicesは「現在時点」のスナップショットなので、
-    finalized済みの月に対しては呼び出し側が絶対に呼ばないこと。
-    data_point_daysは「その月のデータポイント数 × テナントの実効保持日数」で、
-    保持期間が長いほど同じ取り込み量でも課金額が伸びるようにするための指標
-    （実際のストレージコストが データ量×保持期間 に比例することを反映）。"""
+    usage dictを返す。provisionable_devices・retained_data_points・retired_data_points・
+    retired_device_countは「現在時点」のスナップショットなので、finalized済みの月に対しては
+    呼び出し側が絶対に呼ばないこと。
+    retained_data_points/retired_data_pointsは「今まさにInfluxDBに保持されている
+    テレメトリ点数」を、device_nameがDel_接頭辞(退役デバイスのアーカイブ)かどうかで
+    分けたもの。退役デバイスは強制削除せずリテンションで自然に消えるまで保持され続けるため、
+    現役分とは別単価で課金できるようにするための指標。"""
     provisionable_devices, _has_unlimited = _calc_provisionable_devices(db, tenant_id, schema)
     data_points = _count_influxdb_points_for_month(influxdb_org_id, influxdb_token, year, month)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
@@ -97,7 +154,9 @@ def aggregate_monthly_usage(
     return {
         "base_fee": 1,
         "data_points": data_points,
-        "data_point_days": data_points * retention_days,
+        "retained_data_points": _count_influxdb_retained_points(influxdb_org_id, influxdb_token, retention_days, archived=False),
+        "retired_data_points": _count_influxdb_retained_points(influxdb_org_id, influxdb_token, retention_days, archived=True),
+        "retired_device_count": _count_retired_devices(influxdb_org_id, influxdb_token, retention_days),
         "device_count": _count_unique_devices_for_month(influxdb_org_id, influxdb_token, year, month),
         "provisionable_devices": provisionable_devices,
         "alert_events": _count_alert_events_for_month(db, schema, year, month),

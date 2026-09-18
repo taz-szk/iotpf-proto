@@ -186,7 +186,9 @@
         billingItems: [
           { key: 'base_fee', label: '基本料金', unit: '月額' },
           { key: 'data_points', label: 'データポイント数', unit: '件あたり' },
-          { key: 'data_point_days', label: 'データポイント×保持日数', unit: '件×日あたり（保持期間に応じて課金額が増える）' },
+          { key: 'retained_data_points', label: '保持データポイント数（現役）', unit: '件あたり（現在保持中のスナップショット）' },
+          { key: 'retired_data_points', label: '保持データポイント数（退役）', unit: '件あたり（削除済みデバイスのアーカイブ分、通常より低単価を想定）' },
+          { key: 'retired_device_count', label: '退役デバイス数', unit: '台あたり（削除済みでアーカイブ中のデバイス数）' },
           { key: 'device_count', label: 'デバイス数（月内通信）', unit: '台あたり' },
           { key: 'provisionable_devices', label: 'プロビジョニング可能数', unit: '台あたり' },
           { key: 'alert_events', label: 'アラートイベント数', unit: '件あたり' },
