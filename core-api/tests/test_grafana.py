@@ -74,14 +74,17 @@ def test_build_dashboard_panels_empty_configs_returns_fallback():
     assert ts_panel["id"] == 3
 
 def test_build_dashboard_panels_includes_archived_row():
-    """現役デバイス行の下に、archived_device_nameでリピートするアーカイブ行が追加される。"""
+    """現役デバイス行の下に、archived_device_nameでリピートするアーカイブ行が追加される。
+    初期表示は折りたたみ(collapsed)なので、子パネルは行自身のpanelsに入れ子になる。"""
     panels = build_dashboard_panels([])
     archived_row = next(p for p in panels if p.get("id") == 101)
     assert archived_row["type"] == "row"
     assert archived_row["repeat"] == "archived_device_name"
-    assert any(p.get("id") == 102 for p in panels)  # stat deleted (archived)
-    assert any(p.get("id") == 104 for p in panels)  # stat status (archived)
-    assert any(p.get("id") == 103 for p in panels)  # timeseries (archived)
+    assert archived_row["collapsed"] is True
+    child_ids = {p["id"] for p in archived_row["panels"]}
+    assert child_ids == {102, 103, 104}
+    # 折りたたみ行なので、子パネルはトップレベルには出てこない
+    assert not any(p.get("id") in (102, 103, 104) for p in panels)
     # アーカイブ行は現役行(y=0〜9)より下に配置される
     assert archived_row["gridPos"]["y"] > 9
 

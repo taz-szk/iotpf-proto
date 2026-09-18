@@ -321,6 +321,8 @@ _DEFAULT_DASHBOARD = {
             },
             # アーカイブ(削除済み)デバイス行 — archived_device_nameでリピート。
             # 退役デバイスが増えても現役のdevice_name一覧を埋めないよう分離した別枠。
+            # 初期表示では折りたたむ(collapsed: true)ため、子パネルは行自身の
+            # "panels"配列に入れ子にする(Grafanaの折りたたみ行のスキーマ要件)。
             {
                 "id": 101,
                 "type": "row",
@@ -328,114 +330,116 @@ _DEFAULT_DASHBOARD = {
                 "gridPos": {"x": 0, "y": 10, "w": 24, "h": 1},
                 "repeat": "archived_device_name",
                 "repeatDirection": "v",
-                "collapsed": False,
-            },
-            {
-                "id": 102,
-                "type": "stat",
-                "title": "登録状態",
-                "gridPos": {"x": 0, "y": 11, "w": 3, "h": 4},
-                "targets": [
+                "collapsed": True,
+                "panels": [
                     {
-                        "refId": "A",
-                        "datasource": {"type": "influxdb"},
-                        "query": _FLUX_DELETED_ARCHIVED,
-                    }
-                ],
-                "options": {
-                    "reduceOptions": {"calcs": ["lastNotNull"]},
-                    "orientation": "auto",
-                    "textMode": "auto",
-                    "colorMode": "background",
-                    "graphMode": "none",
-                },
-                "fieldConfig": {
-                    "defaults": {
-                        "noValue": "稼働中",
-                        "mappings": [
+                        "id": 102,
+                        "type": "stat",
+                        "title": "登録状態",
+                        "gridPos": {"x": 0, "y": 11, "w": 3, "h": 4},
+                        "targets": [
                             {
-                                "type": "value",
-                                "options": {
-                                    "0": {"text": "稼働中", "index": 0},
-                                    "1": {"text": "削除済み", "index": 1},
-                                },
+                                "refId": "A",
+                                "datasource": {"type": "influxdb"},
+                                "query": _FLUX_DELETED_ARCHIVED,
                             }
                         ],
-                        "thresholds": {
-                            "mode": "absolute",
-                            "steps": [
-                                {"value": None, "color": "green"},
-                                {"value": 1, "color": "red"},
-                            ],
+                        "options": {
+                            "reduceOptions": {"calcs": ["lastNotNull"]},
+                            "orientation": "auto",
+                            "textMode": "auto",
+                            "colorMode": "background",
+                            "graphMode": "none",
                         },
-                        "color": {"mode": "thresholds"},
-                    }
-                },
-            },
-            {
-                "id": 104,
-                "type": "stat",
-                "title": "接続状態",
-                "gridPos": {"x": 3, "y": 11, "w": 3, "h": 4},
-                "targets": [
-                    {
-                        "refId": "A",
-                        "datasource": {"type": "influxdb"},
-                        "query": _FLUX_STATUS_ARCHIVED,
-                    }
-                ],
-                "options": {
-                    "reduceOptions": {"calcs": ["last"]},
-                    "orientation": "auto",
-                    "textMode": "auto",
-                    "colorMode": "background",
-                    "graphMode": "none",
-                },
-                "fieldConfig": {
-                    "defaults": {
-                        "noValue": "不明",
-                        "mappings": [
-                            {
-                                "type": "value",
-                                "options": {
-                                    "0": {"text": "オフライン", "index": 0},
-                                    "1": {"text": "オンライン", "index": 1},
+                        "fieldConfig": {
+                            "defaults": {
+                                "noValue": "稼働中",
+                                "mappings": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {"text": "稼働中", "index": 0},
+                                            "1": {"text": "削除済み", "index": 1},
+                                        },
+                                    }
+                                ],
+                                "thresholds": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {"value": None, "color": "green"},
+                                        {"value": 1, "color": "red"},
+                                    ],
                                 },
+                                "color": {"mode": "thresholds"},
                             }
-                        ],
-                        "thresholds": {
-                            "mode": "absolute",
-                            "steps": [
-                                {"value": None, "color": "red"},
-                                {"value": 1, "color": "green"},
-                            ],
                         },
-                        "color": {"mode": "thresholds"},
-                    }
-                },
-            },
-            {
-                "id": 103,
-                "type": "timeseries",
-                "title": "テレメトリ",
-                "gridPos": {"x": 6, "y": 11, "w": 18, "h": 8},
-                "targets": [
-                    {
-                        "refId": "A",
-                        "datasource": {"type": "influxdb"},
-                        "query": _FLUX_TELEMETRY_ARCHIVED,
-                    }
-                ],
-                "fieldConfig": {
-                    "defaults": {
-                        "custom": {"lineWidth": 2},
-                        "displayName": "${__field.name}",
                     },
-                },
-                "options": {
-                    "tooltip": {"mode": "multi"},
-                    "legend": {"displayMode": "list", "placement": "bottom"},
-                },
+                    {
+                        "id": 104,
+                        "type": "stat",
+                        "title": "接続状態",
+                        "gridPos": {"x": 3, "y": 11, "w": 3, "h": 4},
+                        "targets": [
+                            {
+                                "refId": "A",
+                                "datasource": {"type": "influxdb"},
+                                "query": _FLUX_STATUS_ARCHIVED,
+                            }
+                        ],
+                        "options": {
+                            "reduceOptions": {"calcs": ["last"]},
+                            "orientation": "auto",
+                            "textMode": "auto",
+                            "colorMode": "background",
+                            "graphMode": "none",
+                        },
+                        "fieldConfig": {
+                            "defaults": {
+                                "noValue": "不明",
+                                "mappings": [
+                                    {
+                                        "type": "value",
+                                        "options": {
+                                            "0": {"text": "オフライン", "index": 0},
+                                            "1": {"text": "オンライン", "index": 1},
+                                        },
+                                    }
+                                ],
+                                "thresholds": {
+                                    "mode": "absolute",
+                                    "steps": [
+                                        {"value": None, "color": "red"},
+                                        {"value": 1, "color": "green"},
+                                    ],
+                                },
+                                "color": {"mode": "thresholds"},
+                            }
+                        },
+                    },
+                    {
+                        "id": 103,
+                        "type": "timeseries",
+                        "title": "テレメトリ",
+                        "gridPos": {"x": 6, "y": 11, "w": 18, "h": 8},
+                        "targets": [
+                            {
+                                "refId": "A",
+                                "datasource": {"type": "influxdb"},
+                                "query": _FLUX_TELEMETRY_ARCHIVED,
+                            }
+                        ],
+                        "fieldConfig": {
+                            "defaults": {
+                                "custom": {"lineWidth": 2},
+                                "displayName": "${__field.name}",
+                            },
+                        },
+                        "options": {
+                            "tooltip": {"mode": "multi"},
+                            "legend": {"displayMode": "list", "placement": "bottom"},
+                        },
+                    },
+                ],
             },
         ],
         "time": {"from": "now-1h", "to": "now"},
@@ -546,10 +550,9 @@ def build_dashboard_panels(configs: list[dict]) -> list[dict]:
     stat_status  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][2])  # id=4
     fallback_ts  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][3])  # id=3
     # アーカイブ(削除済み)行。現役デバイスの行より下に来るよう、後段でyを詰め直す。
-    row_archived         = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][4])  # id=101
-    stat_deleted_archived = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][5])  # id=102
-    stat_status_archived  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][6])  # id=104
-    fallback_ts_archived  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][7])  # id=103
+    # アーカイブ行(id=101, collapsed=true)。子パネル(登録状態/接続状態/テレメトリ)は
+    # 折りたたみ行の仕様上、row_archived自身の"panels"に入れ子になっている。
+    row_archived = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][4])  # id=101
 
     fixed = [row_panel, stat_deleted, stat_status]
 
@@ -570,15 +573,12 @@ def build_dashboard_panels(configs: list[dict]) -> list[dict]:
 
     archive_row_y = active_max_y + 1
     row_archived["gridPos"]["y"] = archive_row_y
-    stat_deleted_archived["gridPos"]["y"] = archive_row_y + 1
-    stat_status_archived["gridPos"]["y"] = archive_row_y + 1
-    fallback_ts_archived["gridPos"]["y"] = archive_row_y + 1
-
-    archived = [row_archived, stat_deleted_archived, stat_status_archived, fallback_ts_archived]
+    for child in row_archived["panels"]:
+        child["gridPos"]["y"] = archive_row_y + 1
 
     if not configs:
-        return fixed + [fallback_ts] + archived
-    return fixed + sensor_panels + archived
+        return fixed + [fallback_ts, row_archived]
+    return fixed + sensor_panels + [row_archived]
 
 
 def mark_device_deleted(influxdb_org_id: str, device_name: str) -> None:
