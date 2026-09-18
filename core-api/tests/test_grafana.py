@@ -4,7 +4,8 @@ from app.services.grafana import (
     build_sensor_panel, build_dashboard_panels, PANEL_DATA_MODE,
     _flux_string_escape, retire_device_in_influxdb, revive_device_in_influxdb,
     build_group_variable, build_templating, sync_tenant_dashboard_groups,
-    _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT,
+    _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT, _FLUX_DEVICE_VAR_ARCHIVED,
+    _FLUX_TELEMETRY_ARCHIVED, _FLUX_DELETED_ARCHIVED, _FLUX_STATUS_ARCHIVED,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -72,6 +73,28 @@ def test_build_dashboard_panels_empty_configs_returns_fallback():
     ts_panel = next(p for p in panels if p["type"] == "timeseries")
     assert ts_panel["id"] == 3
 
+def test_build_dashboard_panels_includes_archived_row():
+    """現役デバイス行の下に、archived_device_nameでリピートするアーカイブ行が追加される。"""
+    panels = build_dashboard_panels([])
+    archived_row = next(p for p in panels if p.get("id") == 101)
+    assert archived_row["type"] == "row"
+    assert archived_row["repeat"] == "archived_device_name"
+    assert any(p.get("id") == 102 for p in panels)  # stat deleted (archived)
+    assert any(p.get("id") == 104 for p in panels)  # stat status (archived)
+    assert any(p.get("id") == 103 for p in panels)  # timeseries (archived)
+    # アーカイブ行は現役行(y=0〜9)より下に配置される
+    assert archived_row["gridPos"]["y"] > 9
+
+def test_build_dashboard_panels_archived_row_below_configs_sensor_panels():
+    """センサーパネル数が多いほど現役行の占有高さが増えるため、アーカイブ行もそれに応じて下がる。"""
+    configs_few = [{"sensor_key": "temperature", "panel_type": "gauge"}]
+    configs_many = [
+        {"sensor_key": f"sensor{i}", "panel_type": "gauge"} for i in range(6)
+    ]
+    y_few = next(p for p in build_dashboard_panels(configs_few) if p.get("id") == 101)["gridPos"]["y"]
+    y_many = next(p for p in build_dashboard_panels(configs_many) if p.get("id") == 101)["gridPos"]["y"]
+    assert y_many > y_few
+
 def test_build_dashboard_panels_with_configs():
     configs = [
         {"sensor_key": "temperature", "panel_type": "gauge"},
@@ -87,6 +110,8 @@ def test_build_dashboard_panels_with_configs():
     assert any(p.get("id") == 1 for p in panels)  # row
     assert any(p.get("id") == 2 for p in panels)  # stat deleted
     assert any(p.get("id") == 4 for p in panels)  # stat status
+    # アーカイブ行は設定ありでも常に付く
+    assert any(p.get("id") == 101 for p in panels)
 
 def test_build_sensor_panel_sensor_key_escaped():
     panel = build_sensor_panel('temp"test', "timeseries", 10, 6, 1)
@@ -134,9 +159,13 @@ def test_build_group_variable_no_groups_has_only_default():
 def test_build_templating_has_group_before_device_name():
     templating = build_templating([{"name": "拠点A", "device_names": ["dev-1"]}])
     names = [v["name"] for v in templating]
-    assert names == ["group", "device_name"]
+    assert names == ["group", "device_name", "archived_device_name"]
     device_var = next(v for v in templating if v["name"] == "device_name")
     assert "${group}" in device_var["query"]["query"]
+    archived_var = next(v for v in templating if v["name"] == "archived_device_name")
+    assert archived_var["query"]["query"] == _FLUX_DEVICE_VAR_ARCHIVED
+    # アーカイブ変数はグループ絞り込みの対象外(${group}を含まない)
+    assert "${group}" not in archived_var["query"]["query"]
 
 def test_sync_tenant_dashboard_groups_replaces_templating_only():
     existing_dashboard = {
@@ -234,6 +263,29 @@ def test_device_var_flux_only_treats_latest_value_1_as_deleted():
         deleted_block = flux.split('deleted = from')[1]
         assert 'last()\n' in deleted_block
         assert 'r._value == 1' in deleted_block
+
+
+def test_device_var_flux_excludes_del_prefixed_names_entirely():
+    """現役デバイス一覧からはDel_接頭辞のアーカイブ名義そのものを問答無用で除外する
+    (device_statusデータがあっても現役側の一覧には出さず、アーカイブ専用変数に分離する)。"""
+    for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
+        final_filter = flux.rsplit('|> filter', 1)[-1]
+        assert 'not (r.device_name =~ /^Del_/)' in final_filter
+
+
+def test_flux_device_var_archived_lists_only_del_prefixed():
+    assert 'r._measurement == "device_deleted"' in _FLUX_DEVICE_VAR_ARCHIVED
+    assert 'r.device_name =~ /^Del_/' in _FLUX_DEVICE_VAR_ARCHIVED
+    assert 'distinct(column: "device_name")' in _FLUX_DEVICE_VAR_ARCHIVED
+
+
+def test_archived_flux_constants_reference_archived_variable_not_tag():
+    """Grafana変数参照${device_name:regex}だけを${archived_device_name:regex}に
+    差し替えていて、InfluxDB側のタグ名r.device_nameは変えていないこと。"""
+    for flux in (_FLUX_TELEMETRY_ARCHIVED, _FLUX_DELETED_ARCHIVED, _FLUX_STATUS_ARCHIVED):
+        assert '${archived_device_name:regex}' in flux
+        assert '${device_name:regex}' not in flux
+        assert 'r.device_name' in flux
 
 
 def test_revive_device_in_influxdb_writes_deleted_zero_marker():

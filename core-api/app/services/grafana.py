@@ -72,6 +72,7 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
         '       identity: {device_name: "", hasStatus: false, hasDeleted: false},\n'
         '     )\n'
         '  |> filter(fn: (r) => r.hasStatus and not r.hasDeleted)\n'
+        '  |> filter(fn: (r) => not (r.device_name =~ /^Del_/))\n'
         '  |> map(fn: (r) => ({_value: r.device_name}))'
     )
 
@@ -80,6 +81,19 @@ _FLUX_DEVICE_VAR = _flux_exclude_deleted_devices("")
 # テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む
 _FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices(
     '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
+)
+
+# アーカイブ(Del_接頭辞)専用のデバイス一覧変数。退役デバイスが増え続けると現役用の
+# device_name一覧が埋まって分かりにくくなるため、現役側からは完全に除外し、
+# 過去データを見たい時だけ使う別のドロップダウンとして分離する。
+_FLUX_DEVICE_VAR_ARCHIVED = (
+    'from(bucket: "telemetry")\n'
+    '  |> range(start: 0)\n'
+    '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
+    '  |> filter(fn: (r) => r.device_name =~ /^Del_/)\n'
+    '  |> keep(columns: ["device_name"])\n'
+    '  |> group()\n'
+    '  |> distinct(column: "device_name")\n'
 )
 
 
@@ -110,7 +124,8 @@ def build_group_variable(groups: list[dict]) -> dict:
 
 
 def build_templating(groups: list[dict]) -> list[dict]:
-    """テナントダッシュボードのtemplating.listを構築する(group変数 → device_name変数の順)。"""
+    """テナントダッシュボードのtemplating.listを構築する
+    (group変数 → device_name変数 → archived_device_name変数の順)。"""
     return [
         build_group_variable(groups),
         {
@@ -123,6 +138,22 @@ def build_templating(groups: list[dict]) -> list[dict]:
             "current": {"selected": True, "text": "All", "value": "$__all"},
             "query": {
                 "query": _FLUX_DEVICE_VAR_TENANT,
+                "refId": "StandardVariableQuery",
+            },
+            "datasource": {"type": "influxdb"},
+            "refresh": 2,
+            "sort": 1,
+        },
+        {
+            "name": "archived_device_name",
+            "label": "アーカイブ(削除済み)デバイス",
+            "type": "query",
+            "multi": True,
+            "includeAll": True,
+            "allValue": ".*",
+            "current": {"selected": True, "text": "All", "value": "$__all"},
+            "query": {
+                "query": _FLUX_DEVICE_VAR_ARCHIVED,
                 "refId": "StandardVariableQuery",
             },
             "datasource": {"type": "influxdb"},
@@ -153,6 +184,13 @@ _FLUX_STATUS = (
     '  |> group(columns: ["device_name"])\n'
     '  |> last()'
 )
+
+# アーカイブ行用: ${device_name:regex}(Grafana変数参照)だけを${archived_device_name:regex}に
+# 置き換える。r.device_name(InfluxDB側のタグ名)は文字列として変えてしまうと壊れるため、
+# 変数参照の部分文字列だけを対象にした置換にしている。
+_FLUX_TELEMETRY_ARCHIVED = _FLUX_TELEMETRY.replace("${device_name:regex}", "${archived_device_name:regex}")
+_FLUX_DELETED_ARCHIVED = _FLUX_DELETED.replace("${device_name:regex}", "${archived_device_name:regex}")
+_FLUX_STATUS_ARCHIVED = _FLUX_STATUS.replace("${device_name:regex}", "${archived_device_name:regex}")
 
 _DEFAULT_DASHBOARD = {
     "dashboard": {
@@ -281,6 +319,124 @@ _DEFAULT_DASHBOARD = {
                     "legend": {"displayMode": "list", "placement": "bottom"},
                 },
             },
+            # アーカイブ(削除済み)デバイス行 — archived_device_nameでリピート。
+            # 退役デバイスが増えても現役のdevice_name一覧を埋めないよう分離した別枠。
+            {
+                "id": 101,
+                "type": "row",
+                "title": "アーカイブ(削除済み): ${archived_device_name}",
+                "gridPos": {"x": 0, "y": 10, "w": 24, "h": 1},
+                "repeat": "archived_device_name",
+                "repeatDirection": "v",
+                "collapsed": False,
+            },
+            {
+                "id": 102,
+                "type": "stat",
+                "title": "登録状態",
+                "gridPos": {"x": 0, "y": 11, "w": 3, "h": 4},
+                "targets": [
+                    {
+                        "refId": "A",
+                        "datasource": {"type": "influxdb"},
+                        "query": _FLUX_DELETED_ARCHIVED,
+                    }
+                ],
+                "options": {
+                    "reduceOptions": {"calcs": ["lastNotNull"]},
+                    "orientation": "auto",
+                    "textMode": "auto",
+                    "colorMode": "background",
+                    "graphMode": "none",
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "noValue": "稼働中",
+                        "mappings": [
+                            {
+                                "type": "value",
+                                "options": {
+                                    "0": {"text": "稼働中", "index": 0},
+                                    "1": {"text": "削除済み", "index": 1},
+                                },
+                            }
+                        ],
+                        "thresholds": {
+                            "mode": "absolute",
+                            "steps": [
+                                {"value": None, "color": "green"},
+                                {"value": 1, "color": "red"},
+                            ],
+                        },
+                        "color": {"mode": "thresholds"},
+                    }
+                },
+            },
+            {
+                "id": 104,
+                "type": "stat",
+                "title": "接続状態",
+                "gridPos": {"x": 3, "y": 11, "w": 3, "h": 4},
+                "targets": [
+                    {
+                        "refId": "A",
+                        "datasource": {"type": "influxdb"},
+                        "query": _FLUX_STATUS_ARCHIVED,
+                    }
+                ],
+                "options": {
+                    "reduceOptions": {"calcs": ["last"]},
+                    "orientation": "auto",
+                    "textMode": "auto",
+                    "colorMode": "background",
+                    "graphMode": "none",
+                },
+                "fieldConfig": {
+                    "defaults": {
+                        "noValue": "不明",
+                        "mappings": [
+                            {
+                                "type": "value",
+                                "options": {
+                                    "0": {"text": "オフライン", "index": 0},
+                                    "1": {"text": "オンライン", "index": 1},
+                                },
+                            }
+                        ],
+                        "thresholds": {
+                            "mode": "absolute",
+                            "steps": [
+                                {"value": None, "color": "red"},
+                                {"value": 1, "color": "green"},
+                            ],
+                        },
+                        "color": {"mode": "thresholds"},
+                    }
+                },
+            },
+            {
+                "id": 103,
+                "type": "timeseries",
+                "title": "テレメトリ",
+                "gridPos": {"x": 6, "y": 11, "w": 18, "h": 8},
+                "targets": [
+                    {
+                        "refId": "A",
+                        "datasource": {"type": "influxdb"},
+                        "query": _FLUX_TELEMETRY_ARCHIVED,
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "custom": {"lineWidth": 2},
+                        "displayName": "${__field.name}",
+                    },
+                },
+                "options": {
+                    "tooltip": {"mode": "multi"},
+                    "legend": {"displayMode": "list", "placement": "bottom"},
+                },
+            },
         ],
         "time": {"from": "now-1h", "to": "now"},
         "refresh": "30s",
@@ -389,22 +545,40 @@ def build_dashboard_panels(configs: list[dict]) -> list[dict]:
     stat_deleted = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][1])  # id=2
     stat_status  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][2])  # id=4
     fallback_ts  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][3])  # id=3
+    # アーカイブ(削除済み)行。現役デバイスの行より下に来るよう、後段でyを詰め直す。
+    row_archived         = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][4])  # id=101
+    stat_deleted_archived = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][5])  # id=102
+    stat_status_archived  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][6])  # id=104
+    fallback_ts_archived  = copy.deepcopy(_DEFAULT_DASHBOARD["dashboard"]["panels"][7])  # id=103
 
     fixed = [row_panel, stat_deleted, stat_status]
 
     if not configs:
-        return fixed + [fallback_ts]
+        sensor_panels = []
+        active_max_y = 1 + 8  # 行(h=1) + フォールバックtimeseries(y=1, h=8)
+    else:
+        sensor_panels = []
+        for i, cfg in enumerate(configs):
+            panel_id = 10 + i
+            x = 6 + (i % 2) * 9   # x=6 または x=15（2列）
+            y = 1 + (i // 2) * 7
+            sensor_panels.append(
+                build_sensor_panel(cfg["sensor_key"], cfg["panel_type"], panel_id, x, y)
+            )
+        last_row_y = 1 + ((len(configs) - 1) // 2) * 7
+        active_max_y = last_row_y + 6  # センサーパネルの高さ(h=6)
 
-    sensor_panels = []
-    for i, cfg in enumerate(configs):
-        panel_id = 10 + i
-        x = 6 + (i % 2) * 9   # x=6 または x=15（2列）
-        y = 1 + (i // 2) * 7
-        sensor_panels.append(
-            build_sensor_panel(cfg["sensor_key"], cfg["panel_type"], panel_id, x, y)
-        )
+    archive_row_y = active_max_y + 1
+    row_archived["gridPos"]["y"] = archive_row_y
+    stat_deleted_archived["gridPos"]["y"] = archive_row_y + 1
+    stat_status_archived["gridPos"]["y"] = archive_row_y + 1
+    fallback_ts_archived["gridPos"]["y"] = archive_row_y + 1
 
-    return fixed + sensor_panels
+    archived = [row_archived, stat_deleted_archived, stat_status_archived, fallback_ts_archived]
+
+    if not configs:
+        return fixed + [fallback_ts] + archived
+    return fixed + sensor_panels + archived
 
 
 def mark_device_deleted(influxdb_org_id: str, device_name: str) -> None:
