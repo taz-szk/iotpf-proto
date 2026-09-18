@@ -4,7 +4,7 @@ from app.services.billing_usage import (
     _count_influxdb_points_for_month,
     _count_influxdb_retained_points,
     _count_retired_devices,
-    _count_unique_devices_for_month,
+    _count_registered_devices,
     _count_alert_events_for_month,
     aggregate_monthly_usage,
 )
@@ -104,14 +104,22 @@ def test_count_retired_devices_returns_zero_on_error_status():
     assert result == 0
 
 
-def test_count_unique_devices_for_month_parses_response():
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.text = ",result,table,_value\n,_result,0,7\n"
-    with patch("app.services.billing_usage.httpx") as mock_httpx:
-        mock_httpx.post.return_value = mock_resp
-        result = _count_unique_devices_for_month("org-1", "tok", 2026, 9)
-    assert result == 7
+def test_count_registered_devices_counts_devices_table_rows():
+    """「デバイス一覧」画面の表示件数(devicesテーブルの行数)と一致する、重複のないスナップショット。"""
+    mock_db = MagicMock()
+    mock_db.execute.return_value.scalar.return_value = 5
+    result = _count_registered_devices(mock_db, "tenant_x")
+    assert result == 5
+    sql_text = str(mock_db.execute.call_args[0][0])
+    assert "tenant_x" in sql_text
+    assert "devices" in sql_text
+
+
+def test_count_registered_devices_returns_zero_when_none():
+    mock_db = MagicMock()
+    mock_db.execute.return_value.scalar.return_value = None
+    result = _count_registered_devices(mock_db, "tenant_x")
+    assert result == 0
 
 
 def test_count_alert_events_for_month_queries_target_month():
@@ -128,7 +136,7 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
     with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=100), \
          patch("app.services.billing_usage._count_influxdb_retained_points", side_effect=[300, 20]), \
          patch("app.services.billing_usage._count_retired_devices", return_value=2), \
-         patch("app.services.billing_usage._count_unique_devices_for_month", return_value=5), \
+         patch("app.services.billing_usage._count_registered_devices", return_value=5), \
          patch("app.services.billing_usage._count_alert_events_for_month", return_value=2), \
          patch("app.services.billing_usage._calc_provisionable_devices", return_value=(40, False)), \
          patch("app.services.billing_usage.get_effective_retention_days", return_value=365):
@@ -151,7 +159,7 @@ def test_aggregate_monthly_usage_passes_effective_retention_days_to_retained_poi
     with patch("app.services.billing_usage._count_influxdb_points_for_month", return_value=10), \
          patch("app.services.billing_usage._count_influxdb_retained_points", return_value=0) as mock_retained, \
          patch("app.services.billing_usage._count_retired_devices", return_value=0), \
-         patch("app.services.billing_usage._count_unique_devices_for_month", return_value=1), \
+         patch("app.services.billing_usage._count_registered_devices", return_value=1), \
          patch("app.services.billing_usage._count_alert_events_for_month", return_value=0), \
          patch("app.services.billing_usage._calc_provisionable_devices", return_value=(1, False)), \
          patch("app.services.billing_usage.get_effective_retention_days", return_value=730):
