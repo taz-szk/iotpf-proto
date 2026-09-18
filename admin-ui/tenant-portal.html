@@ -493,8 +493,9 @@
                 </div>
                 <div class="flex justify-end gap-2">
                   <button @click="archivedPurgeModalOpen = false" :disabled="archivedPurgeSubmitting"
-                          class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
-                  <button @click="submitArchivedPurge()"
+                          class="text-sm text-gray-500 px-3 py-1.5"
+                          x-text="archivedPurgeResults.length > 0 ? '閉じる' : 'キャンセル'"></button>
+                  <button x-show="archivedPurgeResults.length === 0" @click="submitArchivedPurge()"
                           :disabled="archivedPurgeConfirmText !== 'DELETE' || archivedPurgeSubmitting"
                           class="bg-red-500 disabled:bg-red-200 text-white text-sm px-3 py-1.5 rounded">
                     <span x-show="!archivedPurgeSubmitting">完全に削除</span>
