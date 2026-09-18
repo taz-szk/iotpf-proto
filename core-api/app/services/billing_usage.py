@@ -42,16 +42,42 @@ def _count_influxdb_points_for_month(influxdb_org_id: str, token: str, year: int
         return 0
 
 
-def _count_influxdb_retained_points(influxdb_org_id: str, token: str, retention_days: int, archived: bool) -> int:
-    """現在(スナップショット時点)保持されているテレメトリ点数。
-    archived=Falseなら現役デバイス(device_nameがDel_接頭辞でないもの)、
-    archived=Trueなら退役デバイス(Del_接頭辞のアーカイブ)のみを対象にする。"""
-    name_filter = 'r.device_name =~ /^Del_/' if archived else 'not (r.device_name =~ /^Del_/)'
+def _count_total_retained_points(influxdb_org_id: str, token: str, retention_days: int) -> int:
+    """現在(スナップショット時点)保持されているテレメトリ点数の全体(現役+退役)。
+    device_nameによる絞り込みを行わないので高速。"""
     query = (
         'from(bucket: "telemetry")\n'
         f'  |> range(start: -{retention_days}d)\n'
         '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
-        f'  |> filter(fn: (r) => {name_filter})\n'
+        '  |> group()\n'
+        '  |> count()\n'
+        '  |> sum()\n'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={influxdb_org_id}",
+            headers={"Authorization": f"Token {token}", "Content-Type": "application/json"},
+            json={"query": query, "type": "flux"},
+            timeout=15.0,
+        )
+        if resp.status_code != 200:
+            return 0
+        return _parse_influx_csv_scalar(resp.text)
+    except Exception:
+        return 0
+
+
+def _count_retired_retained_points(influxdb_org_id: str, token: str, retention_days: int) -> int:
+    """現在(スナップショット時点)保持されているテレメトリ点数のうち、退役デバイス
+    (device_nameがDel_接頭辞のアーカイブ)分。device_name =~ /^Del_/ は肯定regexで
+    InfluxDBのタグインデックスを使えるため高速(否定regexは大量データで遅い/タイムアウト
+    しうることが実機で確認済み。not (...)は使わず、全体からこの値を引いて現役分を
+    求める方式にしている)。"""
+    query = (
+        'from(bucket: "telemetry")\n'
+        f'  |> range(start: -{retention_days}d)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        '  |> filter(fn: (r) => r.device_name =~ /^Del_/)\n'
         '  |> group()\n'
         '  |> count()\n'
         '  |> sum()\n'
@@ -134,11 +160,13 @@ def aggregate_monthly_usage(
     data_points = _count_influxdb_points_for_month(influxdb_org_id, influxdb_token, year, month)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     retention_days = get_effective_retention_days(db, tenant)
+    total_retained = _count_total_retained_points(influxdb_org_id, influxdb_token, retention_days)
+    retired_retained = _count_retired_retained_points(influxdb_org_id, influxdb_token, retention_days)
     return {
         "base_fee": 1,
         "data_points": data_points,
-        "retained_data_points": _count_influxdb_retained_points(influxdb_org_id, influxdb_token, retention_days, archived=False),
-        "retired_data_points": _count_influxdb_retained_points(influxdb_org_id, influxdb_token, retention_days, archived=True),
+        "retained_data_points": max(0, total_retained - retired_retained),
+        "retired_data_points": retired_retained,
         "retired_device_count": _count_retired_devices(influxdb_org_id, influxdb_token, retention_days),
         "device_count": _count_registered_devices(db, schema),
         "provisionable_devices": provisionable_devices,
