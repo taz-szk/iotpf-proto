@@ -88,6 +88,7 @@ def test_provision_max_devices_reached(client):
         mock_db.__exit__ = MagicMock(return_value=False)
         mock_session.return_value = mock_db
         mock_db.query.return_value.filter.return_value.first.return_value = mock_token
+        mock_db.execute.return_value.rowcount = 0
 
         resp = client.post("/provision", json={
             "bootstrap_token": "full-token",

@@ -24,8 +24,11 @@ def test_tenant_login_success():
 
     with patch("app.routers.tenant_auth.SessionLocal") as mock_sl, \
          patch("app.routers.tenant_auth.engine") as mock_engine, \
-         patch("app.routers.tenant_auth.verify_password", return_value=True):
-        mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
+         patch("app.routers.tenant_auth.verify_password", return_value=True), \
+         patch("app.routers.tenant_auth.ensure_grafana_user_in_org"), \
+         patch("app.routers.tenant_auth.set_user_default_org_via_proxy"):
+        # 1回目: テナント取得、2回目: MFA設定(未設定=MFA必須でない)
+        mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.side_effect = [tenant, None]
         mock_conn = MagicMock()
         mock_conn.execute.return_value.fetchone.return_value = row
         mock_engine.connect.return_value.__enter__.return_value = mock_conn
@@ -34,8 +37,9 @@ def test_tenant_login_success():
 
     assert resp.status_code == 200
     data = resp.json()
+    assert data["status"] == "ok"
     assert data["email"] == "user@acme.com"
-    assert data["redirect_url"] == "/grafana/?orgId=2"
+    assert data["redirect_url"] == "/admin/tenant-portal.html"
     assert "iot_token" in resp.cookies
 
 

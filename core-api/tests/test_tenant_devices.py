@@ -36,6 +36,8 @@ def test_list_tenant_devices_returns_rows():
     mock_row = MagicMock()
     mock_row.id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     mock_row.device_id = "device-001"
+    mock_row.device_name = "Device 001"
+    mock_row.group_id = None
     mock_row.connection_status = "online"
     mock_row.last_seen_at = now
     mock_row.fw_version = "1.2.3"
@@ -55,9 +57,11 @@ def test_list_tenant_devices_returns_rows():
     data = resp.json()
     assert len(data) == 1
     assert data[0]["device_id"] == "device-001"
+    assert data[0]["device_name"] == "Device 001"
     assert data[0]["connection_status"] == "online"
     assert data[0]["fw_version"] == "1.2.3"
     assert data[0]["cert_not_after"] is None
+    assert data[0]["group_id"] is None
 
 def test_list_tenant_devices_unauthorized():
     resp = client.get("/tenants/33333333-3333-3333-3333-333333333333/devices")

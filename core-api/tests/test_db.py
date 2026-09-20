@@ -18,8 +18,7 @@ def test_create_tenant_schema_executes_sql():
         create_tenant_schema("123e4567-e89b-12d3-a456-426614174000")
 
     assert mock_conn.execute.called
-    first_call = mock_conn.execute.call_args_list[0]
-    assert "CREATE SCHEMA" in str(first_call)
+    assert "CREATE SCHEMA" in _sql_text(mock_conn.execute.call_args_list[:1])
 
 
 def test_create_tenant_schema_includes_device_groups():
