@@ -10,7 +10,18 @@ os.environ.setdefault("EMQX_API_PASSWORD", "test_emqx_password")
 os.environ.setdefault("EMQX_WEBHOOK_SECRET", "test_webhook_secret_for_unit_tests")
 
 from fastapi.testclient import TestClient
+import app.main as app_main
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def _no_startup_migrations(monkeypatch):
+    # ローカルにPostgresが無いと、起動時の全マイグレーションが接続失敗を待つ(Windowsで1起動約70秒)。
+    # マイグレーション自体のテストはapp.databaseの関数を直接呼ぶので影響しない。
+    for name in dir(app_main):
+        if name.startswith("migrate_"):
+            monkeypatch.setattr(app_main, name, lambda: None)
+
 
 @pytest.fixture
 def client():
