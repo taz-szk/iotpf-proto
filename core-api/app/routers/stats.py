@@ -98,6 +98,16 @@ def _calc_provisionable_devices(db, tenant_id: str, schema: str) -> tuple[int, b
     return remaining, has_unlimited
 
 
+def _count_active_firmware_releases(db, schema: str) -> int:
+    # 失敗するSELECTをtry/exceptで握り潰すとPostgreSQLではトランザクションが中断状態で残り後続が全て失敗するため、事前に存在確認する
+    table = db.execute(text("SELECT to_regclass(:name)"), {"name": f'"{schema}".firmware_releases'}).scalar()
+    if table is None:
+        return 0
+    return db.execute(
+        text(f'SELECT COUNT(*) FROM "{schema}".firmware_releases WHERE is_active = TRUE')
+    ).scalar() or 0
+
+
 @router.get("/{tenant_id}/stats")
 def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
     _validate_uuid(tenant_id)
@@ -120,12 +130,7 @@ def get_tenant_stats(tenant_id: str, _: dict = Depends(_require_platform)):
             text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= date_trunc('month', NOW())")
         ).scalar() or 0
 
-        try:
-            firmware_releases = db.execute(
-                text(f'SELECT COUNT(*) FROM "{schema}".firmware_releases WHERE is_active = TRUE')
-            ).scalar() or 0
-        except Exception:
-            firmware_releases = 0
+        firmware_releases = _count_active_firmware_releases(db, schema)
 
         provisionable_devices, has_unlimited_token = _calc_provisionable_devices(db, tenant_id, schema)
 

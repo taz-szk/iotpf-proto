@@ -27,7 +27,7 @@ from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.audit import write_audit_log, log_audit
-from app.routers.stats import _count_influxdb_points, _calc_provisionable_devices
+from app.routers.stats import _count_influxdb_points, _calc_provisionable_devices, _count_active_firmware_releases
 from app.services.device_groups import (
     DeviceNotFoundError,
     GroupInUseError,
@@ -791,12 +791,7 @@ def get_stats(payload: dict = Depends(_require_tenant)):
         alert_events_this_month = db.execute(
             text(f"SELECT COUNT(*) FROM \"{schema}\".alert_events WHERE triggered_at >= date_trunc('month', NOW())")
         ).scalar() or 0
-        try:
-            firmware_releases = db.execute(
-                text(f'SELECT COUNT(*) FROM "{schema}".firmware_releases WHERE is_active = TRUE')
-            ).scalar() or 0
-        except Exception:
-            firmware_releases = 0
+        firmware_releases = _count_active_firmware_releases(db, schema)
 
         provisionable_devices, has_unlimited_token = _calc_provisionable_devices(db, tenant_id, schema)
 
