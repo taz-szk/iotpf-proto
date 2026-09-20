@@ -1239,8 +1239,10 @@ def add_tenant_datasource_to_platform_org(platform_org_id: int, tenant_name: str
         httpx.post(f"{settings.grafana_url}/api/user/using/1", auth=auth, timeout=5.0)
 
 
-def sync_tenant_dashboard(org_id: int, tenant_name: str, groups: list[dict] | None = None) -> None:
-    """テナントのホームダッシュボードを最新パネル定義に更新する。"""
+def sync_tenant_dashboard(org_id: int, tenant_name: str, groups: list[dict] | None = None,
+                          configs: list[dict] | None = None) -> None:
+    """テナントのホームダッシュボードを最新パネル定義に更新する。
+    configsにテナントが保存済みのセンサー別パネル設定を渡さないと、初期レイアウトで上書きされて消える。"""
     import copy
     auth = _admin_auth()
 
@@ -1271,6 +1273,7 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str, groups: list[dict] | No
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
+    dashboard["dashboard"]["panels"] = build_dashboard_panels(configs or [])
     if groups is not None:
         dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
 

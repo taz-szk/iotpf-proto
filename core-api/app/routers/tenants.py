@@ -16,6 +16,7 @@ from app.services.billing import (
 from app.config import settings
 from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to_platform_org, ensure_platform_admin_in_grafana, add_user_to_grafana_org, set_user_default_org_via_proxy, sync_tenant_dashboard, sync_platform_dashboard
 from app.services.device_groups import list_groups_with_devices
+from app.services.panel_configs import get_default_panel_configs
 from app.services.audit import write_audit_log
 import time
 import uuid
@@ -172,7 +173,7 @@ def sync_all_dashboards(_: dict = Depends(_require_platform)):
         try:
             schema = f"tenant_{str(t.id).replace('-', '_')}"
             groups = list_groups_with_devices(schema)
-            sync_tenant_dashboard(t.grafana_org_id, t.name, groups)
+            sync_tenant_dashboard(t.grafana_org_id, t.name, groups, configs=get_default_panel_configs(str(t.id)))
             results.append({"tenant": t.name, "status": "ok"})
         except Exception as e:
             results.append({"tenant": t.name, "status": "error", "detail": str(e)})

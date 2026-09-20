@@ -7,6 +7,7 @@ from sqlalchemy import text
 from app.database import SessionLocal
 from app.models.public import Tenant
 from app.services.device_groups import list_groups_with_devices
+from app.services.panel_configs import get_default_panel_configs
 from app.services.grafana import (
     sync_tenant_dashboard, sync_platform_dashboard, get_or_create_platform_org,
 )
@@ -21,7 +22,7 @@ for tenant_id, name, grafana_org_id in tenants:
     schema = f"tenant_{str(tenant_id).replace('-', '_')}"
     try:
         groups = list_groups_with_devices(schema)
-        sync_tenant_dashboard(grafana_org_id, name, groups)
+        sync_tenant_dashboard(grafana_org_id, name, groups, configs=get_default_panel_configs(str(tenant_id)))
         print(f"OK: {name}")
     except Exception as e:
         print(f"ERROR: {name}: {e}")
