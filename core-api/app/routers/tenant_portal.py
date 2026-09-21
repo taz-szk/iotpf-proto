@@ -1,5 +1,4 @@
 """テナントユーザー（Cookie認証）向けの自テナント管理API。"""
-import hashlib
 import re
 import secrets
 import time
@@ -48,6 +47,7 @@ from app.services.device_groups import (
 )
 from app.services.tenant import teardown_tenant
 from app.services.emqx_publisher import publish_ota_command
+from app.services.firmware_upload import measure_upload
 from app.services.minio_client import (
     create_firmware_download_token,
     delete_firmware,
@@ -926,7 +926,7 @@ def list_firmware(payload: dict = Depends(_require_tenant)):
 
 
 @router.post("/me/firmware", status_code=status.HTTP_201_CREATED)
-async def upload_firmware_release(
+def upload_firmware_release(
     version: str = Form(...),
     target_model: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
@@ -935,13 +935,10 @@ async def upload_firmware_release(
 ):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
-    content = await file.read()
-    if len(content) > 100 * 1024 * 1024:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Firmware file too large (max 100 MB)")
-    checksum = "sha256:" + hashlib.sha256(content).hexdigest()
+    file_size, checksum = measure_upload(file.file)
     firmware_id = str(uuid_lib.uuid4())
     add_firmware_tables_to_tenant_schema(tenant_id)
-    minio_key = upload_firmware(tenant_id, firmware_id, content, file.content_type)
+    minio_key = upload_firmware(tenant_id, firmware_id, file.file, file.content_type, length=file_size)
     with SessionLocal() as db:
         db.execute(text(f'''
             INSERT INTO "{schema}".firmware_releases
@@ -949,14 +946,14 @@ async def upload_firmware_release(
             VALUES (:id, :version, :target_model, :minio_key, :file_size, :checksum, :description)
         '''), {
             "id": firmware_id, "version": version, "target_model": target_model,
-            "minio_key": minio_key, "file_size": len(content),
+            "minio_key": minio_key, "file_size": file_size,
             "checksum": checksum, "description": description,
         })
         write_audit_log(db, "tenant", payload["sub"], payload["email"],
                         "upload_firmware", tenant_id=tenant_id,
                         resource_type="firmware", resource_id=version)
         db.commit()
-    return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": len(content)}
+    return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": file_size}
 
 
 @router.delete("/me/firmware/{firmware_id}", status_code=status.HTTP_204_NO_CONTENT)

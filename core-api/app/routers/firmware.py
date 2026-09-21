@@ -1,4 +1,3 @@
-import hashlib
 import re
 import uuid as uuid_lib
 from typing import Optional
@@ -14,6 +13,7 @@ from app.models.public import Tenant
 from app.services.auth import verify_token
 from app.services.device_groups import GroupNotFoundError, list_group_device_ids
 from app.services.emqx_publisher import publish_ota_command
+from app.services.firmware_upload import measure_upload
 from app.services.minio_client import (
     create_firmware_download_token,
     decode_firmware_download_token,
@@ -69,7 +69,7 @@ def _validate_tenant(tenant_id: str) -> tuple[str, str]:
 
 
 @router.post("/tenants/{tenant_id}/firmware", status_code=status.HTTP_201_CREATED)
-async def upload_firmware_release(
+def upload_firmware_release(
     tenant_id: str,
     version: str = Form(...),
     target_model: Optional[str] = Form(None),
@@ -78,18 +78,12 @@ async def upload_firmware_release(
     payload: dict = Depends(_require_platform),
 ):
     tenant_name, schema_suffix = _validate_tenant(tenant_id)
-    content = await file.read()
-    MAX_FIRMWARE_BYTES = 100 * 1024 * 1024  # 100 MB
-    if len(content) > MAX_FIRMWARE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail="Firmware file too large (max 100 MB)"
-        )
-    checksum = "sha256:" + hashlib.sha256(content).hexdigest()
+    # ファイルはStarletteが一時ファイルに書き出したもの。全量をメモリに読まず、チャンクで検証・転送する
+    file_size, checksum = measure_upload(file.file)
     firmware_id = str(uuid_lib.uuid4())
 
     add_firmware_tables_to_tenant_schema(tenant_id)
-    minio_key = upload_firmware(tenant_id, firmware_id, content, file.content_type)
+    minio_key = upload_firmware(tenant_id, firmware_id, file.file, file.content_type, length=file_size)
 
     with SessionLocal() as db:
         schema = f"tenant_{schema_suffix}"
@@ -102,7 +96,7 @@ async def upload_firmware_release(
             "version": version,
             "target_model": target_model,
             "minio_key": minio_key,
-            "file_size": len(content),
+            "file_size": file_size,
             "checksum": checksum,
             "description": description,
         })
@@ -111,7 +105,7 @@ async def upload_firmware_release(
                         resource_type="firmware", resource_id=version)
         db.commit()
 
-    return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": len(content)}
+    return {"id": firmware_id, "version": version, "checksum": checksum, "file_size": file_size}
 
 
 @router.get("/tenants/{tenant_id}/firmware")

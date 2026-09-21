@@ -1,7 +1,7 @@
 import io
 import re
 from datetime import datetime, timedelta, timezone
-from typing import Iterator
+from typing import BinaryIO, Iterator
 
 from minio import Minio
 import jwt
@@ -26,15 +26,22 @@ def _ensure_bucket() -> None:
         client.make_bucket(settings.minio_firmware_bucket)
 
 
-def upload_firmware(tenant_id: str, firmware_id: str, data: bytes, content_type: str) -> str:
+def upload_firmware(tenant_id: str, firmware_id: str, data: bytes | BinaryIO, content_type: str,
+                    length: int | None = None) -> str:
+    """dataにはbytesかファイルオブジェクトを渡せる。ファイルオブジェクトの場合はlength(バイト数)が必須で、
+    全量をメモリに載せずにMinIOへ流す。"""
     _ensure_bucket()
     client = _get_client()
     key = f"{tenant_id}/{firmware_id}"
+    if isinstance(data, (bytes, bytearray)):
+        length, data = len(data), io.BytesIO(data)
+    elif length is None:
+        raise ValueError("length is required when uploading a file object")
     client.put_object(
         settings.minio_firmware_bucket,
         key,
-        io.BytesIO(data),
-        length=len(data),
+        data,
+        length=length,
         content_type=content_type or "application/octet-stream",
     )
     return key
