@@ -161,6 +161,7 @@ RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・�
 - **パスワードポリシー** — 12文字以上・72バイト以下（`services/password_policy.py`、全設定経路で共通）。ログイン照合には適用しない
 - **パスワード変更でセッション失効** — テナントJWTに `pwv`（パスワード指紋）、PF管理者Cookieは `tok_ver`/`is_active` をDBで再検証（`tenant_session.py` / `platform_session.py`）
 - **Grafanaイメージ固定** — `GRAFANA_IMAGE`（既定 `grafana/grafana-oss:13.0.2`）
+- **管理コンソールのURLは公開文書に載せない** — 記録先は `nginx/conf.d/api.conf`（管理コンソール用のlocation）とインストーラ完了画面。docs/・README・CLAUDE.md には書かない（docs/ は `/docs/` で公開され、AIアシスタントの検索対象にもなる）
 
 ## デバッグに使うコマンド集
 

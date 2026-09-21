@@ -407,7 +407,7 @@ docker compose down -v
   +---------------------------------------------------------+
   |  IoT Platform is running!                               |
   +---------------------------------------------------------+
-  Admin / Login  https://localhost/iotairx-console/
+  Admin / Login  https://localhost/<管理コンソールのURL>   ← 実際のURLはインストーラの完了画面に表示されます
                  admin@platform.local / see PLATFORM_ADMIN_PASSWORD in .env
   Grafana        https://localhost/grafana/  (behind admin login)
   MailHog        http://localhost:8025
@@ -415,7 +415,7 @@ docker compose down -v
   +---------------------------------------------------------+
 
   Next steps:
-    1. Open https://localhost/iotairx-console/ and log in as
+    1. Open the admin console URL shown above and log in as
        admin@platform.local (password in .env)
     2. Create a tenant
     3. Provision your first device using the bootstrap token
@@ -781,7 +781,7 @@ docker exec ollama ollama list</pre>
       <div class="step-body">
         <div class="step-title">プラットフォーム設定画面でOllama接続先を設定する</div>
         <div class="step-desc">
-          プラットフォーム管理コンソール（<code>/iotairx-console/</code>）の設定画面「AIアシスタント接続設定」で、
+          プラットフォーム管理コンソールの設定画面「AIアシスタント接続設定」で、
           手順2で用意したOllamaの接続先URL（例: <code>http://192.0.2.10:11434</code>）を入力し、
           「接続テスト」で疎通を確認してから保存します。<strong>この設定を保存するまでAIアシスタント機能は
           非表示のまま</strong>で、テナント画面にも影響しません。
@@ -800,7 +800,7 @@ docker exec ollama ollama list</pre>
         </div>
         <table class="ep-table">
           <tr><th>項目</th><th>内容</th></tr>
-          <tr><td>/iotairx-console/</td><td>プラットフォーム管理コンソール → 設定 → AIアシスタント</td></tr>
+          <tr><td>プラットフォーム管理コンソール</td><td>設定 → AIアシスタント</td></tr>
           <tr><td>POST /platform/assistant/reindex</td><td>再インデックスAPI（管理コンソールのボタンから呼ばれます）</td></tr>
         </table>
         <div class="callout callout-warn">
@@ -894,7 +894,7 @@ docker compose ps postgres   <span class="cmt"># イメージがpgvector/pgvecto
         <div class="step-title">Ollama接続先をプラットフォーム設定画面で再設定する</div>
         <div class="step-desc">
           旧構成の<code>OLLAMA_URL</code>等の環境変数は廃止された。プラットフォーム管理コンソール
-          （<code>/iotairx-console/</code>）の設定画面「AIアシスタント接続設定」で、Ollama専用インスタンスの
+          の設定画面「AIアシスタント接続設定」で、Ollama専用インスタンスの
           接続先URL・チャットモデル・埋め込みモデルを入力し、「接続テスト」で疎通確認後に保存する。
           保存するまでAIアシスタントタブは非表示のまま。
         </div>
