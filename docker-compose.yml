@@ -137,7 +137,9 @@ services:
       retries: 3
 
   grafana:
-    image: grafana/grafana-oss:latest
+    # latestではなくバージョンを固定する(再作成のたびに意図せずメジャーアップグレードされるのを防ぐ)。
+    # 上げるときは .env の GRAFANA_IMAGE を書き換える。
+    image: ${GRAFANA_IMAGE:-grafana/grafana-oss:13.0.2}
     container_name: grafana
     restart: unless-stopped
     networks:
