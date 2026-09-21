@@ -32,6 +32,13 @@ def _passthrough_tenant_session_check(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _passthrough_platform_session_check(monkeypatch):
+    # プラットフォーム管理者のCookie再検証も同様。実物のテストはtest_platform_session.pyで行う。
+    from app.services import platform_session
+    monkeypatch.setattr(platform_session, "revalidate_platform_session", lambda payload: None)
+
+
+@pytest.fixture(autouse=True)
 def _no_blocklist_db(monkeypatch):
     # JTIブロックリストのDB永続化は、ローカルにDBが無い既存テストでは何もしない。
     # 永続化そのもののテストはtest_token_blocklist_persistence.pyで差し替えて行う。

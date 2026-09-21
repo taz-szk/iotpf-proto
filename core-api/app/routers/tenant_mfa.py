@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from app.services.audit import log_audit
 from app.services.auth import verify_token, create_access_token, verify_password
+from app.services.tenant_session import current_password_fingerprint
 from app.services.totp import generate_totp_secret, get_totp_uri, verify_totp_code
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
 from app.models.public import Tenant
@@ -27,7 +28,11 @@ def _schema(tenant_id: str) -> str:
 
 
 def _set_tenant_cookie(response: Response, payload: dict) -> None:
-    token = create_access_token(payload, expires_delta=timedelta(hours=settings.grafana_session_expire_hours))
+    # パスワード変更・リセットでこのセッションを失効させられるよう、現在のパスワードの指紋を入れる
+    pwv = current_password_fingerprint(payload["tenant_id"], payload["sub"])
+    if pwv is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+    token = create_access_token({**payload, "pwv": pwv}, expires_delta=timedelta(hours=settings.grafana_session_expire_hours))
     response.set_cookie(
         key="iot_token", value=token,
         httponly=True, secure=True, samesite="lax",

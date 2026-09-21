@@ -10,6 +10,7 @@ from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token, hash_password
 from app.services.password_policy import validate_password
+from app.services.tenant_session import forget_session
 from app.services.grafana import ensure_grafana_user_in_org
 from app.services.audit import log_audit
 
@@ -91,6 +92,7 @@ def reset_tenant_user_password(tenant_id: UUID, user_id: str, body: PasswordRese
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    forget_session(tenant_id_str, user_id)
 
 
 @router.patch("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

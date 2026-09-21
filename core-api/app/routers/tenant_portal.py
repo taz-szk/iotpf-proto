@@ -442,6 +442,7 @@ def reset_user_password(user_id: str, body: PasswordResetBody, payload: dict = D
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    forget_session(tenant_id, user_id)
 
 
 # ---------------------------------------------------------------------------

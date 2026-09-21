@@ -8,7 +8,7 @@ import secrets as _secrets
 from app.services.audit import log_audit
 from app.services.password_policy import validate_password
 from app.services.auth import verify_password, create_access_token, hash_password, verify_token
-from app.services.tenant_session import require_tenant_session
+from app.services.tenant_session import require_tenant_session, forget_session, password_fingerprint
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
 from app.models.public import Tenant, MfaSettings
@@ -117,6 +117,7 @@ def tenant_login(req: TenantLoginRequest, request: Request, response: Response):
         "type": "tenant",
         "tenant_id": str(tenant.id),
         "role": row.role,
+        "pwv": password_fingerprint(row.password_hash),
     }
     token = create_access_token(
         payload,
@@ -175,7 +176,7 @@ def get_me(payload: dict = Depends(require_tenant_session)):
 
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
-def change_password(req: ChangePasswordRequest, payload: dict = Depends(require_tenant_session)):
+def change_password(req: ChangePasswordRequest, response: Response, payload: dict = Depends(require_tenant_session)):
     validate_password(req.new_password, payload.get("email"))
 
     tenant_id = payload["tenant_id"]
@@ -191,11 +192,24 @@ def change_password(req: ChangePasswordRequest, payload: dict = Depends(require_
     if not row or not verify_password(req.current_password, row.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect")
 
+    new_hash = hash_password(req.new_password)
     with engine.connect() as conn:
         conn.execute(
             text(f'UPDATE "{schema}".users SET password_hash = :hash WHERE id = :uid'),
-            {"hash": hash_password(req.new_password), "uid": user_id},
+            {"hash": new_hash, "uid": user_id},
         )
         conn.commit()
+    forget_session(tenant_id, user_id)
+    # 他の端末のセッションはこれで失効する。本人の今のセッションは、新しいパスワードの指紋で発行し直して継続させる
+    token = create_access_token(
+        {"sub": user_id, "email": payload["email"], "type": "tenant", "tenant_id": tenant_id,
+         "role": payload["role"], "pwv": password_fingerprint(new_hash)},
+        expires_delta=timedelta(hours=settings.grafana_session_expire_hours),
+    )
+    response.set_cookie(
+        key="iot_token", value=token,
+        httponly=True, secure=True, samesite="lax",
+        max_age=settings.grafana_session_expire_hours * 3600, path="/",
+    )
     log_audit("tenant", user_id, payload["email"], "change_password",
               tenant_id=tenant_id, resource_type="tenant_user", resource_id=payload["email"])
