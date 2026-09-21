@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     step_ca_url: str = "https://step-ca:9000"
     step_ca_root: str = "/certs/ca/root_ca.crt"
     step_ca_provisioner: str = "iot-platform"
+    # プロビジョナ(証明書発行用)のパスワード。step-caのボリューム全体(CA秘密鍵を含む)をマウントせずに
+    # 済むよう、環境変数STEP_CA_PASSWORDで受け取る。未設定の場合のみ step_ca_password_file を読む。
+    step_ca_password: str = ""
     step_ca_password_file: str = "/home/step/secrets/password"
     # Secrets — no default; app refuses to start if these are not set
     jwt_secret: str

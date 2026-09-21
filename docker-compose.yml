@@ -179,10 +179,13 @@ services:
       dockerfile: Dockerfile
     container_name: core-api
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [internal, grafana-net]
     volumes:
       - ./certs/ca/root_ca.crt:/certs/ca/root_ca.crt:ro
-      - step_ca_data:/home/step:ro
       - ./docs:/docs:ro
       - ./CLAUDE.md:/CLAUDE.md:ro
     environment:
@@ -193,7 +196,7 @@ services:
       STEP_CA_URL: "https://step-ca:9000"
       STEP_CA_ROOT: "/certs/ca/root_ca.crt"
       STEP_CA_PROVISIONER: "iot-platform"
-      STEP_CA_PASSWORD_FILE: "/home/step/secrets/password"
+      STEP_CA_PASSWORD: "${STEP_CA_PASSWORD}"
       JWT_SECRET: "${JWT_SECRET}"
       MINIO_ENDPOINT: "http://minio:9000"
       MINIO_ACCESS_KEY: "${MINIO_ROOT_USER}"
@@ -235,6 +238,10 @@ services:
       dockerfile: Dockerfile
     container_name: ingestion-service
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [internal]
     environment:
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
@@ -260,6 +267,10 @@ services:
       dockerfile: Dockerfile
     container_name: alert-service
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks: [internal]
     environment:
       POSTGRES_DSN: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}"
