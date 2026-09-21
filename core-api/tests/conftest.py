@@ -31,6 +31,15 @@ def _passthrough_tenant_session_check(monkeypatch):
     monkeypatch.setattr(tenant_session, "revalidate_session", lambda payload: payload)
 
 
+@pytest.fixture(autouse=True)
+def _no_blocklist_db(monkeypatch):
+    # JTIブロックリストのDB永続化は、ローカルにDBが無い既存テストでは何もしない。
+    # 永続化そのもののテストはtest_token_blocklist_persistence.pyで差し替えて行う。
+    from app.services import token_blocklist
+    monkeypatch.setattr(token_blocklist, "_store", lambda jti, exp_epoch: None)
+    monkeypatch.setattr(token_blocklist, "_lookup", lambda jti: False)
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as c:

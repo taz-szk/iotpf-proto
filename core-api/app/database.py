@@ -370,6 +370,23 @@ def migrate_create_audit_logs() -> None:
         conn.commit()
 
 
+def migrate_create_revoked_tokens() -> None:
+    """失効させたリフレッシュトークン(JTI)を保持するrevoked_tokensテーブルを作成する（べき等）。
+    プロセスを再起動しても、ログアウト済み・ローテーション済みのトークンを再び使えないようにするため。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS revoked_tokens (
+                jti        VARCHAR(64) PRIMARY KEY,
+                expires_at TIMESTAMPTZ NOT NULL
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS ix_revoked_tokens_expires
+                ON revoked_tokens(expires_at)
+        """))
+        conn.commit()
+
+
 def migrate_create_billing_tables() -> None:
     """billing_unit_prices・billing_invoices・billing_line_items テーブルを作成する（べき等）。"""
     with engine.connect() as conn:
