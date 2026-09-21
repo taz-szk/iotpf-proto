@@ -152,6 +152,12 @@ RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・�
 - **H-2** リフレッシュトークン失効 — JTI ブロックリスト + `token_version`（`platform_users` テーブル）
 - **H-5** EMQX Webhook HMAC 署名検証 — `EMQX_WEBHOOK_SECRET` 環境変数
 - **H-6** minio_key UUID 形式バリデーション
+- **削除デバイスの接続遮断** — EMQX `/emqx/auth`・`/acl` がDBの登録有無を確認（`services/device_access.py`）、削除時に `kick_client` で切断
+- **テナントセッション再検証** — 認証のたびにユーザー有効性・ロールをDBで確認（`services/tenant_session.py`、10秒キャッシュ）
+- **ログイン回数制限のIP判定** — nginxが `X-Forwarded-For` を `$remote_addr` で上書き、uvicornは内部ネットワークのみ信頼
+- **JTIブロックリストの永続化** — `revoked_tokens` テーブル（再起動しても失効が保たれる。DBを確認できなければ失効扱い）
+- **公開面の絞り込み** — FastAPI `/docs` は既定無効（`ENABLE_API_DOCS=true` で有効）、`/api/emqx/` は外部404、`client_max_body_size` は1m（ファームウェア経路のみ110m）
+- **コンテナ権限** — Pythonサービスは非root、`no-new-privileges` + `cap_drop: ALL`。core-apiにstep-caボリューム（CA秘密鍵）はマウントせず、プロビジョナのパスワードは `STEP_CA_PASSWORD` 環境変数で渡す
 
 ## デバッグに使うコマンド集
 
