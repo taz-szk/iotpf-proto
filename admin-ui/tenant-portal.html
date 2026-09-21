@@ -133,7 +133,7 @@
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
-                  <input type="password" x-model="newUser.password" required minlength="8" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                  <input type="password" x-model="newUser.password" required minlength="12" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">ロール</label>
@@ -2014,9 +2014,9 @@ function portalApp() {
       } catch(e) { this.error = e.message; }
     },
     async resetUserPassword(userId, email) {
-      const newPass = prompt(`${email} の新しいパスワードを入力してください（8文字以上）:`);
+      const newPass = prompt(`${email} の新しいパスワードを入力してください（12文字以上）:`);
       if (!newPass) return;
-      if (newPass.length < 8) { this.error = 'パスワードは8文字以上必要です'; return; }
+      if (newPass.length < 12) { this.error = 'パスワードは12文字以上必要です'; return; }
       try {
         await portalFetch('PATCH', `/me/users/${userId}/password`, { password: newPass });
         alert(`${email} のパスワードを変更しました`);

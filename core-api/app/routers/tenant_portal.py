@@ -25,6 +25,7 @@ from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
+from app.services.password_policy import validate_password
 from app.services.tenant_session import require_tenant_session, forget_session
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.device_access import forget_device
@@ -305,7 +306,7 @@ def purge_archived_devices_portal(body: ArchivedDevicesPurgeBody, payload: dict 
 
 class UserCreate(BaseModel):
     email: str
-    password: str = Field(min_length=8)
+    password: str
     role: Literal["admin", "operator", "viewer"] = "viewer"
 
 
@@ -332,6 +333,7 @@ def list_users(payload: dict = Depends(_require_tenant)):
 @router.post("/me/users", status_code=status.HTTP_201_CREATED)
 def create_user(body: UserCreate, payload: dict = Depends(_require_admin)):
     from app.services.grafana import ensure_grafana_user_in_org
+    validate_password(body.password, body.email)
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
     user_id = str(uuid_lib.uuid4())
@@ -424,11 +426,12 @@ def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator
 
 
 class PasswordResetBody(BaseModel):
-    password: str = Field(min_length=8)
+    password: str
 
 
 @router.patch("/me/users/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
 def reset_user_password(user_id: str, body: PasswordResetBody, payload: dict = Depends(_require_admin)):
+    validate_password(body.password)
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
     with engine.connect() as conn:

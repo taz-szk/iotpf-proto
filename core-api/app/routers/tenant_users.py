@@ -9,6 +9,7 @@ from app.schemas.tenant_users import TenantUserCreate, TenantUserOut
 from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token, hash_password
+from app.services.password_policy import validate_password
 from app.services.grafana import ensure_grafana_user_in_org
 from app.services.audit import log_audit
 
@@ -34,6 +35,7 @@ def _get_active_tenant(tenant_id: str):
 def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, payload: dict = Depends(_require_platform)):
     if body.role not in _ROLE_GRAFANA:
         raise HTTPException(status_code=400, detail=f"role must be one of {list(_ROLE_GRAFANA)}")
+    validate_password(body.password, body.email)
     tenant_id_str = str(tenant_id)
     tenant = _get_active_tenant(tenant_id_str)
     schema = f"tenant_{tenant_id_str.replace('-', '_')}"
@@ -77,8 +79,7 @@ class PasswordResetBody(BaseModel):
 
 @router.patch("/{user_id}/password", status_code=status.HTTP_204_NO_CONTENT)
 def reset_tenant_user_password(tenant_id: UUID, user_id: str, body: PasswordResetBody, _: dict = Depends(_require_platform)):
-    if len(body.password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    validate_password(body.password)
     tenant_id_str = str(tenant_id)
     _get_active_tenant(tenant_id_str)
     schema = f"tenant_{tenant_id_str.replace('-', '_')}"

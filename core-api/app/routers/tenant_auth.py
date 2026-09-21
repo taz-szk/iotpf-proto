@@ -6,6 +6,7 @@ from sqlalchemy import text
 from app.schemas.tenant_auth import TenantLoginRequest, TenantLoginResponse
 import secrets as _secrets
 from app.services.audit import log_audit
+from app.services.password_policy import validate_password
 from app.services.auth import verify_password, create_access_token, hash_password, verify_token
 from app.services.tenant_session import require_tenant_session
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
@@ -175,8 +176,7 @@ def get_me(payload: dict = Depends(require_tenant_session)):
 
 @router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
 def change_password(req: ChangePasswordRequest, payload: dict = Depends(require_tenant_session)):
-    if len(req.new_password) < 8:
-        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    validate_password(req.new_password, payload.get("email"))
 
     tenant_id = payload["tenant_id"]
     user_id = payload["sub"]

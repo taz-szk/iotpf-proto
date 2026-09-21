@@ -398,7 +398,7 @@
             </div>
             <div>
               <label class="block text-xs font-medium text-gray-600 mb-1">パスワード</label>
-              <input type="password" x-model="newUser.password" required minlength="8"
+              <input type="password" x-model="newUser.password" required minlength="12"
                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
             </div>
             <div>
@@ -468,8 +468,8 @@
                 <tr x-show="resetPwUserId === u.id" class="bg-blue-50">
                   <td colspan="5" class="px-4 py-3">
                     <form @submit.prevent="submitResetPassword(u.id)" class="flex items-center gap-2">
-                      <input type="password" x-model="resetPwInput" placeholder="新しいパスワード（8文字以上）"
-                             minlength="8" required autocomplete="new-password"
+                      <input type="password" x-model="resetPwInput" placeholder="新しいパスワード（12文字以上）"
+                             minlength="12" required autocomplete="new-password"
                              class="border border-gray-300 rounded px-2 py-1.5 text-sm flex-1 bg-white">
                       <button type="submit"
                               class="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1.5 rounded">変更する</button>
@@ -1631,7 +1631,7 @@
         },
 
         async submitResetPassword(userId) {
-          if (this.resetPwInput.length < 8) { this.error = 'パスワードは8文字以上必要です'; return; }
+          if (this.resetPwInput.length < 12) { this.error = 'パスワードは12文字以上必要です'; return; }
           try {
             await api.tenantUsers.resetPassword(tenantId, userId, this.resetPwInput);
             this.resetPwUserId = null;

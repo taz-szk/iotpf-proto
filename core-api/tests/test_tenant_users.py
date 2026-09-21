@@ -29,7 +29,7 @@ def test_create_tenant_user_success():
 
         resp = client.post(
             "/tenants/22222222-2222-2222-2222-222222222222/users",
-            json={"email": "user@acme.com", "password": "secure1234", "role": "viewer"},
+            json={"email": "user@acme.com", "password": "secure-pass-1234", "role": "viewer"},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
 
@@ -58,7 +58,7 @@ def test_create_tenant_user_duplicate_email():
 
         resp = client.post(
             "/tenants/22222222-2222-2222-2222-222222222222/users",
-            json={"email": "user@acme.com", "password": "secure1234", "role": "viewer"},
+            json={"email": "user@acme.com", "password": "secure-pass-1234", "role": "viewer"},
             headers={"Authorization": f"Bearer {_platform_token()}"},
         )
     assert resp.status_code == 409
@@ -91,3 +91,23 @@ def test_list_tenant_users_success():
         )
     assert resp.status_code == 200
     assert len(resp.json()) == 1
+
+
+def test_create_tenant_user_rejects_short_password():
+    with patch("app.routers.tenant_users.hash_password") as mock_hash:
+        resp = client.post(
+            "/tenants/22222222-2222-2222-2222-222222222222/users",
+            json={"email": "user@acme.com", "password": "short-pw-1", "role": "viewer"},
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 400
+    mock_hash.assert_not_called()
+
+
+def test_reset_tenant_user_password_rejects_short_password():
+    resp = client.patch(
+        "/tenants/22222222-2222-2222-2222-222222222222/users/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/password",
+        json={"password": "short-pw-1"},
+        headers={"Authorization": f"Bearer {_platform_token()}"},
+    )
+    assert resp.status_code == 400

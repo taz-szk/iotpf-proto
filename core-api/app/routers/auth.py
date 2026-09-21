@@ -5,6 +5,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from app.schemas.auth import LoginRequest, TokenOut, LoginOut, RefreshRequest
 from app.services.audit import log_audit, write_audit_log
+from app.services.password_policy import validate_password
 from app.services.auth import verify_password, hash_password, create_access_token, create_refresh_token, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.token_blocklist import revoke_jti, is_revoked
@@ -147,8 +148,7 @@ def change_password(
     payload = verify_token(creds.credentials)
     if not payload or payload.get("type") != "platform" or payload.get("token_type") == "refresh":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
-    if len(req.new_password) < 8:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password must be at least 8 characters")
+    validate_password(req.new_password, payload.get("email"))
     with SessionLocal() as db:
         user = db.query(PlatformUser).filter(PlatformUser.id == payload["sub"]).first()
         if not user or not verify_password(req.current_password, user.password_hash):
