@@ -23,6 +23,14 @@ def _no_startup_migrations(monkeypatch):
             monkeypatch.setattr(app_main, name, lambda: None)
 
 
+@pytest.fixture(autouse=True)
+def _passthrough_tenant_session_check(monkeypatch):
+    # テナントセッションのDB再検証(tenant_session.revalidate_session)は、ローカルにDBが無い
+    # 既存テストでは素通しにする。再検証そのもののテストはtest_tenant_session.pyで実物に戻して行う。
+    from app.services import tenant_session
+    monkeypatch.setattr(tenant_session, "revalidate_session", lambda payload: payload)
+
+
 @pytest.fixture
 def client():
     with TestClient(app) as c:

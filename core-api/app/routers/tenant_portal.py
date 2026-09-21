@@ -25,6 +25,7 @@ from app.schemas.audit import AuditLogListOut, AuditLogOut
 from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
+from app.services.tenant_session import require_tenant_session, forget_session
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.device_access import forget_device
 from app.services.emqx_publisher import kick_client
@@ -60,13 +61,7 @@ router = APIRouter(prefix="/tenant-portal", tags=["tenant-portal"])
 # 共通認証 Dependency
 # ---------------------------------------------------------------------------
 
-def _require_tenant(iot_token: str = Cookie(default=None)) -> dict:
-    if not iot_token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    payload = verify_token(iot_token)
-    if not payload or payload.get("type") != "tenant" or payload.get("public"):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
-    return payload
+_require_tenant = require_tenant_session
 
 
 def _require_admin(payload: dict = Depends(_require_tenant)) -> dict:
@@ -367,6 +362,18 @@ class UserUpdateBody(BaseModel):
     is_active: Optional[bool] = None
 
 
+def _forbid_operator_on_admin(conn, schema: str, payload: dict, user_id: str) -> None:
+    """operatorは管理者(admin)ユーザーを無効化・削除できない(テナントの管理者を締め出せてしまうため)。
+    対象が存在しなければ404。"""
+    row = conn.execute(
+        text(f'SELECT role FROM "{schema}".users WHERE id = :uid'), {"uid": user_id},
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    if row.role == "admin" and payload.get("role") != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required to modify an admin user")
+
+
 @router.patch("/me/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 def update_user(user_id: str, body: UserUpdateBody, payload: dict = Depends(_require_admin_or_operator)):
     if payload["sub"] == user_id:
@@ -385,6 +392,7 @@ def update_user(user_id: str, body: UserUpdateBody, payload: dict = Depends(_req
         sets.append("is_active = :is_active")
         params["is_active"] = body.is_active
     with engine.connect() as conn:
+        _forbid_operator_on_admin(conn, schema, payload, user_id)
         result = conn.execute(
             text(f'UPDATE "{schema}".users SET {", ".join(sets)} WHERE id = :uid'),
             params,
@@ -392,6 +400,7 @@ def update_user(user_id: str, body: UserUpdateBody, payload: dict = Depends(_req
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    forget_session(tenant_id, user_id)
 
 
 @router.delete("/me/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -401,6 +410,7 @@ def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
     with engine.connect() as conn:
+        _forbid_operator_on_admin(conn, schema, payload, user_id)
         result = conn.execute(
             text(f'DELETE FROM "{schema}".users WHERE id = :uid'),
             {"uid": user_id},
@@ -408,6 +418,7 @@ def delete_user(user_id: str, payload: dict = Depends(_require_admin_or_operator
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         conn.commit()
+    forget_session(tenant_id, user_id)
     log_audit("tenant", payload["sub"], payload["email"], "delete_tenant_user",
               tenant_id=tenant_id, resource_type="tenant_user", resource_id=user_id)
 

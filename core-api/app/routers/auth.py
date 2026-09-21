@@ -8,6 +8,7 @@ from app.services.audit import log_audit, write_audit_log
 from app.services.auth import verify_password, hash_password, create_access_token, create_refresh_token, verify_token
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.token_blocklist import revoke_jti, is_revoked
+from app.services import tenant_session
 from app.models.public import PlatformUser, MfaSettings
 from app.database import SessionLocal
 from app.config import settings
@@ -167,6 +168,8 @@ def verify_jwt(request: Request, response: Response):
     payload = verify_token(token)
     if not payload or payload.get("type") not in ("tenant", "platform") or payload.get("token_type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    if payload.get("type") == "tenant" and not payload.get("public"):
+        payload = tenant_session.revalidate_session(payload)
     email = payload["email"]
     # Defense-in-depth: Grafana の予約済みユーザー名はサーバー管理者権限になるため拒否
     _RESERVED = {"admin@localhost", "admin@grafana", "grafana@grafana"}
