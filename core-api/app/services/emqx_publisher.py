@@ -1,4 +1,6 @@
 import json
+from urllib.parse import quote
+
 import httpx
 from app.config import settings
 
@@ -37,6 +39,20 @@ def _publish(topic: str, payload: dict) -> None:
             timeout=10.0,
         )
     resp.raise_for_status()
+
+
+def kick_client(clientid: str) -> None:
+    """接続中のMQTTクライアントを切断する。削除したデバイスが、証明書が有効なまま
+    既存セッションで送信を続けないようにするためのベストエフォート処理。"""
+    global _token
+    try:
+        url = f"{settings.emqx_api_url}/api/v5/clients/{quote(clientid, safe='')}"
+        resp = httpx.delete(url, headers={"Authorization": f"Bearer {_get_token()}"}, timeout=10.0)
+        if resp.status_code == 401:
+            _token = None
+            httpx.delete(url, headers={"Authorization": f"Bearer {_get_token()}"}, timeout=10.0)
+    except Exception:
+        pass
 
 
 def publish_ota_command(tenant_id: str, device_id: str, payload: dict) -> None:

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel
 from app.database import SessionLocal
 from app.models.public import Tenant
+from app.services.device_access import is_device_registered
 
 router = APIRouter(prefix="/emqx")
 
@@ -41,8 +42,10 @@ def emqx_auth(req: AuthRequest):
     parsed = _parse_cn(cn)
     if not parsed:
         return {"result": "deny"}
-    tenant_id, _ = parsed
+    tenant_id, device_id = parsed
     if not _tenant_is_active(tenant_id):
+        return {"result": "deny"}
+    if not is_device_registered(tenant_id, device_id):
         return {"result": "deny"}
     return {"result": "allow"}
 
@@ -56,6 +59,9 @@ def emqx_acl(req: AclRequest):
     tenant_id, device_id = parsed
     topic = req.topic
     action = req.action
+
+    if not is_device_registered(tenant_id, device_id):
+        return {"result": "deny"}
 
     allowed_patterns = [
         (re.compile(rf"^/{re.escape(tenant_id)}/devices/{re.escape(device_id)}/telemetry$"), "publish"),

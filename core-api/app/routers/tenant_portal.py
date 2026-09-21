@@ -26,6 +26,8 @@ from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
+from app.services.device_access import forget_device
+from app.services.emqx_publisher import kick_client
 from app.services.audit import write_audit_log, log_audit
 from app.routers.stats import _count_influxdb_points, _calc_provisionable_devices, _count_active_firmware_releases
 from app.services.device_groups import (
@@ -207,6 +209,8 @@ def delete_device(device_id: str, payload: dict = Depends(_require_admin_or_oper
         conn.commit()
     log_audit("tenant", payload["sub"], payload["email"], "delete_device",
               tenant_id=tenant_id, resource_type="device", resource_id=device_id)
+    forget_device(tenant_id, device_id)
+    kick_client(f"{tenant_id}:{device_id}")
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if tenant and tenant.influxdb_org_id:

@@ -21,7 +21,8 @@ def test_provision_success(client):
 
     with patch("app.routers.provisioning.SessionLocal") as mock_session, \
          patch("app.routers.provisioning.issue_device_cert_for_tenant", return_value=(mock_cert_pem, mock_key_pem)), \
-         patch("app.routers.provisioning.revive_device_in_influxdb") as mock_revive:
+         patch("app.routers.provisioning.revive_device_in_influxdb") as mock_revive, \
+         patch("app.routers.provisioning.forget_device") as mock_forget:
 
         mock_db = MagicMock()
         mock_db.__enter__ = lambda s: mock_db
@@ -41,6 +42,7 @@ def test_provision_success(client):
     assert "private_key" in data
     assert data["tenant_id"] == tenant_id
     mock_revive.assert_called_once_with("org-1", "device-serial-001")
+    mock_forget.assert_called_once_with(tenant_id, "device-serial-001")
 
 def test_provision_invalid_token(client):
     with patch("app.routers.provisioning.SessionLocal") as mock_session:

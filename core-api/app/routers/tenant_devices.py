@@ -9,6 +9,8 @@ from app.models.public import Tenant
 from app.database import SessionLocal, engine
 from app.services.auth import verify_token
 from app.services.grafana import retire_device_in_influxdb
+from app.services.device_access import forget_device
+from app.services.emqx_publisher import kick_client
 from app.services.audit import log_audit
 from app.services.device_groups import DeviceNotFoundError, GroupNotFoundError, assign_device_group, resync_grafana_groups
 
@@ -68,6 +70,8 @@ def delete_tenant_device(tenant_id: UUID, device_id: str, payload: dict = Depend
         conn.commit()
     log_audit("platform", payload["sub"], payload["email"], "delete_device",
               tenant_id=tenant_id_str, resource_type="device", resource_id=device_id)
+    forget_device(tenant_id_str, device_id)
+    kick_client(f"{tenant_id_str}:{device_id}")
     if tenant.influxdb_org_id:
         retire_device_in_influxdb(tenant.influxdb_org_id, device_name)
 

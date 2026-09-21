@@ -11,7 +11,8 @@ def _auth(client, cn="tenant-a-id:device-001"):
 
 
 def test_emqx_auth_valid_cn(client):
-    with patch("app.routers.emqx._tenant_is_active", return_value=True):
+    with patch("app.routers.emqx._tenant_is_active", return_value=True), \
+         patch("app.routers.emqx.is_device_registered", return_value=True):
         resp = _auth(client)
     assert resp.status_code == 200
     assert resp.json()["result"] == "allow"
@@ -33,16 +34,41 @@ def test_emqx_auth_invalid_cn_format(client):
     assert resp.status_code == 200
     assert resp.json()["result"] == "deny"
 
+def test_emqx_auth_denies_deleted_device(client):
+    """テナントがactiveでも、devicesテーブルに存在しない(削除済み)デバイスは、証明書が有効でも拒否する。"""
+    with patch("app.routers.emqx._tenant_is_active", return_value=True), \
+         patch("app.routers.emqx.is_device_registered", return_value=False):
+        resp = _auth(client)
+    assert resp.json()["result"] == "deny"
+
+
+def test_emqx_acl_denies_deleted_device(client):
+    with patch("app.routers.emqx.is_device_registered", return_value=False):
+        resp = client.post("/emqx/acl", json={
+            "username": "tenant-abc:device-001",
+            "clientid": "tenant-abc:device-001",
+            "topic": "/tenant-abc/devices/device-001/telemetry",
+            "action": "publish",
+            "peerhost": "192.168.1.100",
+        })
+    assert resp.json()["result"] == "deny"
+
+
 def test_emqx_acl_valid_telemetry_publish(client):
-    resp = client.post("/emqx/acl", json={
+    with patch("app.routers.emqx.is_device_registered", return_value=True):
+        resp = _acl_valid_telemetry(client)
+    assert resp.status_code == 200
+    assert resp.json()["result"] == "allow"
+
+
+def _acl_valid_telemetry(client):
+    return client.post("/emqx/acl", json={
         "username": "tenant-abc:device-001",
         "clientid": "tenant-abc:device-001",
         "topic": "/tenant-abc/devices/device-001/telemetry",
         "action": "publish",
         "peerhost": "192.168.1.100",
     })
-    assert resp.status_code == 200
-    assert resp.json()["result"] == "allow"
 
 def test_emqx_acl_cross_tenant_denied(client):
     resp = client.post("/emqx/acl", json={
@@ -56,13 +82,14 @@ def test_emqx_acl_cross_tenant_denied(client):
     assert resp.json()["result"] == "deny"
 
 def test_emqx_acl_subscribe_commands(client):
-    resp = client.post("/emqx/acl", json={
-        "username": "tenant-abc:device-001",
-        "clientid": "tenant-abc:device-001",
-        "topic": "/tenant-abc/devices/device-001/commands",
-        "action": "subscribe",
-        "peerhost": "192.168.1.100",
-    })
+    with patch("app.routers.emqx.is_device_registered", return_value=True):
+        resp = client.post("/emqx/acl", json={
+            "username": "tenant-abc:device-001",
+            "clientid": "tenant-abc:device-001",
+            "topic": "/tenant-abc/devices/device-001/commands",
+            "action": "subscribe",
+            "peerhost": "192.168.1.100",
+        })
     assert resp.status_code == 200
     assert resp.json()["result"] == "allow"
 

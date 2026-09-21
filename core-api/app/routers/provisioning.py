@@ -15,6 +15,7 @@ from app.schemas.device import ProvisionRequest, ProvisionOut, ProvisionGroupsRe
 from app.schemas.device_group import GroupOut
 from app.services.provisioning import issue_device_cert_for_tenant
 from app.services.grafana import revive_device_in_influxdb
+from app.services.device_access import forget_device
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -95,6 +96,7 @@ def provision(req: ProvisionRequest):
         )
         db.commit()
 
+    forget_device(tenant_id, req.device_id)
     if influxdb_org_id:
         revive_device_in_influxdb(influxdb_org_id, device_name)
 

@@ -23,6 +23,27 @@ def test_publish_ota_command_posts_to_emqx():
     assert payload_sent["qos"] == 1
 
 
+def test_kick_client_deletes_the_mqtt_session():
+    """削除したデバイスの接続中セッションを、EMQXのAPIで切断する。"""
+    from app.services.emqx_publisher import kick_client
+    with patch("app.services.emqx_publisher._token", "tok"), \
+         patch("app.services.emqx_publisher.httpx") as mock_httpx:
+        mock_httpx.delete.return_value = MagicMock(status_code=204)
+        kick_client("tenant-abc:device-001")
+    url = mock_httpx.delete.call_args[0][0]
+    assert url.endswith("/api/v5/clients/tenant-abc%3Adevice-001")
+    assert mock_httpx.delete.call_args[1]["headers"]["Authorization"] == "Bearer tok"
+
+
+def test_kick_client_swallows_errors():
+    """切断はベストエフォート。EMQXに繋がらなくてもデバイス削除自体は失敗させない。"""
+    from app.services.emqx_publisher import kick_client
+    with patch("app.services.emqx_publisher._token", "tok"), \
+         patch("app.services.emqx_publisher.httpx") as mock_httpx:
+        mock_httpx.delete.side_effect = Exception("emqx down")
+        kick_client("tenant-abc:device-001")
+
+
 def test_ota_topic_matches_acl():
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
