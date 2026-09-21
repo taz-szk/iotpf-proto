@@ -31,6 +31,8 @@ class Settings(BaseSettings):
     # emqx_events.py trivially bypassable (hmac.compare_digest(b"", b"") == True).
     emqx_webhook_secret: str = Field(min_length=32)
     platform_domain: str = "localhost"
+    # /docs・/redoc・/openapi.json(全エンドポイントの一覧)を公開するか。開発時のみ ENABLE_API_DOCS=true。
+    enable_api_docs: bool = False
     grafana_session_expire_hours: int = 24
     audit_log_retention_days: int = 365
     # 環境変数 AUDIT_LOG_RETENTION_DAYS で上書き可

@@ -8,7 +8,7 @@ from app.influx_writer import write_telemetry, write_device_status
 from app.device_updater import update_last_seen
 from app.config import settings
 
-app = FastAPI(title="IoT Ingestion Service", version="0.1.0")
+app = FastAPI(title="IoT Ingestion Service", version="0.1.0", docs_url=None, redoc_url=None, openapi_url=None)
 
 
 def _verify_emqx_secret(x_api_key: Optional[str] = Header(default=None)) -> None:

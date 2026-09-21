@@ -13,7 +13,8 @@ from app.config import settings
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="IoT Platform Core API", version="0.1.0")
+_docs_kwargs = {} if settings.enable_api_docs else {"docs_url": None, "redoc_url": None, "openapi_url": None}
+app = FastAPI(title="IoT Platform Core API", version="0.1.0", **_docs_kwargs)
 
 def _run_emqx_setup():
     try:
