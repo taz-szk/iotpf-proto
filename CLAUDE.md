@@ -158,6 +158,9 @@ RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・�
 - **JTIブロックリストの永続化** — `revoked_tokens` テーブル（再起動しても失効が保たれる。DBを確認できなければ失効扱い）
 - **公開面の絞り込み** — FastAPI `/docs` は既定無効（`ENABLE_API_DOCS=true` で有効）、`/api/emqx/` は外部404、`client_max_body_size` は1m（ファームウェア経路のみ110m）
 - **コンテナ権限** — Pythonサービスは非root、`no-new-privileges` + `cap_drop: ALL`。core-apiにstep-caボリューム（CA秘密鍵）はマウントせず、プロビジョナのパスワードは `STEP_CA_PASSWORD` 環境変数で渡す
+- **パスワードポリシー** — 12文字以上・72バイト以下（`services/password_policy.py`、全設定経路で共通）。ログイン照合には適用しない
+- **パスワード変更でセッション失効** — テナントJWTに `pwv`（パスワード指紋）、PF管理者Cookieは `tok_ver`/`is_active` をDBで再検証（`tenant_session.py` / `platform_session.py`）
+- **Grafanaイメージ固定** — `GRAFANA_IMAGE`（既定 `grafana/grafana-oss:13.0.2`）
 
 ## デバッグに使うコマンド集
 
