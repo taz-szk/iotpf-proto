@@ -206,6 +206,8 @@ done
 echo -e " ${GREEN}done${NC}"
 
 docker compose cp step-ca:/home/step/certs/root_ca.crt certs/ca/root_ca.crt
+# ルート証明書は公開情報。コピー元(step-ca内)は所有者のみ読める(600)ため、非rootのcore-apiが読めるよう 644 にする
+chmod 644 certs/ca/root_ca.crt
 
 docker compose exec -T step-ca \
   step ca certificate \

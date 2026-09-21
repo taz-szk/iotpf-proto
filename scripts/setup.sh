@@ -35,6 +35,8 @@ done
 echo "[2/4] ルートCA証明書をコピー..."
 docker compose cp step-ca:/home/step/certs/root_ca.crt \
   "${PROJECT_DIR}/certs/ca/root_ca.crt"
+# ルート証明書は公開情報。コピー元(step-ca内)は所有者のみ読める(600)ため、非rootのcore-apiが読めるよう 644 にする
+chmod 644 "${PROJECT_DIR}/certs/ca/root_ca.crt"
 
 echo "[3/4] サーバー証明書生成..."
 docker compose exec -T step-ca \
