@@ -111,7 +111,7 @@ docker compose restart nginx emqx
 | minio | minio/minio | ファームウェアストレージ |
 | grafana | grafana/grafana-oss | ダッシュボード（Auth Proxy SSO） |
 | nginx | nginx:1.25-alpine | リバースプロキシ（TLS終端） |
-| mailhog | mailhog/mailhog | SMTP テスト用 |
+| mailhog | axllent/mailpit | SMTP テスト用（サービス名・コンテナ名は`mailhog`のまま。Web UI / APIは :8025、APIは`/api/v1/messages`） |
 | core-api | ./core-api | メイン API（FastAPI） |
 | ingestion-service | ./ingestion-service | MQTT テレメトリ取込 |
 | alert-service | ./alert-service | アラート評価・通知 |
