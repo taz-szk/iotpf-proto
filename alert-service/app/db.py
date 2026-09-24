@@ -128,3 +128,31 @@ def mark_device_offline(tenant_id: str, device_id: str) -> None:
         conn.commit()
     finally:
         conn.close()
+
+
+def record_notify_status(tenant_id: str, rule_id: str, results: dict) -> None:
+    """通知の配信結果を、ルールの直近の結果として記録する。送信を試みたチャンネルだけを上書きする
+    (メールだけ設定しているルールで、Slackの欄を書き換えない)。結果にはURL・宛先を含めない。"""
+    import json
+    from datetime import datetime, timezone
+
+    now = datetime.now(timezone.utc).isoformat()
+    merged = {
+        channel: {"ok": r["ok"], "error": r.get("error"), "at": now}
+        for channel, r in (results or {}).items() if r
+    }
+    if not merged:
+        return
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f'''UPDATE "{schema}".alert_rules
+                    SET notify_status = COALESCE(notify_status, '{{}}'::jsonb) || %s::jsonb
+                    WHERE id = %s''',
+                (json.dumps(merged), rule_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()

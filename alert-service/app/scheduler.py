@@ -2,10 +2,20 @@ from app.config import settings
 from app.db import (
     get_all_tenants, get_active_alert_rules, get_group_device_ids,
     get_unresolved_event, create_alert_event, resolve_alert_event, mark_event_notified,
-    get_offline_devices, mark_device_offline,
+    get_offline_devices, mark_device_offline, record_notify_status,
 )
 from app.evaluator import evaluate_rule
 from app.notifier import notify
+
+
+def _notify_and_record(rule: dict, **kwargs) -> None:
+    """ルールの通知先へ送り、配信結果(成功/失敗)をルールに記録する。記録の失敗で評価ループを止めない。"""
+    results = notify(rule, **kwargs)
+    try:
+        record_notify_status(kwargs["tenant_id"], rule["id"], results)
+    except Exception as e:
+        print(f"Record notify status failed: {type(e).__name__}")
+
 
 def evaluate_all_tenants() -> None:
     try:
@@ -59,7 +69,7 @@ def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
 
         if should_alert and not existing:
             event_id = create_alert_event(tenant_id, rule_id, device_id, last_value)
-            notify(
+            _notify_and_record(
                 rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key=rule["sensor_key"], condition=rule["condition"],
@@ -69,7 +79,7 @@ def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
             mark_event_notified(tenant_id, event_id)
         elif not should_alert and existing:
             resolve_alert_event(tenant_id, existing["id"])
-            notify(
+            _notify_and_record(
                 rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key=rule["sensor_key"], condition=rule["condition"],
@@ -97,7 +107,7 @@ def _check_dead_devices(tenant_id: str) -> None:
             if existing:
                 continue
             event_id = create_alert_event(tenant_id, rule["id"], device_id, None)
-            notify(
+            _notify_and_record(
                 rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key="device", condition="device_offline",

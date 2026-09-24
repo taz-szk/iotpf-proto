@@ -1,5 +1,6 @@
 import re
 import smtplib
+import socket
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -20,9 +21,10 @@ def send_alert_email(
     current_value: float | None,
     severity: str,
     resolved: bool = False,
-) -> None:
+) -> dict | None:
+    """送信結果 {"ok", "error"} を返す。宛先が無く送信を試みなかった場合は None。"""
     if not to_emails:
-        return
+        return None
 
     # Sanitize values that go into email headers
     sensor_key = str(sensor_key).replace("\r", "").replace("\n", "")
@@ -57,14 +59,60 @@ def send_alert_email(
                 server.starttls()
                 server.login(settings.smtp_user, settings.smtp_password)
             server.sendmail(settings.smtp_from, to_emails, msg.as_string())
+        return {"ok": True, "error": None}
     except Exception as e:
-        print(f"Email send failed: {e}")
+        # SMTPのエラーメッセージには宛先アドレスが含まれうるため、種類だけを記録・返却する
+        print(f"Email send failed: {type(e).__name__}")
+        return {"ok": False, "error": _describe_smtp_exception(e)}
+
+
+def _describe_smtp_exception(e: Exception) -> str:
+    """利用者に見せてよい説明。SMTPのエラーメッセージには宛先アドレスが含まれうるため、種類(クラス名)だけを添える。"""
+    if isinstance(e, socket.gaierror):
+        hint = "SMTPサーバーのホスト名を解決できません"
+    elif isinstance(e, ConnectionError):
+        hint = "SMTPサーバーに接続できません"
+    elif isinstance(e, (TimeoutError, socket.timeout)):
+        hint = "SMTPサーバーへの接続がタイムアウトしました"
+    elif isinstance(e, smtplib.SMTPAuthenticationError):
+        hint = "SMTPの認証に失敗しました。ユーザー名とパスワードを確認してください"
+    elif isinstance(e, smtplib.SMTPRecipientsRefused):
+        hint = "宛先がSMTPサーバーに受け付けられませんでした"
+    else:
+        hint = "メール送信に失敗しました"
+    return f"{hint}（{type(e).__name__}）"
 
 
 def _slack_escape(value) -> str:
     # Slackは & < > を制御文字として解釈する。センサー名・デバイスIDは利用者が決める値なので、
     # <!channel> や <@U123> のようなメンション/リンクを注入されないようにエスケープする。
     return str(value).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _describe_slack_http_failure(status: int, body: str) -> str:
+    body = (body or "").strip()
+    hint = {
+        "no_team": "Webhook URLが正しくありません",
+        "no_service": "Webhookが存在しない、または削除されています",
+        "no_service_id": "Webhookが存在しない、または削除されています",
+        "invalid_token": "Webhookが無効化されています",
+        "channel_not_found": "投稿先のチャンネルが見つかりません",
+        "channel_is_archived": "投稿先のチャンネルがアーカイブされています",
+        "action_prohibited": "Slackの管理設定により、このWebhookからの投稿が制限されています",
+        "no_text": "メッセージが空です",
+        "invalid_payload": "メッセージがSlackに受け付けられませんでした",
+    }.get(body)
+    if hint is None and status == 429:
+        hint = "Slackの送信制限に達しました。しばらくしてから再度お試しください"
+    return f"HTTP {status}（{hint}）" if hint else f"HTTP {status}"
+
+
+def _describe_slack_exception(e: Exception) -> str:
+    if isinstance(e, httpx.TimeoutException):
+        return "タイムアウトしました（10秒）"
+    if isinstance(e, httpx.NetworkError):
+        return f"Slackに接続できません（{type(e).__name__}）"
+    return f"送信エラー（{type(e).__name__}）"
 
 
 def send_alert_slack(
@@ -77,10 +125,11 @@ def send_alert_slack(
     current_value: float | None,
     severity: str,
     resolved: bool = False,
-) -> None:
+) -> dict:
+    """送信結果 {"ok", "error"} を返す。errorには利用者に見せてよい説明だけを入れる(URLは含めない)。"""
     if not webhook_url or not _SLACK_WEBHOOK_RE.fullmatch(webhook_url):
         print("Slack send skipped: webhook URL is not a Slack Incoming Webhook")
-        return
+        return {"ok": False, "error": "Webhook URLの形式が正しくありません"}
 
     device = _slack_escape(device_id) if device_id else "all"
     if resolved:
@@ -94,11 +143,14 @@ def send_alert_slack(
 
     try:
         resp = httpx.post(webhook_url, json={"text": text}, timeout=10)
-        if resp.status_code != 200:
-            print(f"Slack send failed: HTTP {resp.status_code}")
     except Exception as e:
-        # 例外メッセージにWebhook URL(秘密情報)が含まれうるため、クラス名だけを記録する
+        # 例外メッセージにWebhook URL(秘密情報)が含まれうるため、クラス名だけを記録・返却する
         print(f"Slack send failed: {type(e).__name__}")
+        return {"ok": False, "error": _describe_slack_exception(e)}
+    if resp.status_code != 200:
+        print(f"Slack send failed: HTTP {resp.status_code}")
+        return {"ok": False, "error": _describe_slack_http_failure(resp.status_code, resp.text)}
+    return {"ok": True, "error": None}
 
 
 def notify(
@@ -111,21 +163,28 @@ def notify(
     current_value: float | None,
     severity: str,
     resolved: bool = False,
-) -> None:
-    """アラートルールに設定された通知先(メール・Slack)へ送る。片方が失敗してももう片方は送る。"""
+) -> dict:
+    """アラートルールに設定された通知先(メール・Slack)へ送る。片方が失敗してももう片方は送る。
+    チャンネルごとの結果 {"email": {...}|None, "slack": {...}|None} を返す(送らなかったチャンネルはNone)。"""
     common = dict(tenant_id=tenant_id, device_id=device_id, sensor_key=sensor_key, condition=condition,
                   threshold=threshold, current_value=current_value, severity=severity, resolved=resolved)
+
+    results: dict = {"email": None, "slack": None}
 
     emails = list(rule.get("notify_emails") or [])
     if emails:
         try:
-            send_alert_email(to_emails=emails, **common)
+            results["email"] = send_alert_email(to_emails=emails, **common)
         except Exception as e:
             print(f"Email notify failed: {type(e).__name__}")
+            results["email"] = {"ok": False, "error": _describe_smtp_exception(e)}
 
     webhook_url = rule.get("slack_webhook_url")
     if webhook_url:
         try:
-            send_alert_slack(webhook_url, **common)
+            results["slack"] = send_alert_slack(webhook_url, **common)
         except Exception as e:
             print(f"Slack notify failed: {type(e).__name__}")
+            results["slack"] = {"ok": False, "error": f"送信エラー（{type(e).__name__}）"}
+
+    return results
