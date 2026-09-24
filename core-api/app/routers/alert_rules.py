@@ -5,6 +5,7 @@ from typing import Optional, Literal
 from app.services.auth import verify_token
 from app.services.device_groups import group_exists
 from app.services.slack_webhook import validate_slack_webhook_url, mask_slack_webhook
+from app.services.alert_test_notify import TestNotificationRequest, run_test_notification
 from app.database import SessionLocal
 from app.models.public import Tenant
 from app.config import settings
@@ -152,6 +153,7 @@ class AlertRuleOut(BaseModel):
     notify_emails: list[str]
     slack_configured: bool = False
     slack_webhook_hint: Optional[str] = None
+    notify_status: Optional[dict] = None
     is_active: bool
 
 @router.post("/{tenant_id}/alert-rules", response_model=AlertRuleOut, status_code=201)
@@ -192,7 +194,7 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         rows = db.execute(text(f'''
             SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, is_active
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, notify_status, is_active
             FROM "{schema}".alert_rules WHERE is_active = TRUE
         ''')).fetchall()
     return [AlertRuleOut(
@@ -202,8 +204,13 @@ def list_alert_rules(tenant_id: str, _: dict = Depends(_require_platform)):
         trigger_mode=r.trigger_mode, consecutive_count=r.consecutive_count,
         duration_sec=r.duration_sec, severity=r.severity,
         notify_emails=list(r.notify_emails) if r.notify_emails else [],
-        is_active=r.is_active, **mask_slack_webhook(r.slack_webhook_url),
+        is_active=r.is_active, notify_status=r.notify_status, **mask_slack_webhook(r.slack_webhook_url),
     ) for r in rows]
+
+@router.post("/{tenant_id}/alert-rules/test-notification")
+def test_alert_notification(tenant_id: str, body: TestNotificationRequest, payload: dict = Depends(_require_platform)):
+    """通知先(Slack / メール)にテストメッセージを1通送り、成否を返す。配信に失敗しても200で{"ok": false, "error": ...}。"""
+    return run_test_notification("platform", payload, tenant_id, _schema(tenant_id), body)
 
 @router.patch("/{tenant_id}/alert-rules/{rule_id}", response_model=AlertRuleOut)
 def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: dict = Depends(_require_platform)):
@@ -218,7 +225,7 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
     with SessionLocal() as db:
         row = db.execute(text(f'''
             SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, is_active
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, notify_status, is_active
             FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
         '''), {"rid": rule_id}).fetchone()
         if not row:
@@ -244,7 +251,7 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
         db.commit()
         updated = db.execute(text(f'''
             SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, is_active
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, notify_status, is_active
             FROM "{schema}".alert_rules WHERE id = :rid
         '''), {"rid": rule_id}).fetchone()
     return AlertRuleOut(
@@ -254,7 +261,8 @@ def update_alert_rule(tenant_id: str, rule_id: str, body: AlertRuleUpdate, _: di
         trigger_mode=updated.trigger_mode, consecutive_count=updated.consecutive_count,
         duration_sec=updated.duration_sec, severity=updated.severity,
         notify_emails=list(updated.notify_emails) if updated.notify_emails else [],
-        is_active=updated.is_active, **mask_slack_webhook(updated.slack_webhook_url),
+        is_active=updated.is_active, notify_status=updated.notify_status,
+        **mask_slack_webhook(updated.slack_webhook_url),
     )
 
 @router.delete("/{tenant_id}/alert-rules/{rule_id}", status_code=204)

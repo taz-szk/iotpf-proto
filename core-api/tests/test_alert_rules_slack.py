@@ -16,6 +16,7 @@ RULE_ID = "33333333-3333-3333-3333-333333333333"
 SECRET = "abcdEFGHijklMNOPqrstUVWX"
 URL = "https://hooks.slack.com/" + "services/T01234567/B01234567/" + SECRET  # GitHubのpush protectionがダミーURLを本物と誤検出するため、連結して組み立てる
 BASE = {"sensor_key": "temperature", "condition": "above", "threshold": 30}
+NOTIFY_STATUS = {"slack": {"ok": False, "error": "HTTP 404", "at": "2026-09-24T05:12:00+00:00"}}
 
 
 def _platform_headers():
@@ -33,6 +34,7 @@ def _row(slack=URL, **kw):
     base = dict(id=RULE_ID, device_id=None, group_id=None, sensor_key="temperature", condition="above",
                 threshold=30, trigger_mode="consecutive", consecutive_count=3, duration_sec=60,
                 severity="warning", notify_emails=["a@example.com"], slack_webhook_url=slack, is_active=True,
+                notify_status=NOTIFY_STATUS,
                 last_triggered_at=datetime(2026, 9, 1, tzinfo=timezone.utc))
     base.update(kw)
     return SimpleNamespace(**base)
@@ -175,3 +177,34 @@ def test_tenant_update_sets_clears_and_masks():
     assert resp.status_code == 200
     assert db.execute.call_args_list[1].args[1]["slack_webhook_url"] is None
     assert resp.json()["slack_configured"] is False
+
+
+# ---------- 配信結果(notify_status)の表示 ----------
+
+def test_platform_list_includes_the_latest_delivery_status():
+    with patch("app.routers.alert_rules.SessionLocal") as sl:
+        sl.return_value.__enter__.return_value.execute.return_value.fetchall.return_value = [_row()]
+        resp = client.get(f"/tenants/{TENANT_ID}/alert-rules", headers=_platform_headers())
+    assert resp.json()[0]["notify_status"] == NOTIFY_STATUS
+
+
+def test_tenant_list_and_update_include_the_latest_delivery_status():
+    with patch("app.routers.tenant_portal.SessionLocal") as sl:
+        sl.return_value.__enter__.return_value.execute.return_value.fetchall.return_value = [_row()]
+        resp = client.get("/tenant-portal/me/alert-rules", cookies=_tenant_cookies("viewer"))
+    assert resp.json()[0]["notify_status"] == NOTIFY_STATUS
+
+    with patch("app.routers.tenant_portal.SessionLocal") as sl:
+        db = sl.return_value.__enter__.return_value
+        db.execute.return_value.fetchone.side_effect = [_row(), _row()]
+        resp = client.patch(f"/tenant-portal/me/alert-rules/{RULE_ID}", cookies=_tenant_cookies(),
+                            json={"severity": "critical"})
+    assert resp.json()["notify_status"] == NOTIFY_STATUS
+
+
+def test_rule_without_any_delivery_yet_has_null_status():
+    with patch("app.routers.alert_rules.SessionLocal") as sl:
+        sl.return_value.__enter__.return_value.execute.return_value.fetchall.return_value = [_row()]
+        sl.return_value.__enter__.return_value.execute.return_value.fetchall.return_value[0].notify_status = None
+        resp = client.get(f"/tenants/{TENANT_ID}/alert-rules", headers=_platform_headers())
+    assert resp.json()[0]["notify_status"] is None

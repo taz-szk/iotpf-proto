@@ -26,6 +26,7 @@ from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.password_policy import validate_password
 from app.services.slack_webhook import validate_slack_webhook_url, mask_slack_webhook
+from app.services.alert_test_notify import TestNotificationRequest, run_test_notification
 from app.services.tenant_session import require_tenant_session, forget_session
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.device_access import forget_device
@@ -680,7 +681,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
     with SessionLocal() as db:
         rows = db.execute(text(f'''
             SELECT r.id, r.device_id, r.group_id, r.sensor_key, r.condition, r.threshold, r.trigger_mode,
-                   r.consecutive_count, r.duration_sec, r.severity, r.notify_emails, r.slack_webhook_url, r.is_active,
+                   r.consecutive_count, r.duration_sec, r.severity, r.notify_emails, r.slack_webhook_url, r.notify_status, r.is_active,
                    MAX(e.triggered_at) AS last_triggered_at
             FROM "{schema}".alert_rules r
             LEFT JOIN "{schema}".alert_events e ON e.rule_id = r.id
@@ -701,6 +702,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
             "severity": r.severity,
             "notify_emails": list(r.notify_emails) if r.notify_emails else [],
             **mask_slack_webhook(r.slack_webhook_url),
+            "notify_status": r.notify_status,
             "is_active": r.is_active,
             "last_triggered_at": r.last_triggered_at.isoformat() if r.last_triggered_at else None,
         }
@@ -735,6 +737,13 @@ def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_ad
     # Webhook URLは秘密情報なので返さない(設定済みかどうかと末尾4文字だけ)
     return {"id": rule_id, **body.model_dump(exclude={"slack_webhook_url"}),
             **mask_slack_webhook(body.slack_webhook_url)}
+
+
+@router.post("/me/alert-rules/test-notification")
+def test_alert_notification(body: TestNotificationRequest, payload: dict = Depends(_require_admin_or_operator)):
+    """通知先(Slack / メール)にテストメッセージを1通送り、成否を返す。配信に失敗しても200で{"ok": false, "error": ...}。"""
+    tenant_id = payload["tenant_id"]
+    return run_test_notification("tenant", payload, tenant_id, _schema(tenant_id), body)
 
 
 @router.patch("/me/alert-rules/{rule_id}")
@@ -778,7 +787,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         db.commit()
         updated = db.execute(text(f'''
             SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, is_active
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, notify_status, is_active
             FROM "{schema}".alert_rules WHERE id = :rid
         '''), {"rid": rule_id}).fetchone()
     return {
@@ -790,6 +799,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         "duration_sec": updated.duration_sec, "severity": updated.severity,
         "notify_emails": list(updated.notify_emails) if updated.notify_emails else [],
         **mask_slack_webhook(updated.slack_webhook_url),
+        "notify_status": updated.notify_status,
         "is_active": updated.is_active,
     }
 

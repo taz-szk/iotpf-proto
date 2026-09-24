@@ -110,7 +110,7 @@ def test_platform_update_alert_rule_ignores_explicit_null_on_not_null_field():
             MagicMock(id="r1", device_id="dev-1", group_id=None, sensor_key="temperature",
                        condition="above", threshold=35, trigger_mode="consecutive",
                        consecutive_count=3, duration_sec=60, severity="warning",
-                       notify_emails=[], slack_webhook_url=None, is_active=True),
+                       notify_emails=[], slack_webhook_url=None, notify_status=None, is_active=True),
         ]
         resp = client.patch(
             f"/tenants/{TENANT_ID}/alert-rules/r1",
@@ -132,7 +132,7 @@ def test_platform_update_alert_rule_switches_from_device_to_group():
             MagicMock(id="r1", device_id=None, group_id=GROUP_ID, sensor_key="temperature",
                        condition="above", threshold=30, trigger_mode="consecutive",
                        consecutive_count=3, duration_sec=60, severity="warning",
-                       notify_emails=[], slack_webhook_url=None, is_active=True),
+                       notify_emails=[], slack_webhook_url=None, notify_status=None, is_active=True),
         ]
         resp = client.patch(
             f"/tenants/{TENANT_ID}/alert-rules/r1",
@@ -202,7 +202,7 @@ def test_portal_update_alert_rule_ignores_explicit_null_on_not_null_field():
             MagicMock(id="r1", device_id="dev-1", group_id=None, sensor_key="temperature",
                        condition="above", threshold=35, trigger_mode="consecutive",
                        consecutive_count=3, duration_sec=60, severity="warning",
-                       notify_emails=[], slack_webhook_url=None, is_active=True),
+                       notify_emails=[], slack_webhook_url=None, notify_status=None, is_active=True),
         ]
         resp = client.patch(
             "/tenant-portal/me/alert-rules/r1",
@@ -238,7 +238,7 @@ def test_portal_update_alert_rule_switches_from_device_to_group():
             MagicMock(id="r1", device_id=None, group_id=GROUP_ID, sensor_key="temperature",
                        condition="above", threshold=30, trigger_mode="consecutive",
                        consecutive_count=3, duration_sec=60, severity="warning",
-                       notify_emails=[], slack_webhook_url=None, is_active=True),
+                       notify_emails=[], slack_webhook_url=None, notify_status=None, is_active=True),
         ]
         resp = client.patch(
             "/tenant-portal/me/alert-rules/r1",

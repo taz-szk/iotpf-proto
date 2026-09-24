@@ -179,3 +179,32 @@ def test_migrate_add_slack_webhook_url_alters_each_active_tenant_and_survives_a_
     assert "tenant_223e4567_e89b_12d3_a456_426614174000" in sql
     assert "ADD COLUMN IF NOT EXISTS slack_webhook_url TEXT" in sql
     good.commit.assert_called()
+
+
+def test_create_tenant_schema_alert_rules_has_notify_status():
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        create_tenant_schema("123e4567-e89b-12d3-a456-426614174000")
+    assert "notify_status JSONB" in _sql_text(mock_conn.execute.call_args_list)
+
+
+def test_migrate_add_alert_notify_status_alters_each_active_tenant():
+    from app.database import migrate_add_alert_notify_status
+
+    list_conn = MagicMock()
+    list_conn.__enter__ = lambda s: list_conn
+    list_conn.__exit__ = MagicMock(return_value=False)
+    list_conn.execute.return_value.fetchall.return_value = [MagicMock(id="123e4567-e89b-12d3-a456-426614174000")]
+    alter_conn = MagicMock()
+    alter_conn.__enter__ = lambda s: alter_conn
+    alter_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.side_effect = [list_conn, alter_conn]
+        migrate_add_alert_notify_status()
+    sql = _sql_text(alter_conn.execute.call_args_list)
+    assert "tenant_123e4567_e89b_12d3_a456_426614174000" in sql
+    assert "ADD COLUMN IF NOT EXISTS notify_status JSONB" in sql
+    alter_conn.commit.assert_called()
