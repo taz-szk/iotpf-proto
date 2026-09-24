@@ -97,6 +97,7 @@ const api = {
         update: (tenantId, ruleId, rule) => request('PATCH', `/tenants/${tenantId}/alert-rules/${ruleId}`, rule),
         delete: (tenantId, ruleId) => request('DELETE', `/tenants/${tenantId}/alert-rules/${ruleId}`),
         sensorKeys: (tenantId) => request('GET', `/tenants/${tenantId}/sensor-keys`),
+        testNotification: (tenantId, body) => request('POST', `/tenants/${tenantId}/alert-rules/test-notification`, body),
     },
     tenantUsers: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/users`),
