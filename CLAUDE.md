@@ -114,7 +114,7 @@ docker compose restart nginx emqx
 | mailhog | axllent/mailpit | SMTP テスト用（サービス名・コンテナ名は`mailhog`のまま。Web UI / APIは :8025、APIは`/api/v1/messages`） |
 | core-api | ./core-api | メイン API（FastAPI） |
 | ingestion-service | ./ingestion-service | MQTT テレメトリ取込 |
-| alert-service | ./alert-service | アラート評価・通知 |
+| alert-service | ./alert-service | アラート評価・通知（ルール単位でメール / Slack、配信結果を`notify_status`に記録、Slack失敗時は管理者へメール） |
 
 ### AIアシスタント機能（選択制、Ollama別インスタンス前提）
 

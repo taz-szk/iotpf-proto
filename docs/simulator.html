@@ -436,6 +436,10 @@ pip install -r requirements.txt</pre>
             <span class="callout-icon">✅</span>
             <span class="callout-body">チェックサム一致でバージョンが更新され、デバイス一覧の <strong>fw: x.x.x</strong> 表示が変わります。</span>
           </div>
+          <div class="callout callout-ok">
+            <span class="callout-icon">ℹ️</span>
+            <span class="callout-body">版数はデバイスごとに <code>certs/&lt;テナント名&gt;/&lt;デバイス名&gt;/fw_version</code> へ保存され、証明書を再利用して起動した端末（登録済みの端末の再起動）では引き継がれます。<strong>同じ名前で新規登録した端末は、必ず 1.0.0 から始まります</strong>（過去の登録の版数は持ち越されません）。表示される <strong>fw:</strong> は、実際に送信する版数です。</span>
+          </div>
           <div class="callout callout-warn">
             <span class="callout-icon">⚠️</span>
             <span class="callout-body">チェックサム不一致の場合は OTA 失敗としてエラー表示します。ファームウェアファイルの整合性テストに使えます。</span>

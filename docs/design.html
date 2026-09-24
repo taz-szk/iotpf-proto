@@ -535,7 +535,7 @@ td code { font-size: 12px; }
       <div class="req-card">
         <div class="req-card-id">FR-02 ユーザー管理</div>
         <div class="req-card-title">プラットフォーム／テナントユーザー認証</div>
-        <div class="req-card-body">email + bcrypt パスワード認証。JWT アクセストークン (15分) + リフレッシュトークン (30日)。パスワード変更機能付き。</div>
+        <div class="req-card-body">email + bcrypt パスワード認証。JWT アクセストークン (15分) + リフレッシュトークン (30日)。パスワード変更機能付き（新しいパスワードは12文字以上・72バイト以下）。</div>
       </div>
       <div class="req-card">
         <div class="req-card-id">FR-03 デバイスプロビジョニング</div>
@@ -600,7 +600,7 @@ td code { font-size: 12px; }
           <tr><td>性能</td><td>API レスポンスタイム</td><td>95パーセンタイル &lt; 300ms</td></tr>
           <tr><td>可用性</td><td>コアサービス稼働率</td><td>99.9% 以上</td></tr>
           <tr><td>セキュリティ</td><td>通信暗号化</td><td>HTTPS (TLS 1.2+)、MQTT over TLS (mTLS)</td></tr>
-          <tr><td>セキュリティ</td><td>ログイン保護</td><td>IP別レート制限（5回/15分）、リフレッシュトークン失効</td></tr>
+          <tr><td>セキュリティ</td><td>ログイン保護</td><td>IP別レート制限（5回/15分）、リフレッシュトークン失効（DBに永続化）、パスワード変更でセッション失効</td></tr>
           <tr><td>保守性</td><td>デプロイ</td><td>Docker Compose 単一コマンド起動</td></tr>
           <tr><td>保守性</td><td>スキーマ変更</td><td>無停止 ADD COLUMN IF NOT EXISTS マイグレーション</td></tr>
         </tbody>
@@ -616,7 +616,7 @@ td code { font-size: 12px; }
       <li>時系列データベース: InfluxDB 2.x（Flux クエリ言語を使用）</li>
       <li>PKI: smallstep/step-ca による自己署名 CA（外部 CA への依存なし）</li>
       <li>MailHog を SMTP 中継として使用（本番では外部 SMTP に切り替え可能）</li>
-      <li>インメモリのレート制限・JTI ブロックリストはプロセス再起動でリセットされる（単一プロセス前提）</li>
+      <li>インメモリのレート制限はプロセス再起動でリセットされる（単一プロセス前提）。失効させたリフレッシュトークン（JTI）は <code>revoked_tokens</code> テーブルに永続化され、再起動しても失効が保たれる</li>
     </ul>
   </div>
 </section>
@@ -770,7 +770,7 @@ td code { font-size: 12px; }
           <tr><td>nginx</td><td><code>nginx:stable-alpine</code></td><td>internal, external, grafana-net</td><td>TLS 終端・リバースプロキシ</td></tr>
           <tr><td>core-api</td><td>カスタムビルド (FastAPI)</td><td>internal, grafana-net</td><td>プラットフォーム管理 API</td></tr>
           <tr><td>ingestion-service</td><td>カスタムビルド (FastAPI)</td><td>internal</td><td>テレメトリ取り込み</td></tr>
-          <tr><td>alert-service</td><td>カスタムビルド (Python)</td><td>internal</td><td>アラートルール評価・メール通知</td></tr>
+          <tr><td>alert-service</td><td>カスタムビルド (Python)</td><td>internal</td><td>アラートルール評価・通知（メール / Slack）・配信結果の記録</td></tr>
           <tr><td>emqx</td><td><code>emqx:5</code></td><td>internal, external</td><td>MQTT ブローカー（mTLS :8883）</td></tr>
           <tr><td>postgres</td><td><code>postgres:16-alpine</code></td><td>internal</td><td>メタデータ・テナントユーザー</td></tr>
           <tr><td>influxdb</td><td><code>influxdb:2-alpine</code></td><td>internal</td><td>時系列テレメトリ・デバイス状態</td></tr>
@@ -856,9 +856,13 @@ td code { font-size: 12px; }
           <thead><tr><th>領域</th><th>実装内容</th></tr></thead>
           <tbody>
             <tr><td>通信</td><td>HTTPS (TLS 1.2+)、MQTT over TLS、mTLS（デバイス↔EMQX）</td></tr>
-            <tr><td>認証</td><td>JWT HS256（access: 15分、refresh: 30日）、bcrypt パスワードハッシュ</td></tr>
-            <tr><td>レート制限</td><td>ログイン IP 別 5回失敗/15分でブロック（インメモリ、スレッドセーフ）</td></tr>
-            <tr><td>トークン失効</td><td>JTI ブロックリスト + token_version（パスワード変更で全 refresh 無効化）</td></tr>
+            <tr><td>認証</td><td>JWT HS256（access: 15分、refresh: 30日）、bcrypt パスワードハッシュ。新しいパスワードは12文字以上・72バイト以下</td></tr>
+            <tr><td>レート制限</td><td>ログイン IP 別 5回失敗/15分でブロック（インメモリ、スレッドセーフ）。IP は nginx が <code>X-Forwarded-For</code> を <code>$remote_addr</code> で上書きした値を使う（クライアントによる偽装不可）</td></tr>
+            <tr><td>トークン失効</td><td>JTI ブロックリスト（DB永続化）+ token_version（パスワード変更で全 refresh 無効化）</td></tr>
+            <tr><td>セッション再検証</td><td>テナントのCookie JWT は認証のたびにユーザーの有効性・ロールをDBで確認（削除・無効化・降格を即時反映）。パスワードを変更・リセットすると、それ以前のJWTは無効。プラットフォーム管理者のCookie（Grafana用）も is_active と token_version を確認</td></tr>
+            <tr><td>MQTT 接続認証</td><td>EMQX の認証・ACL フックが、証明書のCNのテナントが有効で、デバイスが登録済みであることをDBで確認。削除したデバイスは接続・送信できない（削除時に接続も切断）</td></tr>
+            <tr><td>公開面の絞り込み</td><td>FastAPI の /docs・/openapi.json は既定で無効（<code>ENABLE_API_DOCS=true</code> で有効）。<code>/api/emqx/</code> は外部から404。リクエスト上限は1MB（ファームウェアのアップロード経路のみ110MB）。CSP・Referrer-Policy・Permissions-Policy を付与し、<code>server_tokens off</code></td></tr>
+            <tr><td>コンテナ権限</td><td>Python の3サービスは非rootで実行し、<code>no-new-privileges</code> と <code>cap_drop: ALL</code>。core-api には step-ca のボリューム（CA秘密鍵）をマウントせず、プロビジョナのパスワードだけを <code>STEP_CA_PASSWORD</code> で渡す</td></tr>
             <tr><td>SSRF/パストラバーサル</td><td>minio_key を <code>^UUID/UUID$</code> 正規表現で検証、firmware_id UUID 検証</td></tr>
             <tr><td>Webhook 認証</td><td>EMQX Webhook Secret（HMAC-SHA256）</td></tr>
             <tr><td>Grafana</td><td>Auth Proxy を <code>172.30.0.0/24</code> のみに制限</td></tr>
@@ -1067,6 +1071,7 @@ td code { font-size: 12px; }
             <tr><td><code>duration_sec</code></td><td>INT DEFAULT 60</td><td>継続時間閾値（秒）</td></tr>
             <tr><td><code>severity</code></td><td>VARCHAR</td><td>info / warning / critical</td></tr>
             <tr><td><code>notify_emails</code></td><td>TEXT[]</td><td>通知先メールアドレス一覧</td></tr>
+            <tr><td><code>notify_status</code></td><td>JSONB</td><td>チャンネルごとの直近の配信結果 <code>{"slack": {"ok", "error", "at"}, "email": {...}, "admin_notice": {"at"}}</code>。alert-service が記録。URL・宛先は含まない</td></tr>
             <tr><td><code>slack_webhook_url</code></td><td>TEXT</td><td>通知先Slack Incoming Webhook URL（NULL可）。<code>https://hooks.slack.com/services/…</code>のみ許可。秘密情報のためAPIレスポンスには載せず、<code>slack_configured</code>と末尾4文字（<code>slack_webhook_hint</code>）だけ返す</td></tr>
           </tbody>
         </table>
@@ -1200,8 +1205,12 @@ td code { font-size: 12px; }
         <thead><tr><th>機能</th><th>実装クラス／ファイル</th><th>詳細</th></tr></thead>
         <tbody>
           <tr><td>レート制限</td><td><code>app/services/rate_limiter.py</code></td><td>IP をキーとする失敗カウント辞書。<code>threading.Lock</code> でスレッドセーフ。WINDOW_SEC=900、MAX_FAILURES=5。TTL 超過エントリは次回アクセス時に自動削除。</td></tr>
-          <tr><td>JTI ブロックリスト</td><td><code>app/services/token_blocklist.py</code></td><td>JTI → 失効 monotonic 時刻 の辞書。<code>is_revoked()</code> / <code>revoke_jti(jti, ttl_sec)</code>。ログアウト・トークンローテーション時に登録。</td></tr>
-          <tr><td>token_version</td><td><code>platform_users.token_version</code></td><td>パスワード変更で +1。/auth/refresh 時に DB と照合し、不一致なら 401。全リフレッシュトークンを一括無効化できる。</td></tr>
+          <tr><td>JTI ブロックリスト</td><td><code>app/services/token_blocklist.py</code></td><td>失効させたJTIを <code>public.revoked_tokens</code>（jti, expires_at）に保存し、メモリはキャッシュ。<code>is_revoked()</code> / <code>revoke_jti(jti, ttl_sec)</code>。ログアウト・トークンローテーション時に登録。DBを確認できないときは失効扱い（fail closed）。期限切れの行は書き込み時に削除。</td></tr>
+          <tr><td>token_version</td><td><code>platform_users.token_version</code></td><td>パスワード変更で +1。/auth/refresh 時に DB と照合し、不一致なら 401。全リフレッシュトークンを一括無効化できる。Grafana 用の Cookie JWT も <code>app/services/platform_session.py</code> が is_active と token_version を照合する。</td></tr>
+          <tr><td>テナントセッション再検証</td><td><code>app/services/tenant_session.py</code></td><td>Cookie JWT の持ち主が今も有効なユーザー・テナントかをDBで確認し、ロールをDBの最新値に置き換える（10秒キャッシュ、変更・削除時は即時破棄）。JWT の <code>pwv</code>（パスワードの鍵付きハッシュの切り詰め）がDBの現在値と違えば401。公開ダッシュボード用の匿名トークンはテナントAPIでは拒否。</td></tr>
+          <tr><td>デバイス登録の確認</td><td><code>app/services/device_access.py</code></td><td>EMQX の <code>/emqx/auth</code>・<code>/emqx/acl</code> が登録済みかを確認（登録あり30秒・なし5秒のキャッシュ、DBエラーは拒否）。削除時は <code>forget_device()</code> で即時反映し、<code>kick_client()</code> で接続を切断。</td></tr>
+          <tr><td>パスワードポリシー</td><td><code>app/services/password_policy.py</code></td><td>新しく設定するパスワードは12文字以上・72バイト以下（bcrypt上限）・メールアドレスと同じは不可。6か所の設定経路で共通。ログインの照合には適用しない（既存の短いパスワードでも入れる）。</td></tr>
+          <tr><td>ファームウェアのアップロード</td><td><code>app/services/firmware_upload.py</code></td><td>一時ファイルを1MBずつ読んでサイズとSHA-256を求め、MinIOへはファイルのまま流す（全量をメモリに載せない）。上限100MBを超えたらその時点で413。</td></tr>
           <tr><td>minio_key 検証</td><td><code>app/services/minio_client.py</code></td><td><code>_MINIO_KEY_RE = ^UUID/UUID$</code> で正規表現検証。JWT 内の minio_key がこの形式でなければ ValueError を送出。</td></tr>
           <tr><td>EMQX Webhook 認証</td><td><code>app/routers/emqx_events.py</code></td><td>リクエストヘッダの <code>X-Webhook-Secret</code> を settings.emqx_webhook_secret と比較。不一致で 403。</td></tr>
           <tr><td>タイミング均等化</td><td><code>app/routers/tenant_auth.py</code></td><td>テナント不存在・ユーザー不存在の早期リターン経路でも bcrypt 相当の時間を消費（<code>_equalize_timing()</code>）。列挙攻撃を防ぐ。</td></tr>
