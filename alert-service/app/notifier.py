@@ -2,6 +2,7 @@ import re
 import smtplib
 import socket
 from email.mime.text import MIMEText
+from email.header import Header
 from email.mime.multipart import MIMEMultipart
 
 import httpx
@@ -188,3 +189,54 @@ def notify(
             results["slack"] = {"ok": False, "error": f"送信エラー（{type(e).__name__}）"}
 
     return results
+
+
+def send_delivery_failure_email(
+    to_emails: list[str],
+    tenant_name: str,
+    channel: str,
+    error: str,
+    alert: dict,
+) -> dict | None:
+    """通知が届かなかったことを、管理者へメールで知らせる。本来届くはずだったアラートの内容も載せる
+    (失敗に気づくのは、実際にアラートが出たときだけなので、そのアラートを見逃さないため)。
+    結果 {"ok", "error"} を返す。宛先が無く送らなかった場合はNone。"""
+    if not to_emails:
+        return None
+
+    def clean(v) -> str:
+        return str(v).replace("\r", "").replace("\n", "")
+
+    label = "Slack" if channel == "slack" else clean(channel)
+    kind = "復旧通知" if alert.get("resolved") else "アラート"
+    device = clean(alert.get("device_id")) if alert.get("device_id") else "all"
+    body = (
+        f"{label}へのアラート通知が届きませんでした。（{label} notification could not be delivered.）\n\n"
+        f"テナント: {clean(tenant_name)}\n"
+        f"原因: {clean(error)}\n\n"
+        f"届かなかった{kind}の内容:\n"
+        f"  重要度: {clean(alert.get('severity'))}\n"
+        f"  センサー: {clean(alert.get('sensor_key'))}\n"
+        f"  デバイス: {device}\n"
+        f"  条件: {clean(alert.get('condition'))} {alert.get('threshold')}\n"
+        f"  現在値: {alert.get('current_value')}\n\n"
+        f"対処: アラートルールの{label}の設定（Webhook URL）を確認し、設定画面の「テスト送信」で届くか確認してください。\n"
+        f"このメールは、通知が失敗した状態に変わったときに1回だけ送信されます。\n"
+    )
+
+    msg = MIMEMultipart()
+    msg["From"] = settings.smtp_from
+    msg["To"] = ", ".join(to_emails)
+    msg["Subject"] = Header(f"[IoT Alert] {label} notification failed: {clean(alert.get('sensor_key'))}", "utf-8")
+    msg.attach(MIMEText(body, "plain", "utf-8"))
+
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+            if settings.smtp_user:
+                server.starttls()
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(settings.smtp_from, to_emails, msg.as_string())
+        return {"ok": True, "error": None}
+    except Exception as e:
+        print(f"Failure notice email failed: {type(e).__name__}")
+        return {"ok": False, "error": _describe_smtp_exception(e)}

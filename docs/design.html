@@ -2104,6 +2104,7 @@ sequenceDiagram
           <tr><td>送信先（メール）</td><td>アラートルールの <code>notify_emails</code> 配列</td></tr>
           <tr><td>送信先（Slack）</td><td>アラートルールの <code>slack_webhook_url</code>（設定されている場合のみ）。本文はメールと同じ内容を <code>{"text": …}</code> のJSONで POST。<code>&amp; &lt; &gt;</code> はエスケープ。メールとSlackは独立で、片方が失敗してももう片方は送る</td></tr>
           <tr><td>From</td><td><code>SMTP_FROM</code> 環境変数（デフォルト: <code>alerts@iot-platform.local</code>）</td></tr>
+          <tr><td>通知失敗の管理者通知</td><td>Slack通知が<strong>失敗に変わったとき</strong>だけ、テナント管理者とプラットフォーム管理者へメールで知らせる（失敗が続く間は送らない。成功と失敗を繰り返す場合も、同じルールに1時間の間隔）。本来届くはずだったアラートの内容と失敗の理由を載せる。メール(SES)のバウンス率への配慮として、予約ドメイン・形式不正の宛先は除外し、宛先は1回10件まで。メール自体の失敗では送らない。直近の配信結果と通知済みの時刻は <code>alert_rules.notify_status</code>（JSONB）に保存</td></tr>
         </tbody>
       </table>
     </div>

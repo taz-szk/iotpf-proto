@@ -1,20 +1,60 @@
+from datetime import datetime, timezone
 from app.config import settings
 from app.db import (
     get_all_tenants, get_active_alert_rules, get_group_device_ids,
     get_unresolved_event, create_alert_event, resolve_alert_event, mark_event_notified,
     get_offline_devices, mark_device_offline, record_notify_status,
+    get_tenant_admin_contacts, record_admin_notice,
 )
 from app.evaluator import evaluate_rule
-from app.notifier import notify
+from app.failure_notice import decide_failed_channels, filter_deliverable
+from app.notifier import notify, send_delivery_failure_email
+
+
+def _merge_local_status(rule: dict, results, admin_notice_at=None) -> None:
+    """同じサイクル内で同じルールの通知が続く(グループ・複数デバイス)ときに、通知済みの状態を引き継ぐ。"""
+    status = dict(rule.get("notify_status") or {}) if isinstance(rule.get("notify_status"), dict) else {}
+    if isinstance(results, dict):
+        for channel, r in results.items():
+            if isinstance(r, dict):
+                status[channel] = {"ok": r.get("ok"), "error": r.get("error")}
+    if admin_notice_at is not None:
+        status["admin_notice"] = {"at": admin_notice_at.isoformat()}
+    rule["notify_status"] = status
+
+
+def _notify_admins_of_failure(rule: dict, results, previous_status, kwargs: dict) -> None:
+    """Slack通知が「失敗に変わった」ときだけ、テナント管理者・プラットフォーム管理者へメールで知らせる。"""
+    now = datetime.now(timezone.utc)
+    if not decide_failed_channels(previous_status, results, now):
+        return
+    tenant_id = kwargs["tenant_id"]
+    contacts = get_tenant_admin_contacts(tenant_id)
+    recipients = filter_deliverable(contacts.get("emails"))
+    if not recipients:
+        return
+    alert = {k: kwargs.get(k) for k in ("sensor_key", "device_id", "condition", "threshold", "current_value", "severity")}
+    alert["resolved"] = bool(kwargs.get("resolved"))
+    send_delivery_failure_email(recipients, contacts.get("tenant_name", ""), "slack", results["slack"].get("error") or "", alert)
+    # 送信を試みたら記録する(SMTPが不調でも、同じ失敗で送信を繰り返さない)
+    record_admin_notice(tenant_id, rule["id"], now)
+    _merge_local_status(rule, None, admin_notice_at=now)
 
 
 def _notify_and_record(rule: dict, **kwargs) -> None:
-    """ルールの通知先へ送り、配信結果(成功/失敗)をルールに記録する。記録の失敗で評価ループを止めない。"""
+    """ルールの通知先へ送り、配信結果(成功/失敗)をルールに記録する。Slackが失敗に変わったときは管理者にも知らせる。
+    記録・管理者への通知の失敗で、評価ループを止めない。"""
+    previous_status = rule.get("notify_status")
     results = notify(rule, **kwargs)
     try:
         record_notify_status(kwargs["tenant_id"], rule["id"], results)
     except Exception as e:
         print(f"Record notify status failed: {type(e).__name__}")
+    _merge_local_status(rule, results)
+    try:
+        _notify_admins_of_failure(rule, results, previous_status, kwargs)
+    except Exception as e:
+        print(f"Notify admins of failure failed: {type(e).__name__}")
 
 
 def evaluate_all_tenants() -> None:

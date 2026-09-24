@@ -24,7 +24,7 @@ def get_active_alert_rules(tenant_id: str) -> list[dict]:
             cur.execute(f'''
                 SELECT id::text, device_id, group_id::text, sensor_key, condition, threshold,
                        trigger_mode, consecutive_count, duration_sec,
-                       severity, notify_emails, slack_webhook_url
+                       severity, notify_emails, slack_webhook_url, notify_status
                 FROM "{schema}".alert_rules WHERE is_active = TRUE
             ''')
             return cur.fetchall()
@@ -152,6 +152,49 @@ def record_notify_status(tenant_id: str, rule_id: str, results: dict) -> None:
                     SET notify_status = COALESCE(notify_status, '{{}}'::jsonb) || %s::jsonb
                     WHERE id = %s''',
                 (json.dumps(merged), rule_id),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_tenant_admin_contacts(tenant_id: str) -> dict:
+    """通知の失敗を知らせる先。テナント名と、有効なテナント管理者・プラットフォーム管理者のメールアドレス
+    (テナント管理者が先。小文字にそろえて重複を除く)。"""
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name FROM tenants WHERE id = %s", (tenant_id,))
+            row = cur.fetchone()
+            cur.execute(f"SELECT email FROM \"{schema}\".users WHERE role = 'admin' AND is_active = TRUE ORDER BY created_at")
+            tenant_admins = [r["email"] for r in cur.fetchall()]
+            cur.execute("SELECT email FROM platform_users WHERE is_active = TRUE ORDER BY created_at")
+            platform_admins = [r["email"] for r in cur.fetchall()]
+    finally:
+        conn.close()
+    seen, emails = set(), []
+    for e in tenant_admins + platform_admins:
+        low = (e or "").strip().lower()
+        if low and low not in seen:
+            seen.add(low)
+            emails.append(low)
+    return {"tenant_name": row["name"] if row else "", "emails": emails}
+
+
+def record_admin_notice(tenant_id: str, rule_id: str, at) -> None:
+    """管理者へ失敗を知らせた時刻を、ルールのnotify_statusに記録する(短時間に繰り返し送らないため)。"""
+    import json
+
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    conn = get_conn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                f'''UPDATE "{schema}".alert_rules
+                    SET notify_status = COALESCE(notify_status, '{{}}'::jsonb) || %s::jsonb
+                    WHERE id = %s''',
+                (json.dumps({"admin_notice": {"at": at.isoformat()}}), rule_id),
             )
         conn.commit()
     finally:
