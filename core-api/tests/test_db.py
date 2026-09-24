@@ -140,3 +140,42 @@ def test_migrate_create_assistant_settings_executes():
     assert "ollama_url" in sql_calls
     assert "ollama_chat_model" in sql_calls and "qwen2.5:3b" in sql_calls
     assert "INSERT INTO assistant_settings" in sql_calls
+
+
+def test_create_tenant_schema_alert_rules_has_slack_webhook_url():
+    mock_conn = MagicMock()
+    mock_conn.__enter__ = lambda s: mock_conn
+    mock_conn.__exit__ = MagicMock(return_value=False)
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.return_value = mock_conn
+        create_tenant_schema("123e4567-e89b-12d3-a456-426614174000")
+    assert "slack_webhook_url TEXT" in _sql_text(mock_conn.execute.call_args_list)
+
+
+def test_migrate_add_slack_webhook_url_alters_each_active_tenant_and_survives_a_broken_one():
+    from app.database import migrate_add_slack_webhook_url
+
+    rows = [MagicMock(id="123e4567-e89b-12d3-a456-426614174000"),
+            MagicMock(id="223e4567-e89b-12d3-a456-426614174000")]
+    list_conn = MagicMock()
+    list_conn.__enter__ = lambda s: list_conn
+    list_conn.__exit__ = MagicMock(return_value=False)
+    list_conn.execute.return_value.fetchall.return_value = rows
+
+    broken = MagicMock()
+    broken.__enter__ = lambda s: broken
+    broken.__exit__ = MagicMock(return_value=False)
+    broken.execute.side_effect = Exception("schema missing")
+
+    good = MagicMock()
+    good.__enter__ = lambda s: good
+    good.__exit__ = MagicMock(return_value=False)
+
+    with patch("app.database.engine") as mock_engine:
+        mock_engine.connect.side_effect = [list_conn, broken, good]
+        migrate_add_slack_webhook_url()
+
+    sql = _sql_text(good.execute.call_args_list)
+    assert "tenant_223e4567_e89b_12d3_a456_426614174000" in sql
+    assert "ADD COLUMN IF NOT EXISTS slack_webhook_url TEXT" in sql
+    good.commit.assert_called()

@@ -76,6 +76,7 @@ def create_tenant_schema(tenant_id: str) -> None:
                 severity VARCHAR(20) NOT NULL DEFAULT \'warning\'
                     CHECK (severity IN (\'info\', \'warning\', \'critical\')),
                 notify_emails TEXT[] NOT NULL DEFAULT \'{{}}\'::TEXT[],
+                slack_webhook_url TEXT,
                 is_active BOOLEAN NOT NULL DEFAULT TRUE,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
@@ -209,6 +210,24 @@ def migrate_add_device_name() -> None:
                 ADD COLUMN IF NOT EXISTS device_name VARCHAR(255)
             """))
             conn.commit()
+
+
+def migrate_add_slack_webhook_url() -> None:
+    """全テナントの alert_rules テーブルに slack_webhook_url カラムを追加する（べき等）。
+    1テナントで失敗しても、残りのテナントの移行は続ける。"""
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM tenants WHERE status = 'active'")).fetchall()
+    for row in rows:
+        schema = f"tenant_{str(row.id).replace('-', '_')}"
+        try:
+            with engine.connect() as conn:
+                conn.execute(text(f'''
+                    ALTER TABLE "{schema}".alert_rules
+                    ADD COLUMN IF NOT EXISTS slack_webhook_url TEXT
+                '''))
+                conn.commit()
+        except Exception as e:
+            print(f"Migration warning (slack_webhook_url, {schema}): {e}")
 
 
 def migrate_totp_columns() -> None:

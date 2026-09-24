@@ -25,6 +25,7 @@ from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.password_policy import validate_password
+from app.services.slack_webhook import validate_slack_webhook_url, mask_slack_webhook
 from app.services.tenant_session import require_tenant_session, forget_session
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
 from app.services.device_access import forget_device
@@ -572,6 +573,12 @@ class AlertRuleCreate(BaseModel):
     duration_sec: int = 60
     severity: Literal["info", "warning", "critical"] = "warning"
     notify_emails: list[str] = []
+    slack_webhook_url: Optional[str] = None
+
+    @field_validator("slack_webhook_url")
+    @classmethod
+    def _validate_slack_webhook_url(cls, v):
+        return validate_slack_webhook_url(v) if v is not None else None
 
     @field_validator("group_id")
     @classmethod
@@ -597,6 +604,12 @@ class AlertRuleUpdate(BaseModel):
     duration_sec: Optional[int] = None
     severity: Optional[Literal["info", "warning", "critical"]] = None
     notify_emails: Optional[list[str]] = None
+    slack_webhook_url: Optional[str] = None
+
+    @field_validator("slack_webhook_url")
+    @classmethod
+    def _validate_slack_webhook_url(cls, v):
+        return validate_slack_webhook_url(v) if v is not None else None
 
     @field_validator("group_id")
     @classmethod
@@ -667,7 +680,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
     with SessionLocal() as db:
         rows = db.execute(text(f'''
             SELECT r.id, r.device_id, r.group_id, r.sensor_key, r.condition, r.threshold, r.trigger_mode,
-                   r.consecutive_count, r.duration_sec, r.severity, r.notify_emails, r.is_active,
+                   r.consecutive_count, r.duration_sec, r.severity, r.notify_emails, r.slack_webhook_url, r.is_active,
                    MAX(e.triggered_at) AS last_triggered_at
             FROM "{schema}".alert_rules r
             LEFT JOIN "{schema}".alert_events e ON e.rule_id = r.id
@@ -687,6 +700,7 @@ def list_alert_rules(payload: dict = Depends(_require_tenant)):
             "duration_sec": r.duration_sec,
             "severity": r.severity,
             "notify_emails": list(r.notify_emails) if r.notify_emails else [],
+            **mask_slack_webhook(r.slack_webhook_url),
             "is_active": r.is_active,
             "last_triggered_at": r.last_triggered_at.isoformat() if r.last_triggered_at else None,
         }
@@ -706,25 +720,28 @@ def create_alert_rule(body: AlertRuleCreate, payload: dict = Depends(_require_ad
             text(f'''
                 INSERT INTO "{schema}".alert_rules
                   (id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails)
-                VALUES (:id, :did, :gid, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails)
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url)
+                VALUES (:id, :did, :gid, :sk, :cond, :thr, :tm, :cc, :ds, :sev, :emails, :slack)
             ''').bindparams(bindparam("emails", type_=ARRAY(SaString))),
             {
                 "id": rule_id, "did": body.device_id, "gid": body.group_id, "sk": body.sensor_key,
                 "cond": body.condition, "thr": body.threshold, "tm": body.trigger_mode,
                 "cc": body.consecutive_count, "ds": body.duration_sec,
                 "sev": body.severity, "emails": list(body.notify_emails),
+                "slack": body.slack_webhook_url,
             }
         )
         db.commit()
-    return {"id": rule_id, **body.model_dump()}
+    # Webhook URLは秘密情報なので返さない(設定済みかどうかと末尾4文字だけ)
+    return {"id": rule_id, **body.model_dump(exclude={"slack_webhook_url"}),
+            **mask_slack_webhook(body.slack_webhook_url)}
 
 
 @router.patch("/me/alert-rules/{rule_id}")
 def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
-    _NULLABLE_ALERT_FIELDS = {"device_id", "group_id", "threshold"}
+    _NULLABLE_ALERT_FIELDS = {"device_id", "group_id", "threshold", "slack_webhook_url"}
     updates = {
         k: v for k, v in body.model_dump(exclude_unset=True).items()
         if v is not None or k in _NULLABLE_ALERT_FIELDS
@@ -732,7 +749,8 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
     if not updates:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No fields to update")
     _ALLOWED_ALERT_COLS = {"sensor_key", "condition", "threshold", "trigger_mode",
-                           "consecutive_count", "duration_sec", "severity", "device_id", "group_id"}
+                           "consecutive_count", "duration_sec", "severity", "device_id", "group_id",
+                           "slack_webhook_url"}
     with SessionLocal() as db:
         row = db.execute(text(f'''
             SELECT id, device_id, group_id FROM "{schema}".alert_rules WHERE id = :rid AND is_active = TRUE
@@ -760,7 +778,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         db.commit()
         updated = db.execute(text(f'''
             SELECT id, device_id, group_id, sensor_key, condition, threshold, trigger_mode,
-                   consecutive_count, duration_sec, severity, notify_emails, is_active
+                   consecutive_count, duration_sec, severity, notify_emails, slack_webhook_url, is_active
             FROM "{schema}".alert_rules WHERE id = :rid
         '''), {"rid": rule_id}).fetchone()
     return {
@@ -771,6 +789,7 @@ def update_alert_rule(rule_id: str, body: AlertRuleUpdate, payload: dict = Depen
         "trigger_mode": updated.trigger_mode, "consecutive_count": updated.consecutive_count,
         "duration_sec": updated.duration_sec, "severity": updated.severity,
         "notify_emails": list(updated.notify_emails) if updated.notify_emails else [],
+        **mask_slack_webhook(updated.slack_webhook_url),
         "is_active": updated.is_active,
     }
 
