@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>IoTAir-X - ログイン</title>
-  <link rel="stylesheet" href="/admin/static/tailwind.css">
+  <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
   <script src="/admin/static/alpine.min.js" defer></script>
   <script src="/admin/js/api.js?v=11"></script>
 </head>
 <body class="bg-gray-100 min-h-screen flex items-center justify-center">
-  <div x-data="loginApp()" class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
+  <div x-data="loginApp()" x-cloak x-show="!redirecting" class="bg-white rounded-xl shadow-lg p-8 w-full max-w-md">
     <div class="flex flex-col items-center mb-6">
       <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="w-full mb-2" style="height:auto;display:block;">
       <span class="text-sm text-gray-500">管理画面</span>
@@ -43,6 +43,7 @@
         email: '',
         password: '',
         loading: false,
+        redirecting: false,
         error: '',
         async login() {
           this.loading = true;
@@ -66,7 +67,10 @@
           }
         },
         init() {
-          if (api.isLoggedIn()) window.location.href = '/iotairx-console/tenants.html';
+          if (api.isLoggedIn()) {
+            this.redirecting = true;   // 遷移が終わるまで、ログインフォームを見せない
+            window.location.href = '/iotairx-console/tenants.html';
+          }
         }
       };
     }

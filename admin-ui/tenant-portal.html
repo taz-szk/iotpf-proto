@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>テナントポータル - IoTAir-X</title>
-  <link rel="stylesheet" href="/admin/static/tailwind.css">
+  <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
   <script src="/admin/static/alpine.min.js" defer></script>
   <style>
     /* ===== Design A: Dark Navy + Amber ===== */
@@ -60,7 +60,7 @@
 </head>
 <body class="bg-gray-50" style="overflow:hidden;height:100vh;">
 
-<div x-data="portalApp()" x-init="init()" class="flex h-screen overflow-hidden">
+<div x-data="portalApp()" x-cloak x-init="init()" class="flex h-screen overflow-hidden">
 
   <!-- ===== 左サイドバー ===== -->
   <aside class="w-52 flex flex-col flex-shrink-0" style="background:#1a1f2e;border-right:1px solid #2a3147;">

@@ -1,3 +1,6 @@
 ﻿@tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Alpine.js の初期化前に、x-show 等の条件表示が素のまま見えるのを防ぐ */
+[x-cloak] { display: none !important; }

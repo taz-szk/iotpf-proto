@@ -4,12 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ダッシュボードログイン - IoTAir-X</title>
-  <link rel="stylesheet" href="/admin/static/tailwind.css">
+  <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
   <script src="/admin/js/api.js?v=11"></script>
   <script src="/admin/static/alpine.min.js" defer></script>
 </head>
 <body class="bg-gray-50 min-h-screen flex items-center justify-center">
-  <div x-data="tenantLoginApp()" class="w-full max-w-sm">
+  <div x-data="tenantLoginApp()" x-cloak class="w-full max-w-sm">
     <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
       <img src="/admin/IoTAirx_logo.png" alt="IoTAirx" class="w-full mb-6" style="height:auto;display:block;">
       <h1 class="text-xl font-bold text-gray-800 mb-1">ダッシュボードにアクセス</h1>

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>テナント管理 - IoTAir-X</title>
-  <link rel="stylesheet" href="/admin/static/tailwind.css">
+  <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
   <script src="/admin/static/alpine.min.js" defer></script>
   <script src="/admin/js/api.js?v=10"></script>
 </head>
@@ -23,7 +23,7 @@
     </div>
   </nav>
 
-  <div x-data="tenantsApp()" class="max-w-5xl mx-auto px-6 py-8">
+  <div x-data="tenantsApp()" x-cloak class="max-w-5xl mx-auto px-6 py-8">
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-semibold text-gray-800">テナント一覧</h2>
       <button @click="showForm = !showForm"
@@ -181,7 +181,7 @@
   </div>
 
   <!-- 削除確認モーダル -->
-  <div x-data x-show="$store.deleteModal.open" x-transition
+  <div x-data x-cloak x-show="$store.deleteModal.open" x-transition
        class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
     <div @click.stop class="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6" x-data>
       <h3 class="text-lg font-bold text-red-600 mb-2">テナントの完全削除</h3>
