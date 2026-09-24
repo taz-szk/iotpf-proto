@@ -555,7 +555,7 @@ td code { font-size: 12px; }
       <div class="req-card">
         <div class="req-card-id">FR-06 アラート管理</div>
         <div class="req-card-title">ルールベース通知</div>
-        <div class="req-card-body">条件: above / below / equal / device_offline。トリガーモード: consecutive / duration。重要度: info / warning / critical。メール通知。</div>
+        <div class="req-card-body">条件: above / below / equal / device_offline。トリガーモード: consecutive / duration。重要度: info / warning / critical。通知先はルールごとにメール・Slack Incoming Webhookを設定（両方も可）。</div>
       </div>
       <div class="req-card">
         <div class="req-card-id">FR-07 OTA ファームウェア更新</div>
@@ -1067,6 +1067,7 @@ td code { font-size: 12px; }
             <tr><td><code>duration_sec</code></td><td>INT DEFAULT 60</td><td>継続時間閾値（秒）</td></tr>
             <tr><td><code>severity</code></td><td>VARCHAR</td><td>info / warning / critical</td></tr>
             <tr><td><code>notify_emails</code></td><td>TEXT[]</td><td>通知先メールアドレス一覧</td></tr>
+            <tr><td><code>slack_webhook_url</code></td><td>TEXT</td><td>通知先Slack Incoming Webhook URL（NULL可）。<code>https://hooks.slack.com/services/…</code>のみ許可。秘密情報のためAPIレスポンスには載せず、<code>slack_configured</code>と末尾4文字（<code>slack_webhook_hint</code>）だけ返す</td></tr>
           </tbody>
         </table>
       </div>
@@ -2100,7 +2101,8 @@ sequenceDiagram
           <tr><td>件名（解消）</td><td><code>[RESOLVED] IoT Alert: {sensor_key} / {device_id}</code></td></tr>
           <tr><td>本文（アラート）</td><td>sensor_key / device_id / condition &amp; threshold / current_value / tenant_id</td></tr>
           <tr><td>本文（解消）</td><td>sensor_key / device_id / tenant_id のみ（current_value なし）</td></tr>
-          <tr><td>送信先</td><td>アラートルールの <code>notify_emails</code> 配列</td></tr>
+          <tr><td>送信先（メール）</td><td>アラートルールの <code>notify_emails</code> 配列</td></tr>
+          <tr><td>送信先（Slack）</td><td>アラートルールの <code>slack_webhook_url</code>（設定されている場合のみ）。本文はメールと同じ内容を <code>{"text": …}</code> のJSONで POST。<code>&amp; &lt; &gt;</code> はエスケープ。メールとSlackは独立で、片方が失敗してももう片方は送る</td></tr>
           <tr><td>From</td><td><code>SMTP_FROM</code> 環境変数（デフォルト: <code>alerts@iot-platform.local</code>）</td></tr>
         </tbody>
       </table>

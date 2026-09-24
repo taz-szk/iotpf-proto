@@ -298,6 +298,27 @@
               <input type="text" x-model="emailsInput" placeholder="ops@example.com,admin@example.com"
                      class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
             </div>
+            <div class="col-span-2">
+              <label class="block text-xs font-medium text-gray-600 mb-1">通知先 Slack（Incoming Webhook URL）</label>
+              <template x-if="slackExisting.configured && slackAction !== 'replace'">
+                <div class="flex items-center gap-3 text-sm">
+                  <span x-show="slackAction === 'keep'" class="text-gray-600">設定済み（<span x-text="slackExisting.hint"></span>）</span>
+                  <span x-show="slackAction === 'clear'" class="text-red-600">保存すると解除します</span>
+                  <button type="button" @click="slackAction = 'replace'" class="text-blue-500 hover:text-blue-700 text-xs">変更</button>
+                  <button type="button" x-show="slackAction === 'keep'" @click="slackAction = 'clear'" class="text-red-500 hover:text-red-700 text-xs">解除</button>
+                  <button type="button" x-show="slackAction === 'clear'" @click="slackAction = 'keep'" class="text-gray-500 hover:text-gray-700 text-xs">解除をやめる</button>
+                </div>
+              </template>
+              <template x-if="!slackExisting.configured || slackAction === 'replace'">
+                <div>
+                  <input type="text" x-model="slackInput" autocomplete="off" spellcheck="false"
+                         placeholder="https://hooks.slack.com/services/T…/B…/…"
+                         class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                  <p class="text-xs text-gray-400 mt-1">空欄ならSlack通知はしません。URLは秘密情報のため、保存後は末尾4文字だけ表示されます。</p>
+                </div>
+              </template>
+            </div>
+
             <div class="col-span-2 flex justify-end gap-2">
               <button type="button" @click="closeAlertForm()"
                       class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
@@ -334,7 +355,10 @@
                           }"
                           x-text="r.severity"></span>
                   </td>
-                  <td class="px-4 py-3 text-sm text-gray-500" x-text="(r.notify_emails || []).join(', ') || '-'"></td>
+                  <td class="px-4 py-3 text-sm text-gray-500">
+                    <div x-show="(r.notify_emails || []).length || !r.slack_configured" x-text="(r.notify_emails || []).join(', ') || '-'"></div>
+                    <span x-show="r.slack_configured" class="inline-block text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700" x-text="'Slack ' + (r.slack_webhook_hint || '')"></span>
+                  </td>
                   <td class="px-4 py-3 text-right space-x-3">
                     <button @click="editAlertRule(r)"
                             class="text-blue-500 hover:text-blue-700 text-xs">編集</button>
@@ -994,6 +1018,7 @@
         showAlertForm: false,
         editingRuleId: null,
         emailsInput: '',
+        slackInput: '', slackExisting: { configured: false, hint: null }, slackAction: 'keep',
         newRule: {
           sensor_key: '', device_id: '', group_id: null, condition: 'above', threshold: null,
           trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
@@ -1125,7 +1150,7 @@
             trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
             severity: 'warning', notify_emails: [],
           };
-          this.emailsInput = '';
+          this.emailsInput = ''; this.resetSlackForm();
           this.showAlertForm = true;
           try {
             const [keys, devs] = await Promise.all([
@@ -1137,10 +1162,29 @@
           } catch(_) {}
         },
 
+        resetSlackForm(rule) {
+          this.slackInput = '';
+          this.slackExisting = { configured: !!(rule && rule.slack_configured), hint: rule ? rule.slack_webhook_hint : null };
+          this.slackAction = 'keep';
+        },
+
+        // 送信内容にSlack Webhook URLを反映する。未指定=維持、null=解除。エラー文言を返す（なければ空文字）。
+        applySlackToRule(rule) {
+          if (this.slackExisting.configured && this.slackAction === 'keep') return '';
+          if (this.slackAction === 'clear') { rule.slack_webhook_url = null; return ''; }
+          const url = this.slackInput.trim();
+          if (!url) return this.slackAction === 'replace' ? 'Slack Webhook URLを入力してください' : '';
+          if (!/^https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9]+\/[A-Za-z0-9]+\/[A-Za-z0-9]+$/.test(url)) {
+            return 'Slack Webhook URLの形式が正しくありません（https://hooks.slack.com/services/…）';
+          }
+          rule.slack_webhook_url = url;
+          return '';
+        },
+
         closeAlertForm() {
           this.showAlertForm = false;
           this.editingRuleId = null;
-          this.emailsInput = '';
+          this.emailsInput = ''; this.resetSlackForm();
           this.sensorKeySelect = '';
           this.deviceSearch = '';
           this.showDeviceDropdown = false;
@@ -1163,7 +1207,7 @@
             severity: rule.severity,
             notify_emails: rule.notify_emails || [],
           };
-          this.emailsInput = (rule.notify_emails || []).join(', ');
+          this.emailsInput = (rule.notify_emails || []).join(', '); this.resetSlackForm(rule);
           this.showAlertForm = true;
           try {
             const [keys, devs] = await Promise.all([
@@ -1194,6 +1238,8 @@
           const rule = { ...this.newRule };
           rule.group_id = rule.group_id || null;   // 空文字列や不正値を送らない
           rule.notify_emails = this.emailsInput.split(',').map(e => e.trim()).filter(Boolean);
+          const slackErr = this.applySlackToRule(rule);
+          if (slackErr) { this.error = slackErr; return; }
           if (rule.condition === 'device_offline') rule.threshold = null;
           try {
             if (this.editingRuleId) {
