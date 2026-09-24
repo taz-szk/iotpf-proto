@@ -11,6 +11,9 @@ from typing import Callable, Optional
 from iot_platform import IotClient
 
 
+DEFAULT_FW_VERSION = "1.0.0"
+
+
 class DeviceWorker(threading.Thread):
     def __init__(
         self,
@@ -44,12 +47,16 @@ class DeviceWorker(threading.Thread):
         self.fw_version: str = self._load_fw_version()
 
     def _load_fw_version(self) -> str:
+        # fw_version はテナント名/デバイス名のディレクトリに残るため、過去に同じ名前で登録した端末の値が
+        # 残っていることがある。証明書がある(=登録済みの端末を再起動した)ときだけ引き継ぐ。
+        if not os.path.exists(os.path.join(self._cert_dir, "cert.pem")):
+            return DEFAULT_FW_VERSION
         path = os.path.join(self._cert_dir, "fw_version")
         try:
             with open(path) as f:
-                return f.read().strip() or "1.0.0"
+                return f.read().strip() or DEFAULT_FW_VERSION
         except (FileNotFoundError, OSError):
-            return "1.0.0"
+            return DEFAULT_FW_VERSION
 
     def save_fw_version(self) -> None:
         path = os.path.join(self._cert_dir, "fw_version")
@@ -76,8 +83,12 @@ class DeviceWorker(threading.Thread):
                 self._put_event("log", {"message": f"{self.device_id}: プロビジョニング中...", "level": "info"})
                 self._client.provision(self._bootstrap_token, self.device_id, self._cert_dir,
                                         verify=self._ssl_verify, group_id=self._group_id)
+                # 新規登録は出荷状態から始める。以前の登録の fw_version を残すと、次の起動で復活してしまう
+                self.fw_version = DEFAULT_FW_VERSION
+                self.save_fw_version()
                 self._put_event("log", {"message": f"{self.device_id}: プロビジョニング完了", "level": "info"})
 
+            self._put_event("fw_version", {"version": self.fw_version})
             self._put_event("status", {"state": "connecting"})
             self._client.connect()
             self._client.set_disconnect_callback(self._on_unexpected_disconnect)

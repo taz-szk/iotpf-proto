@@ -723,7 +723,7 @@ class SimulatorApp(tk.Tk):
         state_lbl.pack(side=tk.LEFT, padx=2)
         tk.Label(row, text=device_id, font=("Consolas", 9)).pack(side=tk.LEFT)
         tk.Label(row, text=f" [{tenant['name']}]", fg="gray", font=("", 8)).pack(side=tk.LEFT)
-        fw_lbl = tk.Label(row, text="fw: 1.0.0", fg="gray", font=("Consolas", 8))
+        fw_lbl = tk.Label(row, text=f"fw: {worker.fw_version}", fg="gray", font=("Consolas", 8))
         fw_lbl.pack(side=tk.LEFT, padx=(6, 0))
         tk.Button(row, text="✕", font=("", 8), fg="gray", relief=tk.FLAT, bd=0,
                   cursor="hand2", command=lambda w=wid: self._remove_device(w)
@@ -923,6 +923,10 @@ class SimulatorApp(tk.Tk):
                     self._update_state(wid, data["state"])
                 elif event_type == "log":
                     self._append_log(data["message"], level=data.get("level", "info"))
+                elif event_type == "fw_version":
+                    lbl = self._fw_version_labels.get(wid)
+                    if lbl:
+                        lbl.config(text=f"fw: {data['version']}")
                 elif event_type == "telemetry":
                     w = self._workers.get(wid)
                     label = w.device_id if w else str(wid)

@@ -246,5 +246,77 @@ class TestDeviceWorkerOta(unittest.TestCase):
         self.assertEqual(tel[0]["payload"]["fw_version"], "2.0.0")
 
 
+class TestDeviceWorkerFwVersionAcrossRegistrations(unittest.TestCase):
+    """fw_version ファイルは cert_dir(テナント名/デバイス名)単位で残る。
+    過去に同じ名前で登録・OTAしたときの値が、新しい登録の送信データに混ざってはならない。"""
+
+    @staticmethod
+    def _write(path: str, text: str = "x") -> None:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write(text)
+
+    @staticmethod
+    def _events(q: queue.Queue) -> list:
+        items = []
+        while not q.empty():
+            items.append(q.get_nowait())
+        return items
+
+    def _run_worker(self, cert_dir: str, MockClient) -> DeviceWorker:
+        q = queue.Queue()
+        worker = _make_worker(cert_dir, q)
+        worker.start()
+        time.sleep(0.4)
+        worker.stop()
+        worker.join(timeout=2)
+        worker._test_events = self._events(q)
+        return worker
+
+    @patch("device_worker.IotClient")
+    def test_fresh_registration_ignores_a_stale_fw_version_file(self, MockClient):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "tenant", "test-001")
+            self._write(os.path.join(cert_dir, "fw_version"), "1.5.0")  # cert.pem は無い = 新規登録
+            worker = self._run_worker(cert_dir, MockClient)
+        MockClient.return_value.provision.assert_called_once()
+        MockClient.return_value.publish_status.assert_called_once_with("online", fw_version="1.0.0")
+        self.assertEqual(worker.fw_version, "1.0.0")
+
+    @patch("device_worker.IotClient")
+    def test_stale_fw_version_is_not_resurrected_by_a_later_restart(self, MockClient):
+        """新規登録で上書きしないと、証明書ができた次の起動で古い値が復活する"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "tenant", "test-001")
+            self._write(os.path.join(cert_dir, "fw_version"), "1.5.0")
+            self._run_worker(cert_dir, MockClient)
+            self._write(os.path.join(cert_dir, "cert.pem"))  # provision() が証明書を書いた状態を再現
+            restarted = _make_worker(cert_dir, queue.Queue())
+        self.assertEqual(restarted.fw_version, "1.0.0")
+
+    @patch("device_worker.IotClient")
+    def test_reused_credentials_keep_the_persisted_fw_version(self, MockClient):
+        """OTA 済みの同じデバイスを再起動しただけなら、保存した版数を引き継ぐ"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "tenant", "test-001")
+            self._write(os.path.join(cert_dir, "cert.pem"))
+            self._write(os.path.join(cert_dir, "fw_version"), "1.5.0")
+            worker = self._run_worker(cert_dir, MockClient)
+        MockClient.return_value.provision.assert_not_called()
+        MockClient.return_value.publish_status.assert_called_once_with("online", fw_version="1.5.0")
+        self.assertEqual(worker.fw_version, "1.5.0")
+
+    @patch("device_worker.IotClient")
+    def test_worker_reports_its_actual_fw_version_to_the_ui(self, MockClient):
+        """画面のラベルは固定の 1.0.0 ではなく、実際に送る版数を表示する"""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cert_dir = os.path.join(tmpdir, "tenant", "test-001")
+            self._write(os.path.join(cert_dir, "cert.pem"))
+            self._write(os.path.join(cert_dir, "fw_version"), "1.5.0")
+            worker = self._run_worker(cert_dir, MockClient)
+        fw_events = [d for (_, t, d) in worker._test_events if t == "fw_version"]
+        self.assertEqual(fw_events, [{"version": "1.5.0"}])
+
+
 if __name__ == "__main__":
     unittest.main()
