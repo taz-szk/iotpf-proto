@@ -5,7 +5,7 @@ from app.db import (
     get_offline_devices, mark_device_offline,
 )
 from app.evaluator import evaluate_rule
-from app.notifier import send_alert_email
+from app.notifier import notify
 
 def evaluate_all_tenants() -> None:
     try:
@@ -59,8 +59,8 @@ def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
 
         if should_alert and not existing:
             event_id = create_alert_event(tenant_id, rule_id, device_id, last_value)
-            send_alert_email(
-                to_emails=list(rule["notify_emails"] or []),
+            notify(
+                rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key=rule["sensor_key"], condition=rule["condition"],
                 threshold=float(rule["threshold"]) if rule["threshold"] else None,
@@ -69,8 +69,8 @@ def _evaluate_tenant(tenant_id: str, org_id: str, token: str) -> None:
             mark_event_notified(tenant_id, event_id)
         elif not should_alert and existing:
             resolve_alert_event(tenant_id, existing["id"])
-            send_alert_email(
-                to_emails=list(rule["notify_emails"] or []),
+            notify(
+                rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key=rule["sensor_key"], condition=rule["condition"],
                 threshold=float(rule["threshold"]) if rule["threshold"] else None,
@@ -97,8 +97,8 @@ def _check_dead_devices(tenant_id: str) -> None:
             if existing:
                 continue
             event_id = create_alert_event(tenant_id, rule["id"], device_id, None)
-            send_alert_email(
-                to_emails=list(rule["notify_emails"] or []),
+            notify(
+                rule,
                 tenant_id=tenant_id, device_id=device_id,
                 sensor_key="device", condition="device_offline",
                 threshold=None, current_value=None, severity=rule["severity"],

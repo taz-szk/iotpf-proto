@@ -24,7 +24,7 @@ def get_active_alert_rules(tenant_id: str) -> list[dict]:
             cur.execute(f'''
                 SELECT id::text, device_id, group_id::text, sensor_key, condition, threshold,
                        trigger_mode, consecutive_count, duration_sec,
-                       severity, notify_emails
+                       severity, notify_emails, slack_webhook_url
                 FROM "{schema}".alert_rules WHERE is_active = TRUE
             ''')
             return cur.fetchall()
