@@ -48,9 +48,11 @@ def test_ota_topic_matches_acl():
     mock_resp = MagicMock()
     mock_resp.raise_for_status = MagicMock()
 
-    with patch("httpx.post", return_value=mock_resp) as mock_post:
+    # httpx.post をグローバルに差し替えると、他のテストが起動したバックグラウンドスレッド(EMQX初期設定など)の
+    # 呼び出しが call_args に混ざって不安定になる。このモジュール内のhttpxだけを差し替える。
+    with patch("app.services.emqx_publisher._token", "cached-token"),          patch("app.services.emqx_publisher.httpx") as mock_httpx:
+        mock_httpx.post.return_value = mock_resp
         publish_ota_command("tenant-123", "dev-001", {"type": "ota", "version": "1.0"})
 
-    call_kwargs = mock_post.call_args
-    body = call_kwargs.kwargs["json"] if call_kwargs.kwargs else call_kwargs[1]["json"]
+    body = mock_httpx.post.call_args.kwargs["json"]
     assert body["topic"] == "/tenant-123/devices/dev-001/commands"
