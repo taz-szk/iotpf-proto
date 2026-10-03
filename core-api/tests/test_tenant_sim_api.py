@@ -2,11 +2,18 @@
 認証情報(Auth Key)はレスポンス・エラーに含めない。"""
 from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.services.auth import create_access_token
-from app.services.sim_service import SoracomNotConfiguredError
+from app.services.sim_service import (
+    BindingNotFoundError,
+    DeviceAlreadyBoundError,
+    DeviceNotFoundError,
+    SimAlreadyBoundError,
+    SoracomNotConfiguredError,
+)
 from app.services.soracom_client import SoracomApiError
 
 client = TestClient(app)
@@ -138,3 +145,42 @@ def test_list_lines_soracom_failure_returns_502():
         resp = client.get("/tenant-portal/me/sim/lines", cookies=_cookies())
     assert resp.status_code == 502
     assert "一時的な問題" in resp.json()["detail"]
+
+
+def test_bind_device_not_found_returns_404():
+    with patch("app.routers.tenant_sim.bind_line", side_effect=DeviceNotFoundError("dev-001")):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+                           cookies=_cookies("operator"), json={"device_id": "dev-001"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.parametrize("error", [SimAlreadyBoundError("x"), DeviceAlreadyBoundError("x")])
+def test_bind_conflicts_return_409(error):
+    with patch("app.routers.tenant_sim.bind_line", side_effect=error):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+                           cookies=_cookies("operator"), json={"device_id": "dev-001"})
+    assert resp.status_code == 409
+
+
+def test_bind_success_logs_audit():
+    with patch("app.routers.tenant_sim.bind_line") as mock_bind, \
+         patch("app.routers.tenant_sim.log_audit") as mock_audit:
+        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+                           cookies=_cookies("operator"), json={"device_id": "dev-001", "iccid": "8981...01"})
+    assert resp.status_code == 204
+    mock_bind.assert_called_once_with(TENANT_ID, "440100000001", "dev-001", iccid="8981...01")
+    assert mock_audit.call_args.args[3] == "bind_sim"
+
+
+def test_unbind_not_found_returns_404():
+    with patch("app.routers.tenant_sim.unbind_line", side_effect=BindingNotFoundError("x")):
+        resp = client.delete("/tenant-portal/me/sim/lines/440100000001/bind", cookies=_cookies("operator"))
+    assert resp.status_code == 404
+
+
+def test_unbind_success():
+    with patch("app.routers.tenant_sim.unbind_line") as mock_unbind, \
+         patch("app.routers.tenant_sim.log_audit"):
+        resp = client.delete("/tenant-portal/me/sim/lines/440100000001/bind", cookies=_cookies("operator"))
+    assert resp.status_code == 204
+    mock_unbind.assert_called_once_with(TENANT_ID, "440100000001")

@@ -7,12 +7,18 @@ from pydantic import BaseModel, Field
 
 from app.services.audit import log_audit
 from app.services.sim_service import (
+    BindingNotFoundError,
+    DeviceAlreadyBoundError,
+    DeviceNotFoundError,
+    SimAlreadyBoundError,
     SoracomNotConfiguredError,
     activate_line,
+    bind_line,
     deactivate_line,
     get_line,
     list_lines,
     set_speed_class,
+    unbind_line,
 )
 from app.services.soracom_client import SoracomApiError, verify_credentials
 from app.services.soracom_credentials import delete_credentials, get_credentials_summary, save_credentials
@@ -152,3 +158,33 @@ def set_speed_class_endpoint(imsi: str, body: SpeedClassUpdate, payload: dict = 
               tenant_id=payload["tenant_id"], resource_type="sim", resource_id=imsi,
               detail={"speed_class": body.speed_class})
     return line
+
+
+class BindRequest(BaseModel):
+    device_id: str = Field(min_length=1, max_length=255)
+    iccid: Optional[str] = None
+
+
+@router.post("/lines/{imsi}/bind", status_code=http_status.HTTP_204_NO_CONTENT)
+def bind_line_endpoint(imsi: str, body: BindRequest, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    try:
+        bind_line(tenant_id, imsi, body.device_id, iccid=body.iccid)
+    except DeviceNotFoundError:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Device not found")
+    except (SimAlreadyBoundError, DeviceAlreadyBoundError) as e:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(e))
+    log_audit("tenant", payload["sub"], payload["email"], "bind_sim",
+              tenant_id=tenant_id, resource_type="sim", resource_id=imsi,
+              detail={"device_id": body.device_id})
+
+
+@router.delete("/lines/{imsi}/bind", status_code=http_status.HTTP_204_NO_CONTENT)
+def unbind_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    try:
+        unbind_line(tenant_id, imsi)
+    except BindingNotFoundError:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Binding not found")
+    log_audit("tenant", payload["sub"], payload["email"], "unbind_sim",
+              tenant_id=tenant_id, resource_type="sim", resource_id=imsi)
