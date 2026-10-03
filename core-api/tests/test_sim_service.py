@@ -101,3 +101,19 @@ def test_get_bindings_by_imsi_with_empty_list_skips_the_query():
          patch("app.services.sim_service.engine") as mock_engine:
         assert get_bindings_by_imsi(TENANT_ID, []) == {}
     mock_engine.connect.assert_not_called()
+
+
+def test_bind_line_device_id_containing_imsi_substring():
+    """Regression test: device_id containing 'imsi' substring must not be misclassified
+    when checking for UNIQUE constraint violations."""
+    conn = _conn()
+    conn.execute.return_value.fetchone.return_value = (1,)
+    orig = MagicMock()
+    # This detail is for device_id UNIQUE violation, not imsi
+    orig.diag.message_detail = "Key (device_id)=(sensor-imsi-999) already exists."
+    conn.execute.side_effect = [MagicMock(fetchone=lambda: (1,)), IntegrityError("stmt", {}, orig)]
+    with patch("app.services.sim_service.ensure_sim_tables_to_tenant_schema"), \
+         patch("app.services.sim_service.engine") as mock_engine:
+        mock_engine.begin.return_value = conn
+        with pytest.raises(DeviceAlreadyBoundError):
+            bind_line(TENANT_ID, "440100000099", "sensor-imsi-999")

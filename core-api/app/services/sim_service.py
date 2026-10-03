@@ -44,10 +44,20 @@ def bind_line(tenant_id: str, imsi: str, device_id: str, iccid: str | None = Non
                 {"imsi": imsi, "iccid": iccid, "device_id": device_id},
             )
         except IntegrityError as e:
-            detail = str(getattr(getattr(e, "orig", None), "diag", None) and e.orig.diag.message_detail or e)
-            if "imsi" in detail:
+            # PostgreSQL UNIQUE constraint violation detail is: "Key (column_name)=(value) already exists."
+            # Check for the column name with parentheses to avoid false positives from device_id values
+            # that happen to contain "imsi" as a substring.
+            detail = ""
+            if hasattr(e, "orig") and hasattr(e.orig, "diag") and e.orig.diag and hasattr(e.orig.diag, "message_detail"):
+                detail = e.orig.diag.message_detail
+
+            if "(imsi)=" in detail:
                 raise SimAlreadyBoundError(imsi) from e
-            raise DeviceAlreadyBoundError(device_id) from e
+            elif "(device_id)=" in detail:
+                raise DeviceAlreadyBoundError(device_id) from e
+            else:
+                # If detail string is malformed or unexpected, re-raise the original error
+                raise
 
 
 def unbind_line(tenant_id: str, imsi: str) -> None:
