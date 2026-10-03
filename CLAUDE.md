@@ -116,6 +116,10 @@ docker compose restart nginx emqx
 | ingestion-service | ./ingestion-service | MQTT テレメトリ取込 |
 | alert-service | ./alert-service | アラート評価・通知（ルール単位でメール / Slack、配信結果を`notify_status`に記録、Slack失敗時は管理者へメール） |
 
+### SORACOM回線管理機能
+
+- **SORACOM回線管理** — テナント単位でSORACOM APIと連携（`services/soracom_client.py`）。認証情報(Auth Key)は`services/crypto.py`で暗号化して`tenant_soracom_credentials`に保存。SIMとデバイスの紐づけはテナントスキーマの`sim_bindings`（1 SIM : 1デバイス）
+
 ### AIアシスタント機能（選択制、Ollama別インスタンス前提）
 
 RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・確認フロー付き操作代行）は**デフォルト無効**の選択制機能。
