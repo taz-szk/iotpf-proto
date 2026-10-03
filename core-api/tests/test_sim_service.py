@@ -180,3 +180,34 @@ def test_get_line_merges_binding_info():
                return_value={"440100000001": {"device_id": "dev-001", "device_name": "センサー01"}}):
         line = get_line(TENANT_ID, "440100000001")
     assert line["bound_device_id"] == "dev-001"
+
+
+from app.services.sim_service import activate_line, deactivate_line, set_speed_class
+
+
+def test_activate_line_requires_configured_credentials():
+    with patch("app.services.sim_service.get_credentials", return_value=None):
+        with pytest.raises(SoracomNotConfiguredError):
+            activate_line(TENANT_ID, "440100000001")
+
+
+def test_activate_line_delegates_to_the_client_with_credentials():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.activate_subscriber", return_value={"imsi": "440100000001", "status": "active"}) as mock_act:
+        result = activate_line(TENANT_ID, "440100000001")
+    mock_act.assert_called_once_with(TENANT_ID, "jp", "keyId-x", "secret-x", "440100000001")
+    assert result["status"] == "active"
+
+
+def test_deactivate_line_returns_none_on_404():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.deactivate_subscriber", return_value=None):
+        assert deactivate_line(TENANT_ID, "000000") is None
+
+
+def test_set_speed_class_delegates_with_the_value():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.update_speed_class", return_value={"speedClass": "s1.fast"}) as mock_upd:
+        result = set_speed_class(TENANT_ID, "440100000001", "s1.fast")
+    mock_upd.assert_called_once_with(TENANT_ID, "jp", "keyId-x", "secret-x", "440100000001", "s1.fast")
+    assert result["speedClass"] == "s1.fast"

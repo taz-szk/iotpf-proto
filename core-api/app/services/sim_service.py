@@ -4,7 +4,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.database import engine, ensure_sim_tables_to_tenant_schema
-from app.services.soracom_client import get_subscriber, list_subscribers
+from app.services.soracom_client import (activate_subscriber, deactivate_subscriber, get_subscriber,
+                                          list_subscribers, update_speed_class)
 from app.services.soracom_credentials import get_credentials
 
 
@@ -134,3 +135,18 @@ def get_line(tenant_id: str, imsi: str) -> dict | None:
     if item is None:
         return None
     return _attach_binding(tenant_id, [item])[0]
+
+
+def activate_line(tenant_id: str, imsi: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    return activate_subscriber(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi)
+
+
+def deactivate_line(tenant_id: str, imsi: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    return deactivate_subscriber(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi)
+
+
+def set_speed_class(tenant_id: str, imsi: str, speed_class: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    return update_speed_class(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi, speed_class)
