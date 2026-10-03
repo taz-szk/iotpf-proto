@@ -712,6 +712,56 @@
             </div>
           </div>
 
+          <!-- ===== SIM管理 ===== -->
+          <div x-show="activeTab === 'sim'">
+            <div class="bg-white rounded shadow-sm border border-gray-200 p-4 mb-4">
+              <h3 class="text-sm font-semibold text-gray-700 mb-3">SORACOM連携</h3>
+              <div x-show="simCredentialsLoading" class="text-sm text-gray-400">読み込み中...</div>
+              <template x-if="!simCredentialsLoading">
+                <div>
+                  <div x-show="simCredentials.configured" class="flex items-center gap-3 text-sm mb-3">
+                    <span class="text-green-700">連携済み（<span x-text="simCredentials.coverage === 'g' ? 'グローバル' : '日本'"></span>カバレッジ、Auth Key ID: <span x-text="simCredentials.auth_key_id_hint"></span>）</span>
+                    <button x-show="isAdmin" @click="simCredentialsEditing = true" class="text-amber-600 hover:text-amber-800 text-xs">変更</button>
+                    <button x-show="isAdmin" @click="deleteSimCredentials()" class="text-red-500 hover:text-red-700 text-xs">連携解除</button>
+                  </div>
+                  <p x-show="!simCredentials.configured && !isAdmin" class="text-sm text-gray-500">
+                    SORACOM連携が未設定です。テナント管理者に設定を依頼してください。
+                  </p>
+                  <form x-show="isAdmin && (!simCredentials.configured || simCredentialsEditing)"
+                        @submit.prevent="saveSimCredentials()" class="grid grid-cols-2 gap-3 max-w-lg">
+                    <div class="col-span-2">
+                      <label class="block text-xs font-medium text-gray-600 mb-1">カバレッジ</label>
+                      <select x-model="simCredentialsForm.coverage" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                        <option value="jp">日本カバレッジ</option>
+                        <option value="g">グローバルカバレッジ</option>
+                      </select>
+                    </div>
+                    <div class="col-span-2">
+                      <label class="block text-xs font-medium text-gray-600 mb-1">Auth Key ID</label>
+                      <input type="text" x-model="simCredentialsForm.auth_key_id" autocomplete="off"
+                             class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    <div class="col-span-2">
+                      <label class="block text-xs font-medium text-gray-600 mb-1">Auth Key</label>
+                      <input type="password" x-model="simCredentialsForm.auth_key" autocomplete="off"
+                             class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    </div>
+                    <div class="col-span-2 flex justify-end gap-2">
+                      <button x-show="simCredentialsEditing" type="button" @click="simCredentialsEditing = false"
+                              class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                      <button type="submit" :disabled="simCredentialsSaving"
+                              class="bg-amber-600 text-white text-sm px-3 py-1.5 rounded disabled:opacity-50">
+                        <span x-show="!simCredentialsSaving">保存</span>
+                        <span x-show="simCredentialsSaving">確認中...</span>
+                      </button>
+                    </div>
+                    <p x-show="simCredentialsError" class="col-span-2 text-xs text-red-500" x-text="simCredentialsError"></p>
+                  </form>
+                </div>
+              </template>
+            </div>
+          </div>
+
           <!-- ===== ファームウェア ===== -->
           <div x-show="activeTab === 'firmware'">
             <div class="flex items-center justify-between mb-4">
@@ -1547,6 +1597,7 @@ function portalApp() {
         { id: 'devices',          label: 'デバイス',                 icon: '📡' },
         { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
         { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
+        { id: 'sim',              label: 'SIM管理',                 icon: '📶' },
         { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
         { id: 'stats-billing',    label: '統計・ビリング',           icon: '📊' },
       ];
@@ -1612,6 +1663,13 @@ function portalApp() {
                trigger_mode: 'consecutive', consecutive_count: 3, duration_sec: 60,
                severity: 'warning', notify_emails: [] },
     targetType: 'all', // 'device' | 'group' | 'all'
+    // SIM管理
+    simCredentials: { configured: false, coverage: 'jp', auth_key_id_hint: null },
+    simCredentialsLoading: false,
+    simCredentialsEditing: false,
+    simCredentialsSaving: false,
+    simCredentialsError: '',
+    simCredentialsForm: { coverage: 'jp', auth_key_id: '', auth_key: '' },
     // ファームウェア
     firmwareList: [], uploadFile: null, fwVersion: '', fwTargetModel: '', fwDescription: '',
     uploading: false,
@@ -1769,6 +1827,7 @@ function portalApp() {
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
       if (tab === 'stats-billing') await this.loadStatsAndBilling();
+      if (tab === 'sim')      await this.loadSimCredentials();
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
@@ -2177,6 +2236,42 @@ function portalApp() {
       if (!confirm('このファームウェアを無効化しますか？')) return;
       try { await portalFetch('DELETE', `/me/firmware/${id}`); await this.loadFirmware(); }
       catch(e) { this.error = e.message; }
+    },
+
+    // ----- SIM管理 -----
+    async loadSimCredentials() {
+      this.simCredentialsLoading = true;
+      try {
+        this.simCredentials = await portalFetch('GET', '/me/sim/credentials');
+        this.simCredentialsForm.coverage = this.simCredentials.coverage || 'jp';
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.simCredentialsLoading = false;
+      }
+    },
+    async saveSimCredentials() {
+      this.simCredentialsSaving = true;
+      this.simCredentialsError = '';
+      try {
+        await portalFetch('PUT', '/me/sim/credentials', { ...this.simCredentialsForm });
+        this.simCredentialsEditing = false;
+        this.simCredentialsForm.auth_key = '';
+        await this.loadSimCredentials();
+      } catch (e) {
+        this.simCredentialsError = e.message;
+      } finally {
+        this.simCredentialsSaving = false;
+      }
+    },
+    async deleteSimCredentials() {
+      if (!confirm('SORACOM連携を解除しますか？紐づけは残りますが、回線の確認・操作ができなくなります。')) return;
+      try {
+        await portalFetch('DELETE', '/me/sim/credentials');
+        await this.loadSimCredentials();
+      } catch (e) {
+        this.error = e.message;
+      }
     },
 
     // ----- ユーザー -----
