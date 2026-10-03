@@ -141,6 +141,25 @@ def add_firmware_tables_to_tenant_schema(tenant_id: str) -> None:
         '''))
         conn.commit()
 
+def ensure_sim_tables_to_tenant_schema(tenant_id: str) -> None:
+    """SIMとデバイスの紐づけを保持するsim_bindingsテーブルを作成する（べき等）。
+    firmware_releasesと同様、呼び出しごとにCREATE TABLE IF NOT EXISTSする遅延作成。"""
+    import re
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', tenant_id.lower()):
+        raise ValueError(f"Invalid tenant_id: {tenant_id}")
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    with engine.connect() as conn:
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".sim_bindings (
+                id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                imsi      VARCHAR(32) NOT NULL UNIQUE,
+                iccid     VARCHAR(32),
+                device_id VARCHAR(255) NOT NULL UNIQUE,
+                bound_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        '''))
+        conn.commit()
+
 
 def migrate_add_grafana_org_id() -> None:
     with engine.connect() as conn:
