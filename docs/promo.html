@@ -280,12 +280,12 @@ canvas{display:block}
           <div class="terminal fade-item">
             <div class="term-hdr"><div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div><div class="term-title">device-003 — bootstrap.sh</div></div>
             <div class="term-body">
-              <div class="fade-item"><span class="t-prompt">$</span> <span class="t-cmd">curl -s https://iot.suzuki-net.org/provision/bootstrap \</span></div>
-              <div class="fade-item">&nbsp;&nbsp;&nbsp;&nbsp;<span class="t-cmd">-d token=$BOOTSTRAP_TOKEN | step ca certificate</span></div>
-              <div class="fade-item"><span class="t-ok">✓ Step-CA への接続を確認しました</span></div>
-              <div class="fade-item"><span class="t-ok">✓ デバイス証明書を発行しました</span> <span class="t-ts">(有効期限: 8760h)</span></div>
-              <div class="fade-item"><span class="t-ok">✓ EMQXへのmTLS接続を確立</span></div>
-              <div class="fade-item"><span class="t-pub">device-003 is now online.</span></div>
+              <div class="fade-item"><span class="t-prompt">$</span> <span class="t-cmd">python sensor_agent.py</span></div>
+              <div class="fade-item"><span class="t-ts">client.provision(bootstrap_token=..., device_id="sensor-003")</span></div>
+              <div class="fade-item"><span class="t-ok">✓ POST /api/provision — Bootstrap Token を検証</span></div>
+              <div class="fade-item"><span class="t-ok">✓ デバイス証明書を発行しました</span> <span class="t-ts">(certs/ に保存)</span></div>
+              <div class="fade-item"><span class="t-ok">✓ 以後は証明書によるmTLSで通信</span></div>
+              <div class="fade-item"><span class="t-pub">プロビジョニング完了 — sensor-003 is now online.</span></div>
             </div>
           </div>
           <div class="prov-token fade-item" style="margin-top:14px">
@@ -308,7 +308,7 @@ canvas{display:block}
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
               <div class="fade-item" style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px">
                 <div style="font-size:.66rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">オンライン端末</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--ui-t)">46<span style="font-size:.9rem;color:var(--ui-tm)"> / 48</span></div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--ui-t)"><span class="count-up" data-target="46">0</span><span style="font-size:.9rem;color:var(--ui-tm)"> / 48</span></div>
               </div>
               <div class="fade-item" style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px">
                 <div style="font-size:.66rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">平均気温</div>
@@ -316,7 +316,7 @@ canvas{display:block}
               </div>
               <div class="fade-item" style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px">
                 <div style="font-size:.66rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">直近1時間のデータ点</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--ui-acc)">2,304</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.4rem;font-weight:700;color:var(--ui-acc)"><span class="count-up" data-target="2304">0</span></div>
               </div>
             </div>
             <div class="fade-item" style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px;margin-bottom:14px">
@@ -359,9 +359,9 @@ canvas{display:block}
               </tbody>
             </table>
             <div class="fade-item" style="margin-top:18px;display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">AAA</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div style="width:84%;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px"></div></div></div>
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Ryu</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div style="width:22%;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px"></div></div></div>
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Suzuki Net</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div style="width:100%;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">AAA</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="84" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Ryu</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="22" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
+              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Suzuki Net</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="100" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
             </div>
           </div>
         </div>
@@ -417,7 +417,7 @@ canvas{display:block}
               <div style="font-size:.7rem;color:var(--ui-tm);margin-bottom:8px">OTA配信中 — v1.4.2</div>
               <div class="device-row" style="padding:0;border-bottom:none">
                 <div class="device-name" style="color:var(--ui-t)">sensor-012</div>
-                <div class="progress-bar" style="margin:0 10px;background:#E2E8F0"><div class="progress-fill" style="width:62%"></div></div>
+                <div class="progress-bar" style="margin:0 10px;background:#E2E8F0"><div class="progress-fill ota-progress" data-target="62"></div></div>
                 <div class="device-status" style="color:var(--ui-acc)">62%</div>
               </div>
             </div>
@@ -565,15 +565,15 @@ canvas{display:block}
 <!-- Scene 12: AIアシスタント(RAG) -->
     <section class="scene" id="s12">
       <div class="eyebrow fade-item">テナント管理者 — AIアシスタント</div>
-      <div class="scene-title fade-item">社内データに答えるRAGアシスタント</div>
+      <div class="scene-title fade-item">確認フロー付きのAI操作代行</div>
       <div class="scene-body">
         <div class="chat-panel fade-item" style="max-width:560px;margin:0 auto">
           <div class="chat-hdr"><span>🤖</span><span>IoTAir-X アシスタント</span></div>
           <div class="chat-body">
-            <div class="chat-bubble user">先月アラートが一番多かったデバイスは？</div>
-            <div class="chat-bubble bot"><span class="typed" data-full="sensor-012 です。しきい値超えが14件発生しています。デバイスグループ「大阪工場」に属しています。"></span><span class="caret"></span></div>
+            <div class="chat-bubble user">大阪工場のデバイスが高温になったらSlackに通知したい</div>
+            <div class="chat-bubble bot"><span class="typed" data-full="デバイスグループ「大阪工場」を対象に、温度 &gt; 40℃ が5分継続した場合にSlackへ通知するアラートルールを作成します。"></span><span class="caret"></span></div>
             <div class="chat-confirm">
-              <span>このデバイスのプロビジョニングトークンを再発行しますか？</span>
+              <span>このアラートルールを作成しますか？</span>
               <button>実行する</button>
             </div>
           </div>
@@ -838,13 +838,46 @@ function staggerFadeIn(sceneSel,stepMs=90,startDelay=60){
   return ()=>timers.forEach(clearTimeout);
 }
 
+// 数値を0から data-target までイーズアウトでカウントアップさせる(.count-up / .bill-total 共通)
+function countUpAll(sceneSel,delay=500,dur=1400){
+  const els=document.querySelectorAll(sceneSel+' .count-up, '+sceneSel+' .bill-total');
+  const timers=[];
+  els.forEach(el=>{
+    el.textContent='0';
+    const target=parseInt(el.dataset.target||'0',10);
+    const t1=setTimeout(()=>{
+      const t0=performance.now();
+      function frame(ts){
+        const p=Math.min(1,(ts-t0)/dur);
+        el.textContent=Math.round(target*(1-Math.pow(1-p,3))).toLocaleString();
+        if(p<1)requestAnimationFrame(frame);
+      }
+      requestAnimationFrame(frame);
+    },delay);
+    timers.push(t1);
+  });
+  return ()=>timers.forEach(clearTimeout);
+}
+
+// バー・進捗の幅を0から data-target% まで伸ばす(.tenant-bar / .ota-progress 共通)
+function growBars(sceneSel,delay=700){
+  const els=document.querySelectorAll(sceneSel+' .tenant-bar, '+sceneSel+' .ota-progress');
+  const timers=[];
+  els.forEach(el=>{
+    el.style.width='0';
+    const t=setTimeout(()=>{el.style.width=(el.dataset.target||'0')+'%';},delay);
+    timers.push(t);
+  });
+  return ()=>timers.forEach(clearTimeout);
+}
+
 // Scene 2-8: 見出し・スクリーンショットの段階的フェードイン(ズームは#s0 .screen-body imgのCSSで常時適用)
 ANIMS[2]=()=>staggerFadeIn('#s2');
 ANIMS[3]=()=>staggerFadeIn('#s3');
-ANIMS[4]=()=>staggerFadeIn('#s4');
-ANIMS[5]=()=>staggerFadeIn('#s5');
+ANIMS[4]=()=>{const c1=staggerFadeIn('#s4');const c2=countUpAll('#s4');return()=>{c1();c2();};};
+ANIMS[5]=()=>{const c1=staggerFadeIn('#s5');const c2=growBars('#s5');return()=>{c1();c2();};};
 ANIMS[6]=()=>staggerFadeIn('#s6');
-ANIMS[7]=()=>staggerFadeIn('#s7');
+ANIMS[7]=()=>{const c1=staggerFadeIn('#s7');const c2=growBars('#s7');return()=>{c1();c2();};};
 ANIMS[8]=()=>staggerFadeIn('#s8');
 
 // Scene 9: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
@@ -867,25 +900,8 @@ ANIMS[9]=()=>{
   return ()=>{cleanup1();timers.forEach(clearTimeout);};
 };
 
-// Scene 10: 利用量ベース課金 — 請求額・ステータスのカウントアップ
-ANIMS[10]=()=>{
-  const cleanup1=staggerFadeIn('#s10');
-  const el=document.querySelector('#s10 .bill-total');
-  const timers=[];
-  if(el){
-    const target=parseInt(el.dataset.target||'0',10);
-    const t0=performance.now();
-    const dur=1400;
-    function frame(ts){
-      const p=Math.min(1,(ts-t0)/dur);
-      el.textContent=Math.round(target*(1-Math.pow(1-p,3))).toLocaleString();
-      if(p<1)requestAnimationFrame(frame);
-    }
-    const t1=setTimeout(()=>requestAnimationFrame(frame),500);
-    timers.push(t1);
-  }
-  return ()=>{cleanup1();timers.forEach(clearTimeout);};
-};
+// Scene 10: 利用量ベース課金 — 請求額のカウントアップ
+ANIMS[10]=()=>{const c1=staggerFadeIn('#s10');const c2=countUpAll('#s10');return()=>{c1();c2();};};
 
 // Scene 11: デバイスグループ管理 — カードを順に表示
 ANIMS[11]=()=>staggerFadeIn('#s11',120);
