@@ -807,11 +807,19 @@
                     <template x-for="line in simLines" :key="line.imsi">
                       <tr>
                         <td class="px-4 py-3 font-mono text-xs" x-text="line.imsi"></td>
-                        <td class="px-4 py-3 text-xs text-gray-500" x-text="line.type"></td>
+                        <td class="px-4 py-3 text-xs text-gray-500" x-text="simModuleTypeLabel(line.moduleType)"></td>
                         <td class="px-4 py-3">
-                          <span class="text-xs px-2 py-0.5 rounded font-medium"
-                                :class="simStatusBadgeClass(line.status)"
-                                x-text="simStatusLabel(line.status)"></span>
+                          <select x-show="canEdit" :value="line.status" :disabled="line.status === 'terminated'"
+                                  @change="changeSimLineStatus(line, $event.target.value)"
+                                  class="text-xs border border-gray-300 rounded px-1.5 py-1 disabled:bg-gray-50"
+                                  :class="simStatusBadgeClass(line.status)">
+                            <option :value="line.status" x-text="simStatusLabel(line.status)" selected></option>
+                            <template x-for="s in simStatusOptions.filter(s => s !== line.status)" :key="s">
+                              <option :value="s" x-text="simStatusLabel(s)"></option>
+                            </template>
+                          </select>
+                          <span x-show="!canEdit" class="text-xs px-2 py-0.5 rounded font-medium"
+                                :class="simStatusBadgeClass(line.status)" x-text="simStatusLabel(line.status)"></span>
                         </td>
                         <td class="px-4 py-3">
                           <span class="text-xs px-2 py-0.5 rounded font-medium"
@@ -835,18 +843,6 @@
                                   class="text-amber-600 hover:text-amber-800 text-xs">紐づける</button>
                         </td>
                         <td class="px-4 py-3 text-right space-x-2">
-                          <template x-if="canEdit && line.status !== 'terminated'">
-                            <span>
-                              <button x-show="line.status !== 'active'" @click="activateSimLine(line)"
-                                      class="text-green-600 hover:text-green-800 text-xs">有効化</button>
-                              <button x-show="line.status === 'active'" @click="deactivateSimLine(line)"
-                                      class="text-gray-500 hover:text-gray-700 text-xs">停止</button>
-                              <button x-show="line.status !== 'standby'" @click="setSimLineToStandby(line)"
-                                      class="text-amber-600 hover:text-amber-800 text-xs">利用開始待ちに変更</button>
-                              <button x-show="line.status !== 'suspended'" @click="suspendSimLine(line)"
-                                      class="text-red-500 hover:text-red-700 text-xs">利用中断</button>
-                            </span>
-                          </template>
                           <button x-show="canEdit && line.bound_device_id" @click="unbindSimLine(line)"
                                   class="text-red-500 hover:text-red-700 text-xs">紐づけ解除</button>
                         </td>
@@ -1806,6 +1802,14 @@ function portalApp() {
       suspended: { label: '利用中断中', class: 'bg-red-100 text-red-700' },
       terminated: { label: '解約済み', class: 'bg-gray-200 text-gray-400' },
     },
+    // API経由で遷移先として選べるのはこの4つ(ready/terminatedは遷移先にできない: readyは初回のみ、
+    // terminatedは解約でAPI未対応・不可逆)
+    simStatusOptions: ['active', 'inactive', 'standby', 'suspended'],
+    simModuleTypeMeta: {
+      mini: '標準 (2FF)', micro: 'マイクロ (3FF)', nano: 'ナノ (4FF)', trio: '3 in 1',
+      embedded: 'Embedded (MFF2)', virtual: 'バーチャルSIM', integrated: 'Embedded (iSIM)',
+      profilePackage: 'Profile Package (eSIM)',
+    },
     simBindModalOpen: false,
     simBindTarget: null,
     simBindDeviceId: '',
@@ -2435,18 +2439,6 @@ function portalApp() {
         this.simLinesLoading = false;
       }
     },
-    async activateSimLine(line) {
-      try {
-        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/activate`);
-        Object.assign(line, updated);
-      } catch (e) { this.error = e.message; }
-    },
-    async deactivateSimLine(line) {
-      try {
-        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/deactivate`);
-        Object.assign(line, updated);
-      } catch (e) { this.error = e.message; }
-    },
     async changeSimSpeedClass(line, speedClass) {
       try {
         const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/speed-class`, { speed_class: speedClass });
@@ -2459,15 +2451,19 @@ function portalApp() {
     simStatusBadgeClass(status) {
       return (this.simStatusMeta[status] && this.simStatusMeta[status].class) || 'bg-gray-100 text-gray-500';
     },
-    async suspendSimLine(line) {
-      try {
-        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/suspend`);
-        Object.assign(line, updated);
-      } catch (e) { this.error = e.message; }
+    simModuleTypeLabel(moduleType) {
+      return this.simModuleTypeMeta[moduleType] || moduleType;
     },
-    async setSimLineToStandby(line) {
+    async changeSimLineStatus(line, targetStatus) {
+      if (targetStatus === line.status) return;
+      const actions = {
+        active: 'activate', inactive: 'deactivate',
+        standby: 'set-to-standby', suspended: 'suspend',
+      };
+      const action = actions[targetStatus];
+      if (!action) return;
       try {
-        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/set-to-standby`);
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/${action}`);
         Object.assign(line, updated);
       } catch (e) { this.error = e.message; }
     },
