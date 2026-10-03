@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTT
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
-from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
+from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema, ensure_sim_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
 from app.services.billing import (
     InvalidUnitPriceError,
@@ -203,6 +203,8 @@ def delete_device(device_id: str, payload: dict = Depends(_require_admin_or_oper
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
         device_name = row.device_name or device_id
+        ensure_sim_tables_to_tenant_schema(tenant_id)
+        conn.execute(text(f'DELETE FROM "{schema}".sim_bindings WHERE device_id = :did'), {"did": device_id})
         conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
         conn.commit()
     log_audit("tenant", payload["sub"], payload["email"], "delete_device",
