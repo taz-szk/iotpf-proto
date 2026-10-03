@@ -87,3 +87,25 @@ def test_portal_delete_device_also_removes_its_sim_binding():
     conn = engine_mock.connect.return_value.__enter__.return_value
     sql_statements = [str(c.args[0]) for c in conn.execute.call_args_list]
     assert any("sim_bindings" in s and "DELETE" in s for s in sql_statements)
+
+
+def test_list_devices_includes_bound_sim_imsi():
+    """テナントポータル: list_devices が sim_imsi を返すことを検証"""
+    jwt = create_access_token({"sub": "u1", "email": "a@acme.com", "type": "tenant", "role": "viewer", "tenant_id": _TENANT})
+    with patch("app.routers.tenant_portal.engine") as mock_engine, \
+         patch("app.routers.tenant_portal.ensure_sim_tables_to_tenant_schema"), \
+         TestClient(app) as client:
+        conn = MagicMock()
+        conn.__enter__ = lambda s: conn
+        conn.__exit__ = MagicMock(return_value=False)
+        row = MagicMock(
+            id="d1", device_id="dev-001", device_name="センサー01", connection_status="online",
+            last_seen_at=None, fw_version=None, cert_not_after=None, created_at=None,
+            group_id=None, sim_imsi="440100000001"
+        )
+        conn.execute.return_value.fetchall.return_value = [row]
+        mock_engine.connect.return_value = conn
+
+        resp = client.get("/tenant-portal/me/devices", cookies={"iot_token": jwt})
+    assert resp.status_code == 200
+    assert resp.json()[0]["sim_imsi"] == "440100000001"

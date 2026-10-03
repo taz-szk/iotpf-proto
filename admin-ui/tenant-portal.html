@@ -386,6 +386,7 @@
                         <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">グループ</th>
                         <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">証明書期限</th>
                         <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日時</th>
+                        <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">SIM</th>
                         <th class="px-4 py-3"></th>
                       </tr>
                     </thead>
@@ -415,6 +416,11 @@
                           <td class="px-4 py-3" :class="certClass(d.cert_not_after)"
                               x-text="d.cert_not_after ? new Date(d.cert_not_after).toLocaleDateString('ja-JP') : '-'"></td>
                           <td class="px-4 py-3 text-gray-400" x-text="d.created_at ? new Date(d.created_at).toLocaleDateString('ja-JP') : '-'"></td>
+                          <td class="px-4 py-3">
+                            <button x-show="d.sim_imsi" @click="activeTab = 'sim'; simFilter.tag_value = ''; $nextTick(() => reloadSimLines())"
+                                    class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-700">📶 紐づけ済み</button>
+                            <span x-show="!d.sim_imsi" class="text-xs text-gray-300">-</span>
+                          </td>
                           <td class="px-4 py-3 text-right">
                             <button x-show="canEdit" @click="deleteDevice(d.device_id)"
                                     class="text-red-500 hover:text-red-700 text-xs">削除</button>
