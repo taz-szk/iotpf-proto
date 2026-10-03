@@ -4,6 +4,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.database import engine, ensure_sim_tables_to_tenant_schema
+from app.services.soracom_client import get_subscriber, list_subscribers
+from app.services.soracom_credentials import get_credentials
 
 
 class DeviceNotFoundError(Exception):
@@ -20,6 +22,26 @@ class DeviceAlreadyBoundError(Exception):
 
 class BindingNotFoundError(Exception):
     pass
+
+
+class SoracomNotConfiguredError(Exception):
+    pass
+
+
+def _get_credentials_or_raise(tenant_id: str) -> dict:
+    creds = get_credentials(tenant_id)
+    if creds is None:
+        raise SoracomNotConfiguredError(tenant_id)
+    return creds
+
+
+def _attach_binding(tenant_id: str, items: list[dict]) -> list[dict]:
+    bindings = get_bindings_by_imsi(tenant_id, [i["imsi"] for i in items])
+    for item in items:
+        b = bindings.get(item["imsi"])
+        item["bound_device_id"] = b["device_id"] if b else None
+        item["bound_device_name"] = b["device_name"] if b else None
+    return items
 
 
 def _schema(tenant_id: str) -> str:
@@ -85,3 +107,30 @@ def get_bindings_by_imsi(tenant_id: str, imsis: list[str]) -> dict[str, dict]:
             {"imsis": imsis},
         ).fetchall()
     return {r.imsi: {"device_id": r.device_id, "device_name": r.device_name or r.device_id} for r in rows}
+
+
+def list_lines(
+    tenant_id: str, *, status: str | None = None, speed_class: str | None = None,
+    tag_name: str | None = None, tag_value: str | None = None, bound: bool | None = None,
+    cursor: str | None = None, limit: int = 20,
+) -> dict:
+    creds = _get_credentials_or_raise(tenant_id)
+    items, next_cursor = list_subscribers(
+        tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"],
+        status_filter=status, speed_class_filter=speed_class,
+        tag_name=tag_name, tag_value=tag_value, limit=limit, last_evaluated_key=cursor,
+    )
+    items = _attach_binding(tenant_id, items)
+    if bound is True:
+        items = [i for i in items if i["bound_device_id"] is not None]
+    elif bound is False:
+        items = [i for i in items if i["bound_device_id"] is None]
+    return {"items": items, "next_cursor": next_cursor}
+
+
+def get_line(tenant_id: str, imsi: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    item = get_subscriber(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi)
+    if item is None:
+        return None
+    return _attach_binding(tenant_id, [item])[0]

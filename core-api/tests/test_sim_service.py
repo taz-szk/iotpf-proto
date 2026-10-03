@@ -117,3 +117,66 @@ def test_bind_line_device_id_containing_imsi_substring():
         mock_engine.begin.return_value = conn
         with pytest.raises(DeviceAlreadyBoundError):
             bind_line(TENANT_ID, "440100000099", "sensor-imsi-999")
+
+
+from app.services.sim_service import SoracomNotConfiguredError, get_line, list_lines
+
+CREDS = {"coverage": "jp", "auth_key_id": "keyId-x", "auth_key": "secret-x"}
+
+
+def test_list_lines_raises_when_not_configured():
+    with patch("app.services.sim_service.get_credentials", return_value=None):
+        with pytest.raises(SoracomNotConfiguredError):
+            list_lines(TENANT_ID)
+
+
+def test_list_lines_merges_binding_info_and_passes_the_cursor_through():
+    subscribers = [{"imsi": "440100000001", "iccid": "8981...01", "status": "active", "speedClass": "s1.standard"},
+                   {"imsi": "440100000002", "iccid": "8981...02", "status": "inactive", "speedClass": "s1.standard"}]
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.list_subscribers", return_value=(subscribers, "next-key")) as mock_list, \
+         patch("app.services.sim_service.get_bindings_by_imsi",
+               return_value={"440100000001": {"device_id": "dev-001", "device_name": "センサー01"}}):
+        result = list_lines(TENANT_ID, cursor="prev-key", limit=2)
+
+    assert mock_list.call_args.kwargs["last_evaluated_key"] == "prev-key"
+    assert mock_list.call_args.kwargs["limit"] == 2
+    assert result["next_cursor"] == "next-key"
+    assert result["items"][0]["bound_device_id"] == "dev-001"
+    assert result["items"][0]["bound_device_name"] == "センサー01"
+    assert result["items"][1]["bound_device_id"] is None
+
+
+def test_list_lines_bound_filter_true_keeps_only_bound_items():
+    subscribers = [{"imsi": "440100000001", "status": "active"}, {"imsi": "440100000002", "status": "active"}]
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.list_subscribers", return_value=(subscribers, None)), \
+         patch("app.services.sim_service.get_bindings_by_imsi",
+               return_value={"440100000001": {"device_id": "dev-001", "device_name": "dev-001"}}):
+        result = list_lines(TENANT_ID, bound=True)
+    assert [i["imsi"] for i in result["items"]] == ["440100000001"]
+
+
+def test_list_lines_bound_filter_false_keeps_only_unbound_items():
+    subscribers = [{"imsi": "440100000001", "status": "active"}, {"imsi": "440100000002", "status": "active"}]
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.list_subscribers", return_value=(subscribers, None)), \
+         patch("app.services.sim_service.get_bindings_by_imsi",
+               return_value={"440100000001": {"device_id": "dev-001", "device_name": "dev-001"}}):
+        result = list_lines(TENANT_ID, bound=False)
+    assert [i["imsi"] for i in result["items"]] == ["440100000002"]
+
+
+def test_get_line_returns_none_when_subscriber_not_found():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.get_subscriber", return_value=None):
+        assert get_line(TENANT_ID, "000000") is None
+
+
+def test_get_line_merges_binding_info():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.get_subscriber", return_value={"imsi": "440100000001", "status": "active"}), \
+         patch("app.services.sim_service.get_bindings_by_imsi",
+               return_value={"440100000001": {"device_id": "dev-001", "device_name": "センサー01"}}):
+        line = get_line(TENANT_ID, "440100000001")
+    assert line["bound_device_id"] == "dev-001"
