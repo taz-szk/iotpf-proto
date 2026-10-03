@@ -2,7 +2,7 @@
 紐づけはadmin/operatorに許可する。"""
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, HTTPException, Path, status as http_status
 from pydantic import BaseModel, Field
 
 from app.services.audit import log_audit
@@ -20,13 +20,19 @@ from app.services.sim_service import (
     set_speed_class,
     unbind_line,
 )
-from app.services.soracom_client import SoracomApiError, verify_credentials
+from app.services.soracom_client import SoracomApiError, SoracomAuthError, verify_credentials
 from app.services.soracom_credentials import delete_credentials, get_credentials_summary, save_credentials
 from app.services.tenant_session import require_tenant_session
 
 router = APIRouter(prefix="/tenant-portal/me/sim", tags=["tenant-sim"])
 
 _require_tenant = require_tenant_session
+
+# IMSIは14〜15桁の数字のみ(SORACOMの実際のIMSI形式)。FastAPI/Starletteの既定の{imsi}パス変換は
+# デコード済みの?・#・%2Fなどをそのまま受け取ってしまい、httpx/上流SORACOM API呼び出し時に
+# クエリ文字列・フラグメント・エンコード済みスラッシュとして再解釈されうる(パス/クエリ改変の恐れ)。
+# ここで桁数の数字のみに制約し、サービス層・SORACOM呼び出しに届く前に422で弾く。
+_IMSI_PATH = Path(..., pattern=r"^\d{14,15}$")
 
 
 def _require_admin(payload: dict = Depends(_require_tenant)) -> dict:
@@ -98,12 +104,12 @@ def list_lines_endpoint(
 
 
 @router.get("/lines/{imsi}")
-def get_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_operator)):
+def get_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
     try:
         line = get_line(payload["tenant_id"], imsi)
     except SoracomNotConfiguredError:
         _not_configured_as_400()
-    except SoracomApiError as e:
+    except (SoracomAuthError, SoracomApiError) as e:
         raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
     if line is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
@@ -111,12 +117,12 @@ def get_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_opera
 
 
 @router.post("/lines/{imsi}/activate")
-def activate_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_operator)):
+def activate_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
     try:
         line = activate_line(payload["tenant_id"], imsi)
     except SoracomNotConfiguredError:
         _not_configured_as_400()
-    except SoracomApiError as e:
+    except (SoracomAuthError, SoracomApiError) as e:
         raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
     if line is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
@@ -126,12 +132,12 @@ def activate_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_
 
 
 @router.post("/lines/{imsi}/deactivate")
-def deactivate_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_operator)):
+def deactivate_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
     try:
         line = deactivate_line(payload["tenant_id"], imsi)
     except SoracomNotConfiguredError:
         _not_configured_as_400()
-    except SoracomApiError as e:
+    except (SoracomAuthError, SoracomApiError) as e:
         raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
     if line is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
@@ -145,12 +151,14 @@ class SpeedClassUpdate(BaseModel):
 
 
 @router.post("/lines/{imsi}/speed-class")
-def set_speed_class_endpoint(imsi: str, body: SpeedClassUpdate, payload: dict = Depends(_require_admin_or_operator)):
+def set_speed_class_endpoint(
+    body: SpeedClassUpdate, imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator),
+):
     try:
         line = set_speed_class(payload["tenant_id"], imsi, body.speed_class)
     except SoracomNotConfiguredError:
         _not_configured_as_400()
-    except SoracomApiError as e:
+    except (SoracomAuthError, SoracomApiError) as e:
         raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
     if line is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
@@ -166,7 +174,9 @@ class BindRequest(BaseModel):
 
 
 @router.post("/lines/{imsi}/bind", status_code=http_status.HTTP_204_NO_CONTENT)
-def bind_line_endpoint(imsi: str, body: BindRequest, payload: dict = Depends(_require_admin_or_operator)):
+def bind_line_endpoint(
+    body: BindRequest, imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator),
+):
     tenant_id = payload["tenant_id"]
     try:
         bind_line(tenant_id, imsi, body.device_id, iccid=body.iccid)
@@ -180,7 +190,7 @@ def bind_line_endpoint(imsi: str, body: BindRequest, payload: dict = Depends(_re
 
 
 @router.delete("/lines/{imsi}/bind", status_code=http_status.HTTP_204_NO_CONTENT)
-def unbind_line_endpoint(imsi: str, payload: dict = Depends(_require_admin_or_operator)):
+def unbind_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
     tenant_id = payload["tenant_id"]
     try:
         unbind_line(tenant_id, imsi)

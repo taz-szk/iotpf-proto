@@ -14,7 +14,7 @@ from app.services.sim_service import (
     SimAlreadyBoundError,
     SoracomNotConfiguredError,
 )
-from app.services.soracom_client import SoracomApiError
+from app.services.soracom_client import SoracomApiError, SoracomAuthError
 
 client = TestClient(app)
 
@@ -85,7 +85,7 @@ def test_delete_credentials_as_admin():
 
 
 def test_list_lines_passes_filters_and_returns_the_result():
-    result = {"items": [{"imsi": "440100000001", "bound_device_id": None}], "next_cursor": "next-key"}
+    result = {"items": [{"imsi": "440100000000001", "bound_device_id": None}], "next_cursor": "next-key"}
     with patch("app.routers.tenant_sim.list_lines", return_value=result) as mock_list:
         resp = client.get(
             "/tenant-portal/me/sim/lines?status=active&speed_class=s1.standard&bound=false&cursor=prev&limit=5",
@@ -107,37 +107,37 @@ def test_list_lines_without_credentials_returns_400():
 
 def test_get_line_not_found_returns_404():
     with patch("app.routers.tenant_sim.get_line", return_value=None):
-        resp = client.get("/tenant-portal/me/sim/lines/000000", cookies=_cookies())
+        resp = client.get("/tenant-portal/me/sim/lines/440100000000002", cookies=_cookies())
     assert resp.status_code == 404
 
 
 def test_activate_requires_operator_or_admin():
-    resp = client.post("/tenant-portal/me/sim/lines/440100000001/activate", cookies=_cookies("viewer"))
+    resp = client.post("/tenant-portal/me/sim/lines/440100000000001/activate", cookies=_cookies("viewer"))
     assert resp.status_code == 403
 
 
 def test_activate_logs_the_audit_entry_without_the_imsi_leaking_credentials():
-    with patch("app.routers.tenant_sim.activate_line", return_value={"imsi": "440100000001", "status": "active"}), \
+    with patch("app.routers.tenant_sim.activate_line", return_value={"imsi": "440100000000001", "status": "active"}), \
          patch("app.routers.tenant_sim.log_audit") as mock_audit:
-        resp = client.post("/tenant-portal/me/sim/lines/440100000001/activate", cookies=_cookies("operator"))
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/activate", cookies=_cookies("operator"))
     assert resp.status_code == 200
     assert mock_audit.call_args.args[3] == "activate_sim"
-    assert mock_audit.call_args.kwargs["resource_id"] == "440100000001"
+    assert mock_audit.call_args.kwargs["resource_id"] == "440100000000001"
 
 
 def test_deactivate_not_found_returns_404():
     with patch("app.routers.tenant_sim.deactivate_line", return_value=None):
-        resp = client.post("/tenant-portal/me/sim/lines/000000/deactivate", cookies=_cookies("operator"))
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000002/deactivate", cookies=_cookies("operator"))
     assert resp.status_code == 404
 
 
 def test_speed_class_update():
     with patch("app.routers.tenant_sim.set_speed_class", return_value={"speedClass": "s1.fast"}) as mock_set, \
          patch("app.routers.tenant_sim.log_audit"):
-        resp = client.post("/tenant-portal/me/sim/lines/440100000001/speed-class",
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/speed-class",
                            cookies=_cookies("operator"), json={"speed_class": "s1.fast"})
     assert resp.status_code == 200
-    mock_set.assert_called_once_with(TENANT_ID, "440100000001", "s1.fast")
+    mock_set.assert_called_once_with(TENANT_ID, "440100000000001", "s1.fast")
 
 
 def test_list_lines_soracom_failure_returns_502():
@@ -147,9 +147,43 @@ def test_list_lines_soracom_failure_returns_502():
     assert "一時的な問題" in resp.json()["detail"]
 
 
+def test_get_line_soracom_auth_failure_returns_502_not_500():
+    with patch("app.routers.tenant_sim.get_line", side_effect=SoracomAuthError("SORACOMの認証情報が正しくありません")):
+        resp = client.get("/tenant-portal/me/sim/lines/440100000000001", cookies=_cookies())
+    assert resp.status_code == 502
+    assert "認証情報が正しくありません" in resp.json()["detail"]
+
+
+@pytest.mark.parametrize("path_suffix", ["", "/activate", "/deactivate"])
+def test_lines_endpoints_soracom_auth_failure_returns_502(path_suffix):
+    target = "get_line" if path_suffix == "" else ("activate_line" if path_suffix == "/activate" else "deactivate_line")
+    with patch(f"app.routers.tenant_sim.{target}", side_effect=SoracomAuthError("再認証に失敗しました")):
+        if path_suffix == "":
+            resp = client.get("/tenant-portal/me/sim/lines/440100000000001", cookies=_cookies())
+        else:
+            resp = client.post(f"/tenant-portal/me/sim/lines/440100000000001{path_suffix}", cookies=_cookies("operator"))
+    assert resp.status_code == 502
+
+
+def test_imsi_path_parameter_rejects_non_numeric_value():
+    resp = client.get("/tenant-portal/me/sim/lines/not-an-imsi", cookies=_cookies())
+    assert resp.status_code == 422
+
+
+def test_imsi_path_parameter_rejects_query_like_value():
+    # '?'/'#' などを含む値はパスコンバータでデコードされてしまうため、数字のみに制約して弾く
+    resp = client.get("/tenant-portal/me/sim/lines/123%3Fextra", cookies=_cookies())
+    assert resp.status_code == 422
+
+
+def test_imsi_path_parameter_rejects_wrong_length():
+    resp = client.post("/tenant-portal/me/sim/lines/123/activate", cookies=_cookies("operator"))
+    assert resp.status_code == 422
+
+
 def test_bind_device_not_found_returns_404():
     with patch("app.routers.tenant_sim.bind_line", side_effect=DeviceNotFoundError("dev-001")):
-        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/bind",
                            cookies=_cookies("operator"), json={"device_id": "dev-001"})
     assert resp.status_code == 404
 
@@ -157,7 +191,7 @@ def test_bind_device_not_found_returns_404():
 @pytest.mark.parametrize("error", [SimAlreadyBoundError("x"), DeviceAlreadyBoundError("x")])
 def test_bind_conflicts_return_409(error):
     with patch("app.routers.tenant_sim.bind_line", side_effect=error):
-        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/bind",
                            cookies=_cookies("operator"), json={"device_id": "dev-001"})
     assert resp.status_code == 409
 
@@ -165,22 +199,22 @@ def test_bind_conflicts_return_409(error):
 def test_bind_success_logs_audit():
     with patch("app.routers.tenant_sim.bind_line") as mock_bind, \
          patch("app.routers.tenant_sim.log_audit") as mock_audit:
-        resp = client.post("/tenant-portal/me/sim/lines/440100000001/bind",
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/bind",
                            cookies=_cookies("operator"), json={"device_id": "dev-001", "iccid": "8981...01"})
     assert resp.status_code == 204
-    mock_bind.assert_called_once_with(TENANT_ID, "440100000001", "dev-001", iccid="8981...01")
+    mock_bind.assert_called_once_with(TENANT_ID, "440100000000001", "dev-001", iccid="8981...01")
     assert mock_audit.call_args.args[3] == "bind_sim"
 
 
 def test_unbind_not_found_returns_404():
     with patch("app.routers.tenant_sim.unbind_line", side_effect=BindingNotFoundError("x")):
-        resp = client.delete("/tenant-portal/me/sim/lines/440100000001/bind", cookies=_cookies("operator"))
+        resp = client.delete("/tenant-portal/me/sim/lines/440100000000001/bind", cookies=_cookies("operator"))
     assert resp.status_code == 404
 
 
 def test_unbind_success():
     with patch("app.routers.tenant_sim.unbind_line") as mock_unbind, \
          patch("app.routers.tenant_sim.log_audit"):
-        resp = client.delete("/tenant-portal/me/sim/lines/440100000001/bind", cookies=_cookies("operator"))
+        resp = client.delete("/tenant-portal/me/sim/lines/440100000000001/bind", cookies=_cookies("operator"))
     assert resp.status_code == 204
-    mock_unbind.assert_called_once_with(TENANT_ID, "440100000001")
+    mock_unbind.assert_called_once_with(TENANT_ID, "440100000000001")

@@ -852,7 +852,7 @@
                 <p class="text-xs text-gray-500 mb-2">IMSI: <span class="font-mono" x-text="simBindTarget && simBindTarget.imsi"></span></p>
                 <select x-model="simBindDeviceId" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3">
                   <option value="">デバイスを選択</option>
-                  <template x-for="d in devices" :key="d.id">
+                  <template x-for="d in devices.filter(d => !d.sim_imsi)" :key="d.id">
                     <option :value="d.device_id" x-text="d.device_name || d.device_id"></option>
                   </template>
                 </select>
@@ -1940,7 +1940,7 @@ function portalApp() {
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
       if (tab === 'stats-billing') await this.loadStatsAndBilling();
-      if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); }
+      if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); await this.loadDevices(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
@@ -2431,6 +2431,7 @@ function portalApp() {
       this.simBindDeviceId = '';
       this.simBindError = '';
       this.simBindModalOpen = true;
+      if (!this.devices.length) this.loadDevices();
     },
     async submitSimBind() {
       this.simBindError = '';
