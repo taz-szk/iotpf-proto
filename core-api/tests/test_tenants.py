@@ -2,8 +2,13 @@ from unittest.mock import patch, MagicMock
 import uuid
 
 from app.models.public import Tenant
+from app.services.auth import create_access_token
 
 TENANT_ID = "11111111-1111-1111-1111-111111111111"
+
+
+def _platform_token():
+    return create_access_token({"sub": "admin-id", "email": "admin@iot.local", "type": "platform"})
 
 def test_create_tenant_success(client):
     mock_influx_org = {"id": "influx-org-id-001", "name": "test-tenant"}
@@ -299,3 +304,28 @@ def test_put_tenant_data_retention_rejects_below_minimum(client):
             headers={"Authorization": "Bearer dummy"},
         )
     assert resp.status_code == 422
+
+
+def test_get_tenant_includes_soracom_configured_flag(client):
+    tenant = MagicMock()
+    tenant.id = uuid.UUID(TENANT_ID)
+    tenant.name = "Test Tenant"
+    tenant.slug = "test-tenant"
+    tenant.status = "active"
+    tenant.created_at = MagicMock()
+    tenant.grafana_org_id = "42"
+
+    with patch("app.routers.tenants.SessionLocal") as mock_session, \
+         patch("app.routers.tenants.is_configured", return_value=True), \
+         patch("app.routers.tenants.verify_token", return_value={"sub": "admin-id", "email": "a@b.com", "type": "platform"}):
+        mock_db = MagicMock()
+        mock_db.__enter__ = lambda s: mock_db
+        mock_db.__exit__ = MagicMock(return_value=False)
+        mock_db.query.return_value.filter.return_value.first.return_value = tenant
+        mock_session.return_value = mock_db
+        resp = client.get(
+            f"/tenants/{TENANT_ID}",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["soracom_configured"] is True
