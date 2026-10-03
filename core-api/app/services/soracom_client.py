@@ -148,6 +148,16 @@ def deactivate_subscriber(tenant_id: str, coverage: str, auth_key_id: str, auth_
     return None if resp.status_code == 404 else resp.json()
 
 
+def suspend_subscriber(tenant_id: str, coverage: str, auth_key_id: str, auth_key: str, imsi: str) -> dict | None:
+    resp = _request("POST", tenant_id, coverage, auth_key_id, auth_key, f"/subscribers/{imsi}/suspend")
+    return None if resp.status_code == 404 else resp.json()
+
+
+def set_to_standby_subscriber(tenant_id: str, coverage: str, auth_key_id: str, auth_key: str, imsi: str) -> dict | None:
+    resp = _request("POST", tenant_id, coverage, auth_key_id, auth_key, f"/subscribers/{imsi}/set_to_standby")
+    return None if resp.status_code == 404 else resp.json()
+
+
 def update_speed_class(
     tenant_id: str, coverage: str, auth_key_id: str, auth_key: str, imsi: str, speed_class: str,
 ) -> dict | None:

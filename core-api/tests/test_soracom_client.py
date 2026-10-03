@@ -13,6 +13,8 @@ from app.services.soracom_client import (
     verify_credentials,
     activate_subscriber,
     deactivate_subscriber,
+    suspend_subscriber,
+    set_to_standby_subscriber,
     update_speed_class,
 )
 
@@ -133,6 +135,36 @@ def test_deactivate_subscriber_returns_none_on_404():
     not_found = MagicMock(status_code=404, text="")
     with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), not_found]):
         assert deactivate_subscriber(*ARGS, "0000") is None
+
+
+def test_suspend_subscriber_posts_to_the_suspend_path():
+    updated = MagicMock(status_code=200)
+    updated.json.return_value = {"imsi": "4401", "status": "suspended"}
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), updated]) as mock_post:
+        result = suspend_subscriber(*ARGS, "4401")
+    assert mock_post.call_args.args[0] == "https://api.soracom.io/v1/subscribers/4401/suspend"
+    assert result == {"imsi": "4401", "status": "suspended"}
+
+
+def test_suspend_subscriber_returns_none_on_404():
+    not_found = MagicMock(status_code=404, text="")
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), not_found]):
+        assert suspend_subscriber(*ARGS, "0000") is None
+
+
+def test_set_to_standby_subscriber_posts_to_the_set_to_standby_path():
+    updated = MagicMock(status_code=200)
+    updated.json.return_value = {"imsi": "4401", "status": "standby"}
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), updated]) as mock_post:
+        result = set_to_standby_subscriber(*ARGS, "4401")
+    assert mock_post.call_args.args[0] == "https://api.soracom.io/v1/subscribers/4401/set_to_standby"
+    assert result == {"imsi": "4401", "status": "standby"}
+
+
+def test_set_to_standby_subscriber_returns_none_on_404():
+    not_found = MagicMock(status_code=404, text="")
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), not_found]):
+        assert set_to_standby_subscriber(*ARGS, "0000") is None
 
 
 def test_update_speed_class_sends_the_speed_class_body():

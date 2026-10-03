@@ -182,7 +182,7 @@ def test_get_line_merges_binding_info():
     assert line["bound_device_id"] == "dev-001"
 
 
-from app.services.sim_service import activate_line, deactivate_line, set_speed_class
+from app.services.sim_service import activate_line, deactivate_line, set_speed_class, suspend_line, set_to_standby_line
 
 
 def test_activate_line_requires_configured_credentials():
@@ -211,3 +211,25 @@ def test_set_speed_class_delegates_with_the_value():
         result = set_speed_class(TENANT_ID, "440100000001", "s1.fast")
     mock_upd.assert_called_once_with(TENANT_ID, "jp", "keyId-x", "secret-x", "440100000001", "s1.fast")
     assert result["speedClass"] == "s1.fast"
+
+
+def test_suspend_line_requires_configured_credentials():
+    with patch("app.services.sim_service.get_credentials", return_value=None):
+        with pytest.raises(SoracomNotConfiguredError):
+            suspend_line(TENANT_ID, "440100000001")
+
+
+def test_suspend_line_delegates_to_the_client_with_credentials():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.suspend_subscriber", return_value={"imsi": "440100000001", "status": "suspended"}) as mock_sus:
+        result = suspend_line(TENANT_ID, "440100000001")
+    mock_sus.assert_called_once_with(TENANT_ID, "jp", "keyId-x", "secret-x", "440100000001")
+    assert result["status"] == "suspended"
+
+
+def test_set_to_standby_line_delegates_to_the_client_with_credentials():
+    with patch("app.services.sim_service.get_credentials", return_value=CREDS), \
+         patch("app.services.sim_service.set_to_standby_subscriber", return_value={"imsi": "440100000001", "status": "standby"}) as mock_sb:
+        result = set_to_standby_line(TENANT_ID, "440100000001")
+    mock_sb.assert_called_once_with(TENANT_ID, "jp", "keyId-x", "secret-x", "440100000001")
+    assert result["status"] == "standby"

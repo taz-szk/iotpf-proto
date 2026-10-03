@@ -5,7 +5,8 @@ from sqlalchemy.exc import IntegrityError
 
 from app.database import engine, ensure_sim_tables_to_tenant_schema
 from app.services.soracom_client import (activate_subscriber, deactivate_subscriber, get_subscriber,
-                                          list_subscribers, update_speed_class)
+                                          list_subscribers, set_to_standby_subscriber, suspend_subscriber,
+                                          update_speed_class)
 from app.services.soracom_credentials import get_credentials
 
 
@@ -150,3 +151,13 @@ def deactivate_line(tenant_id: str, imsi: str) -> dict | None:
 def set_speed_class(tenant_id: str, imsi: str, speed_class: str) -> dict | None:
     creds = _get_credentials_or_raise(tenant_id)
     return update_speed_class(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi, speed_class)
+
+
+def suspend_line(tenant_id: str, imsi: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    return suspend_subscriber(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi)
+
+
+def set_to_standby_line(tenant_id: str, imsi: str) -> dict | None:
+    creds = _get_credentials_or_raise(tenant_id)
+    return set_to_standby_subscriber(tenant_id, creds["coverage"], creds["auth_key_id"], creds["auth_key"], imsi)
