@@ -18,6 +18,8 @@ from app.services.sim_service import (
     get_line,
     list_lines,
     set_speed_class,
+    set_to_standby_line,
+    suspend_line,
     unbind_line,
 )
 from app.services.soracom_client import SoracomApiError, SoracomAuthError, verify_credentials
@@ -142,6 +144,36 @@ def deactivate_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_re
     if line is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
     log_audit("tenant", payload["sub"], payload["email"], "deactivate_sim",
+              tenant_id=payload["tenant_id"], resource_type="sim", resource_id=imsi)
+    return line
+
+
+@router.post("/lines/{imsi}/suspend")
+def suspend_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
+    try:
+        line = suspend_line(payload["tenant_id"], imsi)
+    except SoracomNotConfiguredError:
+        _not_configured_as_400()
+    except (SoracomAuthError, SoracomApiError) as e:
+        raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    if line is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
+    log_audit("tenant", payload["sub"], payload["email"], "suspend_sim",
+              tenant_id=payload["tenant_id"], resource_type="sim", resource_id=imsi)
+    return line
+
+
+@router.post("/lines/{imsi}/set-to-standby")
+def set_to_standby_line_endpoint(imsi: str = _IMSI_PATH, payload: dict = Depends(_require_admin_or_operator)):
+    try:
+        line = set_to_standby_line(payload["tenant_id"], imsi)
+    except SoracomNotConfiguredError:
+        _not_configured_as_400()
+    except (SoracomAuthError, SoracomApiError) as e:
+        raise HTTPException(status_code=http_status.HTTP_502_BAD_GATEWAY, detail=str(e))
+    if line is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Line not found")
+    log_audit("tenant", payload["sub"], payload["email"], "set_sim_to_standby",
               tenant_id=payload["tenant_id"], resource_type="sim", resource_id=imsi)
     return line
 

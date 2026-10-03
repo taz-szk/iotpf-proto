@@ -771,9 +771,12 @@
               <div class="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
                 <select x-model="simFilter.status" @change="reloadSimLines()" class="text-xs border border-gray-300 rounded px-2 py-1">
                   <option value="">状態: すべて</option>
-                  <option value="active">active</option>
-                  <option value="inactive">inactive</option>
-                  <option value="ready">ready</option>
+                  <option value="ready">準備完了 (ready)</option>
+                  <option value="active">使用中 (active)</option>
+                  <option value="inactive">休止中 (inactive)</option>
+                  <option value="standby">利用開始待ち (standby)</option>
+                  <option value="suspended">利用中断中 (suspended)</option>
+                  <option value="terminated">解約済み (terminated)</option>
                 </select>
                 <select x-model="simFilter.bound" @change="reloadSimLines()" class="text-xs border border-gray-300 rounded px-2 py-1">
                   <option value="">紐づけ: すべて</option>
@@ -792,7 +795,9 @@
                   <thead class="bg-gray-50 border-b border-gray-100">
                     <tr>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">IMSI</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">種別</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">セッション</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">速度クラス</th>
                       <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">紐づけデバイス</th>
                       <th class="px-4 py-3"></th>
@@ -802,10 +807,16 @@
                     <template x-for="line in simLines" :key="line.imsi">
                       <tr>
                         <td class="px-4 py-3 font-mono text-xs" x-text="line.imsi"></td>
+                        <td class="px-4 py-3 text-xs text-gray-500" x-text="line.type"></td>
                         <td class="px-4 py-3">
                           <span class="text-xs px-2 py-0.5 rounded font-medium"
-                                :class="line.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
-                                x-text="line.status"></span>
+                                :class="simStatusBadgeClass(line.status)"
+                                x-text="simStatusLabel(line.status)"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                          <span class="text-xs px-2 py-0.5 rounded font-medium"
+                                :class="line.sessionStatus && line.sessionStatus.online ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-400'"
+                                x-text="line.sessionStatus && line.sessionStatus.online ? 'オンライン' : 'オフライン'"></span>
                         </td>
                         <td class="px-4 py-3">
                           <select x-show="canEdit" :value="line.speedClass"
@@ -824,10 +835,18 @@
                                   class="text-amber-600 hover:text-amber-800 text-xs">紐づける</button>
                         </td>
                         <td class="px-4 py-3 text-right space-x-2">
-                          <button x-show="canEdit && line.status !== 'active'" @click="activateSimLine(line)"
-                                  class="text-green-600 hover:text-green-800 text-xs">有効化</button>
-                          <button x-show="canEdit && line.status === 'active'" @click="deactivateSimLine(line)"
-                                  class="text-gray-500 hover:text-gray-700 text-xs">停止</button>
+                          <template x-if="canEdit && line.status !== 'terminated'">
+                            <span>
+                              <button x-show="line.status !== 'active'" @click="activateSimLine(line)"
+                                      class="text-green-600 hover:text-green-800 text-xs">有効化</button>
+                              <button x-show="line.status === 'active'" @click="deactivateSimLine(line)"
+                                      class="text-gray-500 hover:text-gray-700 text-xs">停止</button>
+                              <button x-show="line.status !== 'standby'" @click="setSimLineToStandby(line)"
+                                      class="text-amber-600 hover:text-amber-800 text-xs">利用開始待ちに変更</button>
+                              <button x-show="line.status !== 'suspended'" @click="suspendSimLine(line)"
+                                      class="text-red-500 hover:text-red-700 text-xs">利用中断</button>
+                            </span>
+                          </template>
                           <button x-show="canEdit && line.bound_device_id" @click="unbindSimLine(line)"
                                   class="text-red-500 hover:text-red-700 text-xs">紐づけ解除</button>
                         </td>
@@ -1779,6 +1798,14 @@ function portalApp() {
     simNextCursor: null,
     simFilter: { status: '', bound: '', tag_value: '' },
     simSpeedClassOptions: ['s1.minimum', 's1.slow', 's1.standard', 's1.fast', 's1.4xfast', 's1.8xfast'],
+    simStatusMeta: {
+      ready: { label: '準備完了', class: 'bg-blue-100 text-blue-700' },
+      active: { label: '使用中', class: 'bg-green-100 text-green-700' },
+      inactive: { label: '休止中', class: 'bg-gray-100 text-gray-500' },
+      standby: { label: '利用開始待ち', class: 'bg-amber-100 text-amber-700' },
+      suspended: { label: '利用中断中', class: 'bg-red-100 text-red-700' },
+      terminated: { label: '解約済み', class: 'bg-gray-200 text-gray-400' },
+    },
     simBindModalOpen: false,
     simBindTarget: null,
     simBindDeviceId: '',
@@ -2423,6 +2450,24 @@ function portalApp() {
     async changeSimSpeedClass(line, speedClass) {
       try {
         const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/speed-class`, { speed_class: speedClass });
+        Object.assign(line, updated);
+      } catch (e) { this.error = e.message; }
+    },
+    simStatusLabel(status) {
+      return (this.simStatusMeta[status] && this.simStatusMeta[status].label) || status;
+    },
+    simStatusBadgeClass(status) {
+      return (this.simStatusMeta[status] && this.simStatusMeta[status].class) || 'bg-gray-100 text-gray-500';
+    },
+    async suspendSimLine(line) {
+      try {
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/suspend`);
+        Object.assign(line, updated);
+      } catch (e) { this.error = e.message; }
+    },
+    async setSimLineToStandby(line) {
+      try {
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/set-to-standby`);
         Object.assign(line, updated);
       } catch (e) { this.error = e.message; }
     },

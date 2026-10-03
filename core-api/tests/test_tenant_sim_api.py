@@ -131,6 +131,58 @@ def test_deactivate_not_found_returns_404():
     assert resp.status_code == 404
 
 
+def test_suspend_requires_operator_or_admin():
+    resp = client.post("/tenant-portal/me/sim/lines/440100000000001/suspend", cookies=_cookies("viewer"))
+    assert resp.status_code == 403
+
+
+def test_suspend_logs_the_audit_entry():
+    with patch("app.routers.tenant_sim.suspend_line", return_value={"imsi": "440100000000001", "status": "suspended"}), \
+         patch("app.routers.tenant_sim.log_audit") as mock_audit:
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/suspend", cookies=_cookies("operator"))
+    assert resp.status_code == 200
+    assert mock_audit.call_args.args[3] == "suspend_sim"
+    assert mock_audit.call_args.kwargs["resource_id"] == "440100000000001"
+
+
+def test_suspend_not_found_returns_404():
+    with patch("app.routers.tenant_sim.suspend_line", return_value=None):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000002/suspend", cookies=_cookies("operator"))
+    assert resp.status_code == 404
+
+
+def test_suspend_without_credentials_returns_400():
+    with patch("app.routers.tenant_sim.suspend_line", side_effect=SoracomNotConfiguredError(TENANT_ID)):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/suspend", cookies=_cookies("operator"))
+    assert resp.status_code == 400
+
+
+def test_suspend_auth_failure_returns_502_not_500():
+    with patch("app.routers.tenant_sim.suspend_line", side_effect=SoracomAuthError("SORACOMの認証情報が正しくありません")):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/suspend", cookies=_cookies("operator"))
+    assert resp.status_code == 502
+
+
+def test_set_to_standby_requires_operator_or_admin():
+    resp = client.post("/tenant-portal/me/sim/lines/440100000000001/set-to-standby", cookies=_cookies("viewer"))
+    assert resp.status_code == 403
+
+
+def test_set_to_standby_logs_the_audit_entry():
+    with patch("app.routers.tenant_sim.set_to_standby_line", return_value={"imsi": "440100000000001", "status": "standby"}), \
+         patch("app.routers.tenant_sim.log_audit") as mock_audit:
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000001/set-to-standby", cookies=_cookies("operator"))
+    assert resp.status_code == 200
+    assert mock_audit.call_args.args[3] == "set_sim_to_standby"
+    assert mock_audit.call_args.kwargs["resource_id"] == "440100000000001"
+
+
+def test_set_to_standby_not_found_returns_404():
+    with patch("app.routers.tenant_sim.set_to_standby_line", return_value=None):
+        resp = client.post("/tenant-portal/me/sim/lines/440100000000002/set-to-standby", cookies=_cookies("operator"))
+    assert resp.status_code == 404
+
+
 def test_speed_class_update():
     with patch("app.routers.tenant_sim.set_speed_class", return_value={"speedClass": "s1.fast"}) as mock_set, \
          patch("app.routers.tenant_sim.log_audit"):
