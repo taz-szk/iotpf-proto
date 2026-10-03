@@ -141,6 +141,25 @@ def add_firmware_tables_to_tenant_schema(tenant_id: str) -> None:
         '''))
         conn.commit()
 
+def ensure_sim_tables_to_tenant_schema(tenant_id: str) -> None:
+    """SIMとデバイスの紐づけを保持するsim_bindingsテーブルを作成する（べき等）。
+    firmware_releasesと同様、呼び出しごとにCREATE TABLE IF NOT EXISTSする遅延作成。"""
+    import re
+    if not re.fullmatch(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', tenant_id.lower()):
+        raise ValueError(f"Invalid tenant_id: {tenant_id}")
+    schema = f"tenant_{tenant_id.replace('-', '_')}"
+    with engine.connect() as conn:
+        conn.execute(text(f'''
+            CREATE TABLE IF NOT EXISTS "{schema}".sim_bindings (
+                id        UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+                imsi      VARCHAR(32) NOT NULL UNIQUE,
+                iccid     VARCHAR(32),
+                device_id VARCHAR(255) NOT NULL UNIQUE,
+                bound_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
+        '''))
+        conn.commit()
+
 
 def migrate_add_grafana_org_id() -> None:
     with engine.connect() as conn:
@@ -421,6 +440,23 @@ def migrate_create_revoked_tokens() -> None:
         conn.execute(text("""
             CREATE INDEX IF NOT EXISTS ix_revoked_tokens_expires
                 ON revoked_tokens(expires_at)
+        """))
+        conn.commit()
+
+
+def migrate_create_tenant_soracom_credentials() -> None:
+    """テナント単位のSORACOM認証情報を保持するテーブルを作成する（べき等）。
+    Auth Key本体(auth_key_enc)はapp.services.cryptoで暗号化した値を保存する。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS tenant_soracom_credentials (
+                tenant_id    UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+                coverage     VARCHAR(10) NOT NULL DEFAULT 'jp' CHECK (coverage IN ('jp', 'g')),
+                auth_key_id  VARCHAR(255) NOT NULL,
+                auth_key_enc TEXT NOT NULL,
+                created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            )
         """))
         conn.commit()
 

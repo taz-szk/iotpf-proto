@@ -199,6 +199,7 @@ services:
       STEP_CA_ROOT: "/certs/ca/root_ca.crt"
       STEP_CA_PROVISIONER: "iot-platform"
       STEP_CA_PASSWORD: "${STEP_CA_PASSWORD}"
+      SECRETS_ENCRYPTION_KEY: "${SECRETS_ENCRYPTION_KEY}"
       JWT_SECRET: "${JWT_SECRET}"
       MINIO_ENDPOINT: "http://minio:9000"
       MINIO_ACCESS_KEY: "${MINIO_ROOT_USER}"

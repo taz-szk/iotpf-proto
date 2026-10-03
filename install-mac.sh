@@ -83,6 +83,7 @@ else
     JWT_SECRET=$(rand_hex 32)
     WEBHOOK_SECRET=$(rand_hex 32)
     PLATFORM_ADMIN_PASS=$(rand_hex 16)
+    SECRETS_ENCRYPTION_KEY=$(rand_hex 32)
 
     sed \
         -e "s|changeme_strong_password|${PG_PASS}|" \
@@ -92,6 +93,7 @@ else
         -e "s|EMQX_NODE_COOKIE=.*|EMQX_NODE_COOKIE=${EMQX_COOKIE}|" \
         -e "s|MINIO_ROOT_PASSWORD=.*|MINIO_ROOT_PASSWORD=${MINIO_PASS}|" \
         -e "s|STEP_CA_PASSWORD=.*|STEP_CA_PASSWORD=${STEP_PASS}|" \
+        -e "s|SECRETS_ENCRYPTION_KEY=.*|SECRETS_ENCRYPTION_KEY=${SECRETS_ENCRYPTION_KEY}|" \
         -e "s|GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=${GRAFANA_PASS}|" \
         -e "s|JWT_SECRET=.*|JWT_SECRET=${JWT_SECRET}|" \
         -e "s|EMQX_WEBHOOK_SECRET=.*|EMQX_WEBHOOK_SECRET=${WEBHOOK_SECRET}|" \

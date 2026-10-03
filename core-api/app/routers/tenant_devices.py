@@ -6,7 +6,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from sqlalchemy import text
 from app.models.public import Tenant
-from app.database import SessionLocal, engine
+from app.database import SessionLocal, engine, ensure_sim_tables_to_tenant_schema
 from app.services.auth import verify_token
 from app.services.grafana import retire_device_in_influxdb
 from app.services.device_access import forget_device
@@ -66,6 +66,8 @@ def delete_tenant_device(tenant_id: UUID, device_id: str, payload: dict = Depend
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
         device_name = row.device_name or device_id
+        ensure_sim_tables_to_tenant_schema(tenant_id_str)
+        conn.execute(text(f'DELETE FROM "{schema}".sim_bindings WHERE device_id = :did'), {"did": device_id})
         conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
         conn.commit()
     log_audit("platform", payload["sub"], payload["email"], "delete_device",

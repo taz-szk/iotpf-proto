@@ -51,6 +51,11 @@
           </div>
           <span class="text-sm text-gray-400 shrink-0" x-text="'ID: ' + tenant?.id"></span>
         </div>
+        <div class="flex items-center gap-3 mb-3">
+          <span class="text-xs px-2 py-0.5 rounded font-medium"
+                :class="tenant.soracom_configured ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                x-text="tenant.soracom_configured ? 'SORACOM連携済み' : 'SORACOM未連携'"></span>
+        </div>
         <div class="flex items-center gap-4 text-sm text-gray-500">
           <span x-text="'スラッグ: ' + tenant?.slug"></span>
           <span x-show="tenant?.grafana_org_id">

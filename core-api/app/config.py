@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     # emqx_events.py trivially bypassable (hmac.compare_digest(b"", b"") == True).
     emqx_webhook_secret: str = Field(min_length=32)
     platform_domain: str = "localhost"
+    # Fernet暗号化の鍵として使う秘密文字列(SORACOM認証情報等の暗号化に使う)。32文字以上。
+    # 任意の文字列でよい(内部でSHA-256に通してFernet鍵へ変換するため、base64形式である必要はない)。
+    secrets_encryption_key: str = Field(min_length=32)
     # /docs・/redoc・/openapi.json(全エンドポイントの一覧)を公開するか。開発時のみ ENABLE_API_DOCS=true。
     enable_api_docs: bool = False
     grafana_session_expire_hours: int = 24

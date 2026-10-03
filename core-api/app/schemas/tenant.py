@@ -17,3 +17,6 @@ class TenantOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+class TenantDetailOut(TenantOut):
+    soracom_configured: bool = False

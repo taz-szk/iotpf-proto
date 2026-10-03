@@ -8,6 +8,7 @@ os.environ.setdefault("GRAFANA_ADMIN_PASSWORD", "test_grafana_password")
 os.environ.setdefault("MINIO_SECRET_KEY", "test_minio_secret")
 os.environ.setdefault("EMQX_API_PASSWORD", "test_emqx_password")
 os.environ.setdefault("EMQX_WEBHOOK_SECRET", "test_webhook_secret_for_unit_tests")
+os.environ.setdefault("SECRETS_ENCRYPTION_KEY", "test_secrets_encryption_key_at_least_32_chars")
 
 from fastapi.testclient import TestClient
 import app.main as app_main

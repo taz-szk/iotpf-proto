@@ -904,6 +904,65 @@ docker compose ps postgres   <span class="cmt"># イメージがpgvector/pgvecto
   </div>
 </section>
 
+<!-- ==================== 既存環境のアップグレード（SORACOM回線管理機能導入前→導入後） ==================== -->
+<section class="common-section" id="upgrade-soracom-sim">
+  <h2>⬆️ 既存環境をSORACOM回線管理機能導入後のバージョンにアップグレードする手順</h2>
+  <div class="hero-sub" style="margin-bottom:24px">
+    SORACOM回線管理機能の追加により、core-apiは<code>SECRETS_ENCRYPTION_KEY</code>（SORACOM認証情報等の
+    暗号化に使う鍵）が<strong>必須の環境変数</strong>になりました。既存稼働中の環境（<code>.env</code>が
+    既に存在する環境）はインストーラが<code>.env</code>の生成をスキップするため、この鍵は自動では追加
+    されません。<code>git pull</code>して<code>docker compose up -d --build</code>する前に、必ず以下の
+    手順を実施してください。
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title"><code>.env</code>に<code>SECRETS_ENCRYPTION_KEY</code>を追加する</div>
+        <div class="step-desc">
+          <code>core-api</code>は起動時にこの環境変数が32文字以上でなければ起動を拒否する
+          （SORACOM機能に限らず、core-api全体が起動しなくなる）。
+        </div>
+        <div class="callout callout-warn">
+          <span class="callout-icon">⚠️</span>
+          <span class="callout-body"><strong>これを忘れて<code>docker compose up -d --build</code>すると
+          core-apiがクラッシュループする。</strong>必ず先に<code>.env</code>へ追記してから反映すること。</span>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>cd ~/iotpf-proto
+echo "SECRETS_ENCRYPTION_KEY=$(openssl rand -hex 32)" &gt;&gt; .env
+grep SECRETS_ENCRYPTION_KEY .env</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title">反映する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>git pull origin main
+docker compose up -d --build
+docker compose logs --tail=30 core-api   <span class="cmt"># 起動エラーが出ていないか確認</span></pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="callout callout-warn" style="margin-top:16px">
+    <span class="callout-icon">⚠️</span>
+    <span class="callout-body"><strong><code>SECRETS_ENCRYPTION_KEY</code>を後から再生成・変更したり、
+    紛失したりすると、テナントがテナントポータルに保存済みのSORACOM認証情報（Auth Key）は暗号化されたまま
+    復号できなくなり、永久に読み出せなくなる。</strong>その場合、該当テナントの管理者にSORACOM連携設定
+    画面からAuth Keyを再入力してもらう必要がある。この鍵は生成後に<code>.env</code>から変更しないこと。</span>
+  </div>
+</section>
+
 <!-- ==================== コンテナ脆弱性スキャン（Slack通知）の導入 ==================== -->
 <section class="common-section" id="vuln-scan">
   <h2>🔒 コンテナ脆弱性スキャン（Slack通知）の導入手順</h2>

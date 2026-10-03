@@ -169,6 +169,7 @@ generate_env() {
   local grafana_pass; grafana_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local influx_pass;  influx_pass=$(openssl rand -base64 18 | tr -d '+/=')
   local admin_pass;   admin_pass=$(openssl rand -base64 18 | tr -d '+/=')
+  local secrets_key;  secrets_key=$(openssl rand -hex 32)
 
   cat > "$PROJECT_DIR/.env" <<EOF
 # install-ubuntu.sh が $(date -u +"%Y-%m-%dT%H:%M:%SZ") に自動生成
@@ -207,6 +208,7 @@ GRAFANA_ADMIN_PASSWORD=${grafana_pass}
 
 # Core API
 JWT_SECRET=${jwt_secret}
+SECRETS_ENCRYPTION_KEY=${secrets_key}
 
 # Platform Admin (initial login at /iotairx-console/)
 PLATFORM_ADMIN_EMAIL=admin@${PLATFORM_DOMAIN}

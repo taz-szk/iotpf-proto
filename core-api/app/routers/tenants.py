@@ -1,11 +1,12 @@
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status, Depends, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
-from app.schemas.tenant import TenantCreate, TenantOut
+from app.schemas.tenant import TenantCreate, TenantOut, TenantDetailOut
 from app.models.public import Tenant
 from app.database import SessionLocal
 from app.services.auth import verify_token
 from app.services.tenant import setup_tenant, teardown_tenant, create_influxdb_bucket
+from app.services.soracom_credentials import is_configured
 from app.services.billing import (
     InvalidUnitPriceError,
     get_default_retention_days,
@@ -60,13 +61,13 @@ def list_tenants(_: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         return db.query(Tenant).order_by(Tenant.name).all()
 
-@router.get("/{tenant_id}", response_model=TenantOut)
+@router.get("/{tenant_id}", response_model=TenantDetailOut)
 def get_tenant(tenant_id: str, _: dict = Depends(_require_platform)):
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-        return tenant
+        return TenantDetailOut(**TenantOut.model_validate(tenant).model_dump(), soracom_configured=is_configured(tenant_id))
 
 
 class TenantUpdate(BaseModel):

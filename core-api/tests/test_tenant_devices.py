@@ -109,3 +109,33 @@ def test_list_tenant_devices_tenant_token_rejected():
         headers={"Authorization": f"Bearer {token}"},
     )
     assert resp.status_code == 401
+
+def test_delete_device_also_removes_its_sim_binding():
+    """デバイス削除時に sim_bindings の紐づけも削除することを検証"""
+    TENANT_ID = "33333333-3333-3333-3333-333333333333"
+    tenant = _make_tenant(TENANT_ID)
+    tenant.influxdb_org_id = None
+
+    conn = MagicMock()
+    conn.execute.return_value.fetchone.return_value = MagicMock(device_name="センサー01")
+
+    def mock_engine_factory(device_name="Device 001"):
+        engine = MagicMock()
+        engine.connect.return_value.__enter__.return_value = conn
+        return engine
+
+    with patch("app.routers.tenant_devices._get_active_tenant", return_value=tenant), \
+         patch("app.routers.tenant_devices.engine", mock_engine_factory()), \
+         patch("app.routers.tenant_devices.forget_device"), \
+         patch("app.routers.tenant_devices.kick_client"), \
+         patch("app.routers.tenant_devices.retire_device_in_influxdb"), \
+         patch("app.routers.tenant_devices.log_audit"), \
+         patch("app.routers.tenant_devices.ensure_sim_tables_to_tenant_schema") as mock_ensure:
+        resp = client.delete(
+            f"/tenants/{TENANT_ID}/devices/dev-001",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 204
+    mock_ensure.assert_called_once_with(TENANT_ID)
+    sql_statements = [str(c.args[0]) for c in conn.execute.call_args_list]
+    assert any("sim_bindings" in s and "DELETE" in s for s in sql_statements)

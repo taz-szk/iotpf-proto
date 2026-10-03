@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTT
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
-from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema
+from app.database import SessionLocal, engine, add_firmware_tables_to_tenant_schema, ensure_sim_tables_to_tenant_schema
 from app.models.public import AuditLog, ProvisioningToken, Tenant
 from app.services.billing import (
     InvalidUnitPriceError,
@@ -167,12 +167,14 @@ def toggle_public_access(body: PublicAccessBody, payload: dict = Depends(_requir
 def list_devices(payload: dict = Depends(_require_tenant)):
     tenant_id = payload["tenant_id"]
     schema = _schema(tenant_id)
+    ensure_sim_tables_to_tenant_schema(tenant_id)
     with engine.connect() as conn:
         rows = conn.execute(text(f'''
-            SELECT id, device_id, device_name, connection_status, last_seen_at,
-                   fw_version, cert_not_after, created_at, group_id
-            FROM "{schema}".devices
-            ORDER BY created_at DESC
+            SELECT d.id, d.device_id, d.device_name, d.connection_status, d.last_seen_at,
+                   d.fw_version, d.cert_not_after, d.created_at, d.group_id, b.imsi AS sim_imsi
+            FROM "{schema}".devices d
+            LEFT JOIN "{schema}".sim_bindings b ON b.device_id = d.device_id
+            ORDER BY d.created_at DESC
             LIMIT 1000
         ''')).fetchall()
     return [
@@ -186,6 +188,7 @@ def list_devices(payload: dict = Depends(_require_tenant)):
             "cert_not_after": r.cert_not_after.isoformat() if r.cert_not_after else None,
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "group_id": str(r.group_id) if r.group_id else None,
+            "sim_imsi": r.sim_imsi,
         }
         for r in rows
     ]
@@ -203,6 +206,8 @@ def delete_device(device_id: str, payload: dict = Depends(_require_admin_or_oper
         if not row:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
         device_name = row.device_name or device_id
+        ensure_sim_tables_to_tenant_schema(tenant_id)
+        conn.execute(text(f'DELETE FROM "{schema}".sim_bindings WHERE device_id = :did'), {"did": device_id})
         conn.execute(text(f'DELETE FROM "{schema}".devices WHERE device_id = :did'), {"did": device_id})
         conn.commit()
     log_audit("tenant", payload["sub"], payload["email"], "delete_device",
