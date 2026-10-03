@@ -11,6 +11,9 @@ from app.services.soracom_client import (
     get_subscriber,
     list_subscribers,
     verify_credentials,
+    activate_subscriber,
+    deactivate_subscriber,
+    update_speed_class,
 )
 
 TENANT_ID = "22222222-2222-2222-2222-222222222222"
@@ -115,3 +118,28 @@ def test_verify_credentials_true_and_false():
     forget_token(TENANT_ID)
     with patch("app.services.soracom_client.httpx.post", return_value=MagicMock(status_code=401)):
         assert verify_credentials(*ARGS) is False
+
+
+def test_activate_subscriber_posts_to_the_activate_path():
+    updated = MagicMock(status_code=200)
+    updated.json.return_value = {"imsi": "4401", "status": "active"}
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), updated]) as mock_post:
+        result = activate_subscriber(*ARGS, "4401")
+    assert mock_post.call_args.args[0] == "https://api.soracom.io/v1/subscribers/4401/activate"
+    assert result == {"imsi": "4401", "status": "active"}
+
+
+def test_deactivate_subscriber_returns_none_on_404():
+    not_found = MagicMock(status_code=404, text="")
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), not_found]):
+        assert deactivate_subscriber(*ARGS, "0000") is None
+
+
+def test_update_speed_class_sends_the_speed_class_body():
+    updated = MagicMock(status_code=200)
+    updated.json.return_value = {"imsi": "4401", "speedClass": "s1.fast"}
+    with patch("app.services.soracom_client.httpx.post", side_effect=[_auth_response(), updated]) as mock_post:
+        update_speed_class(*ARGS, "4401", "s1.fast")
+    call_args, call_kwargs = mock_post.call_args
+    assert call_args[0] == "https://api.soracom.io/v1/subscribers/4401/update_speed_class"
+    assert call_kwargs["json"] == {"speedClass": "s1.fast"}
