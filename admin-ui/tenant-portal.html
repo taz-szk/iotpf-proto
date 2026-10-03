@@ -760,6 +760,104 @@
                 </div>
               </template>
             </div>
+
+            <div class="bg-white rounded shadow-sm border border-gray-200">
+              <div class="flex items-center gap-2 p-3 border-b border-gray-100 flex-wrap">
+                <select x-model="simFilter.status" @change="reloadSimLines()" class="text-xs border border-gray-300 rounded px-2 py-1">
+                  <option value="">状態: すべて</option>
+                  <option value="active">active</option>
+                  <option value="inactive">inactive</option>
+                  <option value="ready">ready</option>
+                </select>
+                <select x-model="simFilter.bound" @change="reloadSimLines()" class="text-xs border border-gray-300 rounded px-2 py-1">
+                  <option value="">紐づけ: すべて</option>
+                  <option value="true">紐づけ済みのみ</option>
+                  <option value="false">未紐づけのみ</option>
+                </select>
+                <input type="text" x-model="simFilter.tag_value" @keydown.enter="reloadSimLines()"
+                       placeholder="タグ値で検索" class="text-xs border border-gray-300 rounded px-2 py-1">
+                <button @click="reloadSimLines()" class="text-xs text-amber-600 hover:text-amber-800">検索</button>
+              </div>
+              <div x-show="!simLinesLoading && simLines.length === 0" class="py-8 text-center text-gray-400 text-sm">
+                回線が見つかりません（SORACOM連携が未設定の場合は上の連携設定を確認してください）
+              </div>
+              <div class="overflow-x-auto">
+                <table x-show="simLines.length > 0" class="w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">IMSI</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">速度クラス</th>
+                      <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">紐づけデバイス</th>
+                      <th class="px-4 py-3"></th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="line in simLines" :key="line.imsi">
+                      <tr>
+                        <td class="px-4 py-3 font-mono text-xs" x-text="line.imsi"></td>
+                        <td class="px-4 py-3">
+                          <span class="text-xs px-2 py-0.5 rounded font-medium"
+                                :class="line.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'"
+                                x-text="line.status"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                          <select x-show="canEdit" :value="line.speedClass"
+                                  @change="changeSimSpeedClass(line, $event.target.value)"
+                                  class="text-xs border border-gray-300 rounded px-1.5 py-1">
+                            <option :value="line.speedClass" x-text="line.speedClass" selected></option>
+                            <template x-for="sc in simSpeedClassOptions" :key="sc">
+                              <option :value="sc" x-text="sc" x-show="sc !== line.speedClass"></option>
+                            </template>
+                          </select>
+                          <span x-show="!canEdit" x-text="line.speedClass"></span>
+                        </td>
+                        <td class="px-4 py-3">
+                          <span x-show="line.bound_device_id" x-text="line.bound_device_name"></span>
+                          <button x-show="canEdit && !line.bound_device_id" @click="openSimBindModal(line)"
+                                  class="text-amber-600 hover:text-amber-800 text-xs">紐づける</button>
+                        </td>
+                        <td class="px-4 py-3 text-right space-x-2">
+                          <button x-show="canEdit && line.status !== 'active'" @click="activateSimLine(line)"
+                                  class="text-green-600 hover:text-green-800 text-xs">有効化</button>
+                          <button x-show="canEdit && line.status === 'active'" @click="deactivateSimLine(line)"
+                                  class="text-gray-500 hover:text-gray-700 text-xs">停止</button>
+                          <button x-show="canEdit && line.bound_device_id" @click="unbindSimLine(line)"
+                                  class="text-red-500 hover:text-red-700 text-xs">紐づけ解除</button>
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+              <div class="p-3 text-center">
+                <button x-show="simNextCursor" @click="loadMoreSimLines()" :disabled="simLinesLoading"
+                        class="text-sm text-amber-600 hover:text-amber-800 disabled:text-amber-200">
+                  <span x-show="!simLinesLoading">さらに読み込む</span>
+                  <span x-show="simLinesLoading">読み込み中...</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- SIM紐づけモーダル -->
+            <div x-show="simBindModalOpen" class="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50 p-4">
+              <div class="bg-white rounded p-6 w-full max-w-md shadow-xl">
+                <h3 class="font-medium text-gray-800 mb-3">デバイスに紐づける</h3>
+                <p class="text-xs text-gray-500 mb-2">IMSI: <span class="font-mono" x-text="simBindTarget && simBindTarget.imsi"></span></p>
+                <select x-model="simBindDeviceId" class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm mb-3">
+                  <option value="">デバイスを選択</option>
+                  <template x-for="d in devices" :key="d.id">
+                    <option :value="d.device_id" x-text="d.device_name || d.device_id"></option>
+                  </template>
+                </select>
+                <p x-show="simBindError" class="text-xs text-red-500 mb-2" x-text="simBindError"></p>
+                <div class="flex justify-end gap-2">
+                  <button @click="simBindModalOpen = false" class="text-sm text-gray-500 px-3 py-1.5">キャンセル</button>
+                  <button @click="submitSimBind()" :disabled="!simBindDeviceId"
+                          class="bg-amber-600 disabled:bg-amber-200 text-white text-sm px-3 py-1.5 rounded">紐づける</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- ===== ファームウェア ===== -->
@@ -1670,6 +1768,15 @@ function portalApp() {
     simCredentialsSaving: false,
     simCredentialsError: '',
     simCredentialsForm: { coverage: 'jp', auth_key_id: '', auth_key: '' },
+    simLines: [],
+    simLinesLoading: false,
+    simNextCursor: null,
+    simFilter: { status: '', bound: '', tag_value: '' },
+    simSpeedClassOptions: ['s1.minimum', 's1.slow', 's1.standard', 's1.fast', 's1.4xfast', 's1.8xfast'],
+    simBindModalOpen: false,
+    simBindTarget: null,
+    simBindDeviceId: '',
+    simBindError: '',
     // ファームウェア
     firmwareList: [], uploadFile: null, fwVersion: '', fwTargetModel: '', fwDescription: '',
     uploading: false,
@@ -1827,7 +1934,7 @@ function portalApp() {
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
       if (tab === 'stats-billing') await this.loadStatsAndBilling();
-      if (tab === 'sim')      await this.loadSimCredentials();
+      if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
     },
@@ -2272,6 +2379,70 @@ function portalApp() {
       } catch (e) {
         this.error = e.message;
       }
+    },
+    async reloadSimLines() {
+      this.simLines = [];
+      this.simNextCursor = null;
+      await this.loadMoreSimLines();
+    },
+    async loadMoreSimLines() {
+      this.simLinesLoading = true;
+      try {
+        const params = new URLSearchParams();
+        if (this.simFilter.status) params.set('status', this.simFilter.status);
+        if (this.simFilter.bound) params.set('bound', this.simFilter.bound);
+        if (this.simFilter.tag_value) { params.set('tag_name', 'name'); params.set('tag_value', this.simFilter.tag_value); }
+        if (this.simNextCursor) params.set('cursor', this.simNextCursor);
+        const result = await portalFetch('GET', `/me/sim/lines?${params.toString()}`);
+        this.simLines = this.simLines.concat(result.items);
+        this.simNextCursor = result.next_cursor;
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.simLinesLoading = false;
+      }
+    },
+    async activateSimLine(line) {
+      try {
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/activate`);
+        Object.assign(line, updated);
+      } catch (e) { this.error = e.message; }
+    },
+    async deactivateSimLine(line) {
+      try {
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/deactivate`);
+        Object.assign(line, updated);
+      } catch (e) { this.error = e.message; }
+    },
+    async changeSimSpeedClass(line, speedClass) {
+      try {
+        const updated = await portalFetch('POST', `/me/sim/lines/${line.imsi}/speed-class`, { speed_class: speedClass });
+        Object.assign(line, updated);
+      } catch (e) { this.error = e.message; }
+    },
+    openSimBindModal(line) {
+      this.simBindTarget = line;
+      this.simBindDeviceId = '';
+      this.simBindError = '';
+      this.simBindModalOpen = true;
+    },
+    async submitSimBind() {
+      this.simBindError = '';
+      try {
+        await portalFetch('POST', `/me/sim/lines/${this.simBindTarget.imsi}/bind`,
+                          { device_id: this.simBindDeviceId, iccid: this.simBindTarget.iccid || null });
+        this.simBindModalOpen = false;
+        await this.reloadSimLines();
+      } catch (e) {
+        this.simBindError = e.message;
+      }
+    },
+    async unbindSimLine(line) {
+      if (!confirm('紐づけを解除しますか？')) return;
+      try {
+        await portalFetch('DELETE', `/me/sim/lines/${line.imsi}/bind`);
+        await this.reloadSimLines();
+      } catch (e) { this.error = e.message; }
     },
 
     // ----- ユーザー -----
