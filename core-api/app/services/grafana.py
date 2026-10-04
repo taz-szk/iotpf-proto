@@ -96,10 +96,13 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
 
 _FLUX_DEVICE_VAR = _flux_exclude_deleted_devices("")
 
-# テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む
-_FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices(
-    '  |> filter(fn: (r) => r.device_name =~ /${group}/)\n'
-)
+# テナントダッシュボード専用。本来は${group}参照でグループ絞り込みをしたいが、
+# device_name変数のクエリが他の変数(${group})に依存していると、Grafana側がこの
+# テンプレート変数クエリ自体を一切実行しなくなる不具合を実機で確認した(${group}を
+# 1箇所だけにしても再現、完全に依存を外すと解消)。暫定対応として依存を外し、
+# デバイス一覧は常に全件表示にする(グループ変数自体はUI上残るが絞り込みには使えない)。
+# グループ絞り込みを復活させる場合は、Grafana側の原因切り分けが別途必要。
+_FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices("")
 
 # アーカイブ(Del_接頭辞)専用のデバイス一覧変数。削除済みデバイスが増え続けると稼働中用の
 # device_name一覧が埋まって分かりにくくなるため、稼働中側からは完全に除外し、
