@@ -216,26 +216,64 @@ canvas{display:block}
 }
 .home-link{color:var(--textm);font-size:12px;font-family:'JetBrains Mono',monospace;text-decoration:none;white-space:nowrap;padding:4px 8px;border-radius:5px;border:1px solid transparent;transition:color .15s,border-color .15s;min-width:52px}
 .home-link:hover{color:var(--accent);border-color:var(--border)}
+
+/* ── 機能タグ(ヘッダー) ── */
+#s0 .pills .pill{opacity:0;transform:translateY(8px)}
+#s0 .pills.show .pill{opacity:1;transform:none;transition:opacity .4s ease,transform .4s ease}
+#s0 .pills.show .pill:nth-child(1){transition-delay:0s}
+#s0 .pills.show .pill:nth-child(2){transition-delay:.08s}
+#s0 .pills.show .pill:nth-child(3){transition-delay:.16s}
+#s0 .pills.show .pill:nth-child(4){transition-delay:.24s}
+#s0 .pills.show .pill:nth-child(5){transition-delay:.32s}
+#s0 .pills.show .pill:nth-child(6){transition-delay:.40s}
+#s0 .pills.show .pill:nth-child(7){transition-delay:.48s}
+/* タイプライター風タグライン */
+#s0 .tagline{display:inline-block;overflow:hidden;white-space:nowrap;width:0;border-right:2px solid transparent;vertical-align:bottom}
+#s0.active .tagline{animation:typewriter 1.3s steps(18,end) .7s forwards,caretBlinkTag .8s step-end 12 2s}
+@keyframes typewriter{from{width:0}to{width:16.5em}}
+@keyframes caretBlinkTag{50%{border-right-color:var(--accent)}}
+
+/* ── 機能グリッド概観(テナント/PF管理者) ── */
+.ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex:1;align-content:center}
+.ov-card{background:var(--surf);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:7px;transition:border-color .3s ease,box-shadow .3s ease,transform .3s ease}
+.ov-card .ov-icon{width:30px;height:30px;border-radius:7px;background:var(--accentlo);display:flex;align-items:center;justify-content:center;font-size:1rem;border:1px solid rgba(46,126,245,.25);transition:background .3s ease,color .3s ease}
+.ov-card .ov-name{font-size:.84rem;font-weight:600;color:var(--text)}
+.ov-card .ov-desc{font-size:.68rem;color:var(--textm);line-height:1.45}
+.ov-card.hl{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent),0 10px 28px rgba(46,126,245,.28);transform:translateY(-4px)}
+.ov-card.hl .ov-icon{background:var(--accent);color:#fff}
+/* PF管理者版はシアン系・落ち着いたトーンでハイライト */
+#ov-pf .ov-card.hl{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan),0 10px 28px rgba(0,198,255,.22)}
+#ov-pf .ov-card.hl .ov-icon{background:var(--cyan);color:#06222C}
+
+/* ── ステップフロー(統合機能: チャット→確認→実行) ── */
+.step-flow{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.step-flow .step{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--textm);transition:color .3s ease}
+.step-flow .step.active{color:var(--accent);font-weight:600}
+.step-flow .step.done{color:var(--green)}
+.step-num{width:19px;height:19px;border-radius:50%;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:.64rem;flex-shrink:0;transition:background .3s ease,color .3s ease}
+.step-flow .step.active .step-num{background:var(--accent);color:#fff}
+.step-flow .step.done .step-num{background:var(--green);color:#fff}
+.step-line{width:26px;height:1px;background:var(--border)}
 </style>
 
 <div id="player">
   <div id="scenes">
 
-    <!-- Scene 0: Title -->
     <section class="scene" id="s0">
       <div class="logo fade-item">IoTAir-<span class="x">X</span></div>
       <div class="tagline fade-item">マルチテナント型 IoT デバイス管理基盤</div>
       <div class="pills fade-item">
         <span class="pill pill-blue">MQTT mTLS接続</span>
-        <span class="pill pill-cyan">リアルタイム可視化</span>
+        <span class="pill pill-cyan">リアルタイムダッシュボード</span>
         <span class="pill pill-green">OTA配信</span>
         <span class="pill pill-orange">アラート通知</span>
-        <span class="pill pill-blue">マルチテナント</span>
+        <span class="pill pill-blue">利用量課金</span>
+        <span class="pill pill-cyan">MFA</span>
+        <span class="pill pill-green">RAGアシスタント</span>
       </div>
       <div class="caption fade-item">工場・病院・インフラ — あらゆる現場に対応するオープンなIoTプラットフォーム</div>
     </section>
 
-    <!-- Scene 1: Architecture -->
     <section class="scene" id="s1">
       <div class="eyebrow">システム構成</div>
       <div class="scene-title">エンドツーエンド アーキテクチャ</div>
@@ -244,35 +282,52 @@ canvas{display:block}
       </div>
     </section>
 
-        <!-- Scene 2: Tenant management -->
     <section class="scene" id="s2">
-      <div class="eyebrow fade-item">プラットフォーム管理者</div>
-      <div class="scene-title fade-item">テナント一覧管理</div>
+      <div class="eyebrow fade-item">テナント管理者機能</div>
+      <div class="scene-title fade-item">現場を支える8つの管理機能</div>
+      <div class="scene-body">
+        <div class="ov-grid" id="ov-tenant-grid">
+          <div class="ov-card fade-item"><div class="ov-icon">🎫</div><div class="ov-name">ブートストラップトークン管理</div><div class="ov-desc">複数トークン発行、台数上限・有効期限を設定</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🔐</div><div class="ov-name">デバイス管理</div><div class="ov-desc">トークン認証→証明書発行→登録を自動化</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">⬆️</div><div class="ov-name">OTAファームウェア更新</div><div class="ov-desc">署名付きJWT(24h)でセキュアに配信</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">📶</div><div class="ov-name">SIM(SORACOM)管理</div><div class="ov-desc">回線状態・速度クラス変更、デバイス紐づけ</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🗂️</div><div class="ov-name">グループ管理</div><div class="ov-desc">拠点・機種単位でアラート/OTA/表示を統制</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">💳</div><div class="ov-name">ビリング管理</div><div class="ov-desc">課金8項目の確認、請求書ライフサイクル閲覧</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">📊</div><div class="ov-name">ダッシュボード(内部)</div><div class="ov-desc">Grafana SSO、テナント別orgで完全分離</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🌐</div><div class="ov-name">ダッシュボード(公開)</div><div class="ov-desc">認証不要の統計API(/me/stats)で共有</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s3">
+      <div class="eyebrow fade-item">テナント管理者</div>
+      <div class="scene-title fade-item">ブートストラップトークン管理</div>
       <div class="scene-body">
         <div class="screen fade-item">
           <div class="screen-hdr">
             <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/</div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
           </div>
           <div class="screen-body">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-              <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:700;color:var(--ui-t)">テナント一覧</div>
-              <div class="fade-item ui-btn primary">+ テナント追加</div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--ui-t)">発行済みトークン</div>
+              <div class="fade-item ui-btn primary">+ トークン発行</div>
             </div>
             <table class="ui-tbl">
-              <thead><tr><th>テナント名</th><th>スラッグ</th><th>ステータス</th><th>作成日</th><th></th></tr></thead>
+              <thead><tr><th>トークン</th><th>上限台数</th><th>有効期限</th><th>状態</th></tr></thead>
               <tbody>
-                <tr class="fade-item"><td>株式会社AAA</td><td>corp-aaa</td><td><span class="ui-badge active">Active</span></td><td>2026/08/30</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
-                <tr class="fade-item"><td>株式会社Ryu</td><td>ryu-iot</td><td><span class="ui-badge active">Active</span></td><td>2026/09/11</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
-                <tr class="fade-item"><td>Suzuki Net</td><td>suzuki-net</td><td><span class="ui-badge active">Active</span></td><td>2026/09/24</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
+                <tr class="fade-item"><td>btk_7f2a91c6…</td><td>50台</td><td>2026-12-31</td><td><span class="ui-badge active">active</span></td></tr>
+                <tr class="fade-item"><td>btk_a93c0e18…</td><td>10台</td><td>2026-10-10</td><td><span class="ui-badge inactive">expired</span></td></tr>
+                <tr class="fade-item"><td>btk_11b0d4f2…</td><td>5台</td><td>無期限</td><td><span class="ui-badge warning">depleted</span></td></tr>
               </tbody>
             </table>
+            <div class="fade-item" style="margin-top:12px;font-size:.72rem;color:var(--ui-tm)">トークンは使い切り(depleted)・期限切れ(expired)になると新規デバイスを受け付けません。</div>
           </div>
         </div>
       </div>
     </section>
-    <!-- Scene 3: Provisioning -->
-    <section class="scene" id="s3">
+
+    <section class="scene" id="s4">
       <div class="eyebrow fade-item">テナント詳細 — プロビジョニング</div>
       <div class="scene-title fade-item">デバイス証明書の自動発行</div>
       <div class="scene-body">
@@ -294,9 +349,158 @@ canvas{display:block}
         </div>
       </div>
     </section>
-    <!-- Scene 4: MQTT stream -->
-    <section class="scene" id="s4">
+
+    <section class="scene" id="s5">
       <div class="eyebrow fade-item">テナント管理者</div>
+      <div class="scene-title fade-item">OTAファームウェア配信</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <table class="ui-tbl">
+              <thead><tr><th>バージョン</th><th>サイズ</th><th>アップロード日</th><th></th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>v1.4.2</td><td>42.1 MB</td><td>2026-09-20</td><td><span class="ui-btn secondary" style="padding:4px 10px">配信</span></td></tr>
+                <tr class="fade-item"><td>v1.3.0</td><td>38.8 MB</td><td>2026-07-02</td><td><span class="ui-btn secondary" style="padding:4px 10px">配信</span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="margin-top:14px;background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px;font-size:.76rem;color:var(--ui-t)">
+              配信先: デバイスグループ「<strong>大阪工場</strong>」22台
+            </div>
+            <div class="fade-item" style="margin-top:10px;font-size:.7rem;color:var(--ui-tm)">最大100MBまでMinIOに格納。ダウンロードは署名付きJWT(24時間有効)で認可し、パストラバーサルを防止します。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s6">
+      <div class="eyebrow fade-item">テナント管理者 — SORACOM連携</div>
+      <div class="scene-title fade-item">SIMステータス管理</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+              <span class="live">連携中</span>
+              <span style="font-size:.72rem;color:var(--ui-tm);font-family:'JetBrains Mono',monospace">Auth Key ****7f3a　coverage: jp</span>
+            </div>
+            <table class="ui-tbl">
+              <thead><tr><th>IMSI</th><th>種別</th><th>状態</th><th>セッション</th><th>速度クラス</th><th>紐づけデバイス</th></tr></thead>
+              <tbody>
+                <tr><td>440103812200441</td><td>nano</td><td><span class="ui-badge active sim-row-status" data-seq="active,suspended,standby,active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.fast</td><td>sensor-003</td></tr>
+                <tr><td>440103812200442</td><td>nano</td><td><span class="ui-badge active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.standard</td><td>sensor-007</td></tr>
+                <tr><td>440103812200443</td><td>virtual</td><td><span class="ui-badge standby">利用開始待ち</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.minimum</td><td>—</td></tr>
+                <tr><td>440103812200444</td><td>nano</td><td><span class="ui-badge inactive">休止中</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.standard</td><td>sensor-012</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s7">
+      <div class="eyebrow fade-item">テナント管理者</div>
+      <div class="scene-title fade-item">デバイスグループ管理</div>
+      <div class="scene-body">
+        <div class="vcol" style="flex:1">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+            <div class="group-card fade-item">
+              <div class="g-hdr"><div class="g-name">東京倉庫</div><div class="g-count">18</div></div>
+              <div style="font-size:.72rem;color:var(--textm)">温度・湿度センサー群</div>
+            </div>
+            <div class="group-card fade-item">
+              <div class="g-hdr"><div class="g-name">大阪工場</div><div class="g-count">22</div></div>
+              <div style="font-size:.72rem;color:var(--textm)">稼働監視センサー群</div>
+            </div>
+            <div class="group-card fade-item">
+              <div class="g-hdr"><div class="g-name">福岡配送センター</div><div class="g-count">8</div></div>
+              <div style="font-size:.72rem;color:var(--textm)">入出庫トラッカー</div>
+            </div>
+          </div>
+          <div class="group-card fade-item">
+            <div class="g-hdr"><div class="g-name">東京倉庫 — デバイス一覧</div><div style="font-size:.72rem;color:var(--textm);font-weight:400">18台</div></div>
+            <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
+              <div class="device-row" style="padding:8px 12px"><div class="device-name">sensor-003</div><div class="spacer"></div><span class="live">オンライン</span></div>
+              <div class="device-row" style="padding:8px 12px"><div class="device-name">sensor-007</div><div class="spacer"></div><span class="live">オンライン</span></div>
+              <div class="device-row" style="padding:8px 12px;border-bottom:none"><div class="device-name">sensor-012</div><div class="spacer"></div><span style="font-size:.72rem;color:var(--textd)">オフライン</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s8">
+      <div class="eyebrow fade-item">アラート管理</div>
+      <div class="scene-title fade-item">閾値アラートルール設定</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div class="alert-banner fade-item" style="margin-bottom:14px">
+              <div class="icon">⚠️</div>
+              <div class="body"><div class="title">高温警告 — sensor-003</div><div class="detail">温度が35℃を超えました(現在値: 37.2℃)。Slackに通知を送信しました。</div></div>
+            </div>
+            <table class="ui-tbl">
+              <thead><tr><th>ルール名</th><th>条件</th><th>通知先</th><th>有効</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>高温警告</td><td>温度 &gt; 35℃ が5分継続</td><td>メール + Slack</td><td><span class="ui-badge active">ON</span></td></tr>
+                <tr class="fade-item"><td>デバイス切断</td><td>オフライン 10分以上</td><td>Slack</td><td><span class="ui-badge active">ON</span></td></tr>
+                <tr class="fade-item"><td>湿度異常</td><td>湿度 &lt; 20% または &gt; 80%</td><td>メール</td><td><span class="ui-badge inactive">OFF</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s9">
+      <div class="eyebrow fade-item">テナント管理者 — 請求</div>
+      <div class="scene-title fade-item">利用量ベースの月次課金</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">データポイント</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">284,920</div>
+              </div>
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">デバイス数</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">48</div>
+              </div>
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">今月の請求額</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-acc)">¥<span class="bill-total" data-target="128400">0</span></div>
+              </div>
+            </div>
+            <table class="ui-tbl">
+              <thead><tr><th>請求期間</th><th>金額</th><th>状態</th></tr></thead>
+              <tbody>
+                <tr><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">draft</span></td></tr>
+                <tr><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">finalized</span></td></tr>
+                <tr><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">finalized</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s10">
+      <div class="eyebrow fade-item">テナント管理者 — ダッシュボード(内部)</div>
       <div class="scene-title fade-item">リアルタイム デバイス監視ダッシュボード</div>
       <div class="scene-body">
         <div class="screen fade-item">
@@ -335,12 +539,93 @@ canvas{display:block}
                 <tr class="fade-item"><td>sensor-012</td><td style="color:var(--ui-tm)">オフライン</td><td>13:58:40</td></tr>
               </tbody>
             </table>
+            <div class="fade-item" style="margin-top:10px;font-size:.68rem;color:var(--ui-tm)">背後ではGrafana SSO(Auth Proxy)がテナント別orgを自動選択し、グループ連動変数で絞り込み表示します。</div>
           </div>
         </div>
       </div>
     </section>
-    <!-- Scene 5: Grafana -->
-    <section class="scene" id="s5">
+
+    <section class="scene" id="s11">
+      <div class="eyebrow fade-item">テナント管理者 — ダッシュボード(公開)</div>
+      <div class="scene-title fade-item">ユーザー管理 ・ 公開ダッシュボード URL</div>
+      <div class="scene-body grid2">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--ui-t);margin-bottom:12px">ユーザー管理</div>
+            <table class="ui-tbl">
+              <thead><tr><th>メールアドレス</th><th>ロール</th><th>状態</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>admin@corp-aaa.jp</td><td>admin</td><td><span class="ui-badge active">有効</span></td></tr>
+                <tr class="fade-item"><td>ops@corp-aaa.jp</td><td>operator</td><td><span class="ui-badge active">有効</span></td></tr>
+                <tr class="fade-item"><td>viewer@corp-aaa.jp</td><td>viewer</td><td><span class="ui-badge active">有効</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--ui-t);margin-bottom:12px">公開ダッシュボード URL</div>
+            <div class="fade-item" style="background:#0D1117;border-radius:8px;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:#58A6FF;word-break:break-all;line-height:1.6">
+              https://iot.suzuki-net.org/public/d/corp-aaa-ov3k9x<br>
+              <span style="color:#8B949E">token: pub_9f3e2a…（読み取り専用・認証不要で共有可能）</span>
+            </div>
+            <div class="fade-item" style="margin-top:12px;font-size:.78rem;color:var(--ui-tm)">このURLを顧客や現場担当者と共有すると、ログイン無しで稼働状況(/me/stats)を確認できます。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s12">
+      <div class="eyebrow fade-item">プラットフォーム管理者機能</div>
+      <div class="scene-title fade-item">テナントを支える5つの管理機能</div>
+      <div class="scene-body">
+        <div class="ov-grid" id="ov-pf" style="grid-template-columns:repeat(5,1fr)">
+          <div class="ov-card fade-item"><div class="ov-icon">🏢</div><div class="ov-name">テナント管理</div><div class="ov-desc">作成時にDB・InfluxDB・Grafana orgを自動構築</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">💰</div><div class="ov-name">料金テーブル設定</div><div class="ov-desc">テナント単位の単価マスタ、スナップショット設計</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🧾</div><div class="ov-name">請求・統計処理</div><div class="ov-desc">日次バッチでdraft→finalized、修正にも対応</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🔑</div><div class="ov-name">多要素認証(MFA)設定</div><div class="ov-desc">TOTP、プラットフォーム/テナント別にON/OFF</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🤖</div><div class="ov-name">RAGアシスタント設定</div><div class="ov-desc">ローカルLLM・pgvector、確認フロー付き操作代行</div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s13">
+      <div class="eyebrow fade-item">プラットフォーム管理者</div>
+      <div class="scene-title fade-item">テナント一覧管理</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+              <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.25rem;font-weight:700;color:var(--ui-t)">テナント一覧</div>
+              <div class="fade-item ui-btn primary">+ テナント追加</div>
+            </div>
+            <table class="ui-tbl">
+              <thead><tr><th>テナント名</th><th>スラッグ</th><th>ステータス</th><th>作成日</th><th></th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>株式会社AAA</td><td>corp-aaa</td><td><span class="ui-badge active">Active</span></td><td>2026/08/30</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
+                <tr class="fade-item"><td>株式会社Ryu</td><td>ryu-iot</td><td><span class="ui-badge active">Active</span></td><td>2026/09/11</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
+                <tr class="fade-item"><td>Suzuki Net</td><td>suzuki-net</td><td><span class="ui-badge active">Active</span></td><td>2026/09/24</td><td><span class="ui-btn secondary" style="padding:4px 10px">詳細</span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="margin-top:12px;font-size:.7rem;color:var(--ui-tm)">「+ テナント追加」1回の操作で、PostgreSQLスキーマ・InfluxDB org・Grafana orgを自動構築します。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s14">
       <div class="eyebrow fade-item">プラットフォーム管理者 — 課金</div>
       <div class="scene-title fade-item">テナント単価マスタ & 請求状況</div>
       <div class="scene-body">
@@ -377,222 +662,131 @@ canvas{display:block}
                 </table>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    </section>
-    <!-- Scene 6: Alert -->
-    <section class="scene" id="s6">
-      <div class="eyebrow fade-item">アラート管理</div>
-      <div class="scene-title fade-item">閾値アラートルール設定</div>
-      <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div class="alert-banner fade-item" style="margin-bottom:14px">
-              <div class="icon">⚠️</div>
-              <div class="body"><div class="title">高温警告 — sensor-003</div><div class="detail">温度が35℃を超えました(現在値: 37.2℃)。Slackに通知を送信しました。</div></div>
-            </div>
-            <table class="ui-tbl">
-              <thead><tr><th>ルール名</th><th>条件</th><th>通知先</th><th>有効</th></tr></thead>
-              <tbody>
-                <tr class="fade-item"><td>高温警告</td><td>温度 &gt; 35℃ が5分継続</td><td>メール + Slack</td><td><span class="ui-badge active">ON</span></td></tr>
-                <tr class="fade-item"><td>デバイス切断</td><td>オフライン 10分以上</td><td>Slack</td><td><span class="ui-badge active">ON</span></td></tr>
-                <tr class="fade-item"><td>湿度異常</td><td>湿度 &lt; 20% または &gt; 80%</td><td>メール</td><td><span class="ui-badge inactive">OFF</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-    <!-- Scene 7: OTA -->
-    <section class="scene" id="s7">
-      <div class="eyebrow fade-item">デバイス管理</div>
-      <div class="scene-title fade-item">登録デバイス一覧</div>
-      <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <table class="ui-tbl">
-              <thead><tr><th>デバイスID</th><th>状態</th><th>ファームウェア</th><th>最終通信</th></tr></thead>
-              <tbody>
-                <tr class="fade-item"><td>sensor-003</td><td><span class="ui-badge active">オンライン</span></td><td>v1.4.2</td><td>14:32:05</td></tr>
-                <tr class="fade-item"><td>sensor-007</td><td><span class="ui-badge active">オンライン</span></td><td>v1.4.2</td><td>14:32:03</td></tr>
-                <tr class="fade-item"><td>sensor-012</td><td><span class="ui-badge inactive">オフライン</span></td><td>v1.3.0</td><td>13:58:40</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-    <!-- Scene 8: Multi-tenant -->
-    <section class="scene" id="s8">
-      <div class="eyebrow fade-item">テナント管理者</div>
-      <div class="scene-title fade-item">ユーザー管理 ・ 公開ダッシュボード URL</div>
-      <div class="scene-body grid2">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--ui-t);margin-bottom:12px">ユーザー管理</div>
-            <table class="ui-tbl">
-              <thead><tr><th>メールアドレス</th><th>ロール</th><th>状態</th></tr></thead>
-              <tbody>
-                <tr class="fade-item"><td>admin@corp-aaa.jp</td><td>admin</td><td><span class="ui-badge active">有効</span></td></tr>
-                <tr class="fade-item"><td>ops@corp-aaa.jp</td><td>operator</td><td><span class="ui-badge active">有効</span></td></tr>
-                <tr class="fade-item"><td>viewer@corp-aaa.jp</td><td>viewer</td><td><span class="ui-badge active">有効</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;color:var(--ui-t);margin-bottom:12px">公開ダッシュボード URL</div>
-            <div class="fade-item" style="background:#0D1117;border-radius:8px;padding:14px 16px;font-family:'JetBrains Mono',monospace;font-size:.74rem;color:#58A6FF;word-break:break-all;line-height:1.6">
-              https://iot.suzuki-net.org/public/d/corp-aaa-ov3k9x<br>
-              <span style="color:#8B949E">token: pub_9f3e2a…（読み取り専用・認証不要で共有可能）</span>
-            </div>
-            <div class="fade-item" style="margin-top:12px;font-size:.78rem;color:var(--ui-tm)">このURLを顧客や現場担当者と共有すると、ログイン無しで稼働状況を確認できます。</div>
-          </div>
-        </div>
-      </div>
-    </section>
-<!-- Scene 9: SORACOM SIM管理 -->
-    <section class="scene" id="s9">
-      <div class="eyebrow fade-item">テナント管理者 — SORACOM連携</div>
-      <div class="scene-title fade-item">SIMステータス管理</div>
-      <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-              <span class="live">連携中</span>
-              <span style="font-size:.72rem;color:var(--ui-tm);font-family:'JetBrains Mono',monospace">Auth Key ****7f3a　coverage: jp</span>
-            </div>
-            <table class="ui-tbl">
-              <thead><tr><th>IMSI</th><th>種別</th><th>状態</th><th>セッション</th><th>速度クラス</th><th>紐づけデバイス</th></tr></thead>
-              <tbody>
-                <tr><td>440103812200441</td><td>nano</td><td><span class="ui-badge active sim-row-status" data-seq="active,suspended,standby,active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.fast</td><td>sensor-003</td></tr>
-                <tr><td>440103812200442</td><td>nano</td><td><span class="ui-badge active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.standard</td><td>sensor-007</td></tr>
-                <tr><td>440103812200443</td><td>virtual</td><td><span class="ui-badge standby">利用開始待ち</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.minimum</td><td>—</td></tr>
-                <tr><td>440103812200444</td><td>nano</td><td><span class="ui-badge inactive">休止中</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.standard</td><td>sensor-012</td></tr>
-              </tbody>
-            </table>
+            <div class="fade-item" style="margin-top:14px;font-size:.68rem;color:var(--ui-tm)">単価はスナップショットとして請求書に保存。将来の単価変更が過去の確定請求に影響しません。</div>
           </div>
         </div>
       </div>
     </section>
 
-<!-- Scene 10: 利用量ベース課金 -->
-    <section class="scene" id="s10">
-      <div class="eyebrow fade-item">テナント管理者 — 請求</div>
-      <div class="scene-title fade-item">利用量ベースの月次課金</div>
+    <section class="scene" id="s15">
+      <div class="eyebrow fade-item">プラットフォーム管理者 — 課金バッチ</div>
+      <div class="scene-title fade-item">請求書ライフサイクル</div>
       <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">データポイント</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">284,920</div>
-              </div>
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">デバイス数</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">48</div>
-              </div>
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">今月の請求額</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-acc)">¥<span class="bill-total" data-target="128400">0</span></div>
-              </div>
+        <div class="vcol" style="flex:1;justify-content:center">
+          <div style="display:flex;align-items:center;gap:0;justify-content:center">
+            <div class="group-card fade-item" style="width:200px">
+              <div class="g-name">draft</div>
+              <div style="font-size:.72rem;color:var(--textm)">日次バッチが当月分を暫定算出</div>
             </div>
-            <table class="ui-tbl">
-              <thead><tr><th>請求期間</th><th>金額</th><th>状態</th></tr></thead>
-              <tbody>
-                <tr><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">draft</span></td></tr>
-                <tr><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">finalized</span></td></tr>
-                <tr><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">finalized</span></td></tr>
-              </tbody>
-            </table>
+            <div style="width:50px;text-align:center;color:var(--textm);font-size:1.2rem" class="fade-item">→</div>
+            <div class="group-card fade-item" style="width:200px;border-color:var(--green)">
+              <div class="g-name" style="color:var(--green)">finalized</div>
+              <div style="font-size:.72rem;color:var(--textm)">月末に確定、単価をスナップショット保存</div>
+            </div>
+            <div style="width:50px;text-align:center;color:var(--textm);font-size:1.2rem" class="fade-item">→</div>
+            <div class="group-card fade-item" style="width:200px;border-color:var(--orange)">
+              <div class="g-name" style="color:var(--orange)">corrected</div>
+              <div style="font-size:.72rem;color:var(--textm)">誤り発覚時にPF管理者が再確定</div>
+            </div>
           </div>
+          <div class="fade-item" style="text-align:center;margin-top:20px;font-size:.78rem;color:var(--textm)">全テナントの統計処理をバッチで一括実行、PF管理者がいつでも全体を閲覧できます。</div>
         </div>
       </div>
     </section>
 
-<!-- Scene 11: デバイスグループ管理 -->
-    <section class="scene" id="s11">
-      <div class="eyebrow fade-item">テナント管理者</div>
-      <div class="scene-title fade-item">デバイスグループ管理</div>
+    <section class="scene" id="s16">
+      <div class="eyebrow fade-item">プラットフォーム管理者</div>
+      <div class="scene-title fade-item">多要素認証(MFA)設定</div>
       <div class="scene-body">
-        <div class="vcol" style="flex:1">
-          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
-            <div class="group-card fade-item">
-              <div class="g-hdr"><div class="g-name">東京倉庫</div><div class="g-count">18</div></div>
-              <div style="font-size:.72rem;color:var(--textm)">温度・湿度センサー群</div>
-            </div>
-            <div class="group-card fade-item">
-              <div class="g-hdr"><div class="g-name">大阪工場</div><div class="g-count">22</div></div>
-              <div style="font-size:.72rem;color:var(--textm)">稼働監視センサー群</div>
-            </div>
-            <div class="group-card fade-item">
-              <div class="g-hdr"><div class="g-name">福岡配送センター</div><div class="g-count">8</div></div>
-              <div style="font-size:.72rem;color:var(--textm)">入出庫トラッカー</div>
-            </div>
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/</div>
           </div>
-          <div class="group-card fade-item">
-            <div class="g-hdr"><div class="g-name">東京倉庫 — デバイス一覧</div><div style="font-size:.72rem;color:var(--textm);font-weight:400">18台</div></div>
-            <div style="border:1px solid var(--border);border-radius:6px;overflow:hidden">
-              <div class="device-row" style="padding:8px 12px"><div class="device-name">sensor-003</div><div class="spacer"></div><span class="live">オンライン</span></div>
-              <div class="device-row" style="padding:8px 12px"><div class="device-name">sensor-007</div><div class="spacer"></div><span class="live">オンライン</span></div>
-              <div class="device-row" style="padding:8px 12px;border-bottom:none"><div class="device-name">sensor-012</div><div class="spacer"></div><span style="font-size:.72rem;color:var(--textd)">オフライン</span></div>
+          <div class="screen-body">
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 16px;margin-bottom:10px">
+              <div><div style="font-size:.85rem;font-weight:600;color:var(--ui-t)">platform_required</div><div style="font-size:.7rem;color:var(--ui-tm)">プラットフォーム管理者に2段階認証を必須化</div></div>
+              <span class="ui-badge active">ON</span>
+            </div>
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 16px;margin-bottom:14px">
+              <div><div style="font-size:.85rem;font-weight:600;color:var(--ui-t)">tenant_required</div><div style="font-size:.7rem;color:var(--ui-tm)">テナントユーザーに2段階認証を必須化</div></div>
+              <span class="ui-badge inactive">OFF</span>
+            </div>
+            <div class="fade-item" style="font-size:.74rem;color:var(--ui-tm);line-height:1.6">
+              TOTP(RFC 6238準拠)。ログイン成功後、有効期限10分の<code style="color:var(--ui-acc)">partial_token</code>を発行し、認証アプリでの検証後に正式なトークンへ昇格する二段階フロー。<br>
+              認証アプリ紛失時はPF管理者がDB操作で無効化・再設定します。
             </div>
           </div>
         </div>
       </div>
     </section>
 
-<!-- Scene 12: AIアシスタント(RAG) -->
-    <section class="scene" id="s12">
-      <div class="eyebrow fade-item">テナント管理者 — AIアシスタント</div>
+    <section class="scene" id="s17">
+      <div class="eyebrow fade-item">プラットフォーム管理者</div>
+      <div class="scene-title fade-item">AIアシスタント設定(RAG)</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/</div>
+          </div>
+          <div class="screen-body">
+            <table class="ui-tbl" style="margin-bottom:14px">
+              <thead><tr><th>設定項目</th><th>値</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>Ollama URL</td><td>http://ollama:11434</td></tr>
+                <tr class="fade-item"><td>チャットモデル</td><td>qwen2.5:3b</td></tr>
+                <tr class="fade-item"><td>埋め込みモデル</td><td>nomic-embed-text</td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <span style="font-size:.78rem;color:var(--ui-tm)">design.html / install-guide.html / CLAUDE.md を検索対象に再構築</span>
+              <span class="ui-btn primary">ドキュメント再インデックス</span>
+            </div>
+            <div class="fade-item" style="font-size:.7rem;color:var(--ui-tm);line-height:1.6">外部LLM APIは一切使用せず、推論は全てローカルのOllamaで実行。テナント情報・ドキュメントは外部に送信されません。操作代行は<strong>トークン発行・パネル設定・アラートルール作成</strong>の3ツールのみ、実行前に必ず確認を取ります。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s18">
+      <div class="eyebrow fade-item">統合機能 — AIアシスタント</div>
       <div class="scene-title fade-item">確認フロー付きのAI操作代行</div>
       <div class="scene-body">
-        <div class="chat-panel fade-item" style="max-width:560px;margin:0 auto">
-          <div class="chat-hdr"><span>🤖</span><span>IoTAir-X アシスタント</span></div>
-          <div class="chat-body">
-            <div class="chat-bubble user">大阪工場のデバイスが高温になったらSlackに通知したい</div>
-            <div class="chat-bubble bot"><span class="typed" data-full="デバイスグループ「大阪工場」を対象に、温度 &gt; 40℃ が5分継続した場合にSlackへ通知するアラートルールを作成します。"></span><span class="caret"></span></div>
-            <div class="chat-confirm">
-              <span>このアラートルールを作成しますか？</span>
-              <button>実行する</button>
+        <div class="vcol" style="flex:1;align-items:center">
+          <div class="step-flow fade-item" id="rag-steps" style="width:560px">
+            <div class="step active" data-step="1"><span class="step-num">1</span>問い合わせ</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="2"><span class="step-num">2</span>確認</div>
+            <div class="step-line"></div>
+            <div class="step" data-step="3"><span class="step-num">3</span>実行</div>
+          </div>
+          <div class="chat-panel fade-item" style="max-width:560px;width:100%">
+            <div class="chat-hdr"><span>🤖</span><span>IoTAir-X アシスタント</span></div>
+            <div class="chat-body">
+              <div class="chat-bubble user">大阪工場のデバイスが高温になったらSlackに通知したい</div>
+              <div class="chat-bubble bot"><span class="typed" data-full="デバイスグループ「大阪工場」を対象に、温度 &gt; 40℃ が5分継続した場合にSlackへ通知するアラートルールを作成します。"></span><span class="caret"></span></div>
+              <div class="chat-confirm">
+                <span>このアラートルールを作成しますか？</span>
+                <button>実行する</button>
+              </div>
+              <div class="chat-bubble bot done-msg" style="display:none">✓ アラートルールを作成しました</div>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-<!-- Scene 13: Summary -->
-    <section class="scene" id="s13">
+    <section class="scene" id="s19">
       <div class="eyebrow">まとめ</div>
       <div class="scene-title">IoTAir-X — 全機能一覧</div>
       <div class="scene-body">
-        <div style="flex:1;display:flex;flex-direction:column;gap:14px">
+        <div style="flex:1;display:flex;flex-direction:column;gap:12px">
+          <div class="fade-item" style="display:flex;gap:24px;justify-content:center">
+            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--accent)"><span class="count-up" data-target="13">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">対応機能(FR)数</div></div>
+            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--cyan)"><span class="count-up" data-target="10">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">構成コンポーネント数</div></div>
+            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--green)"><span class="count-up" data-target="2">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">利用者ロール区分</div></div>
+          </div>
           <div class="feat-grid">
             <div class="feat-item"><div class="feat-icon">📡</div><div class="feat-text"><div class="name">MQTT mTLS接続</div><div class="desc">相互TLS認証でデバイスを安全接続 (EMQX 5.x)</div></div></div>
             <div class="feat-item"><div class="feat-icon">📊</div><div class="feat-text"><div class="name">リアルタイム可視化</div><div class="desc">Grafana + InfluxDB によるライブダッシュボード</div></div></div>
@@ -605,12 +799,13 @@ canvas{display:block}
             <div class="feat-item"><div class="feat-icon">📶</div><div class="feat-text"><div class="name">SORACOM SIM管理</div><div class="desc">テナント単位の回線状態変更・デバイス紐づけ</div></div></div>
             <div class="feat-item"><div class="feat-icon">💳</div><div class="feat-text"><div class="name">利用量ベース課金</div><div class="desc">単価マスタ×実利用量で月次請求を自動生成</div></div></div>
             <div class="feat-item"><div class="feat-icon">🗂️</div><div class="feat-text"><div class="name">デバイスグループ管理</div><div class="desc">拠点・用途別にデバイスをグルーピング</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🔑</div><div class="feat-text"><div class="name">多要素認証(MFA)</div><div class="desc">TOTPによる2段階認証、プラットフォーム/テナント別設定</div></div></div>
             <div class="feat-item"><div class="feat-icon">🤖</div><div class="feat-text"><div class="name">AIアシスタント(RAG)</div><div class="desc">ローカルLLMによるQ&A・確認付き操作代行</div></div></div>
           </div>
           <div>
             <div style="font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--textm);font-weight:600;margin-bottom:8px">Tech Stack</div>
             <div class="stack-row">
-              <span class="stack-badge">FastAPI</span><span class="stack-badge">PostgreSQL 16</span><span class="stack-badge">InfluxDB 2</span><span class="stack-badge">EMQX 5</span><span class="stack-badge">Grafana</span><span class="stack-badge">MinIO</span><span class="stack-badge">Step-CA</span><span class="stack-badge">nginx</span><span class="stack-badge">Docker Compose</span>
+              <span class="stack-badge fade-item">FastAPI</span><span class="stack-badge fade-item">PostgreSQL 16</span><span class="stack-badge fade-item">InfluxDB 2</span><span class="stack-badge fade-item">EMQX 5</span><span class="stack-badge fade-item">Grafana</span><span class="stack-badge fade-item">MinIO</span><span class="stack-badge fade-item">Step-CA</span><span class="stack-badge fade-item">nginx</span><span class="stack-badge fade-item">Docker Compose</span><span class="stack-badge fade-item">Ollama</span><span class="stack-badge fade-item">pgvector</span>
             </div>
           </div>
           <div style="text-align:center;font-size:.78rem;color:var(--textd);font-family:'JetBrains Mono',monospace">
@@ -638,7 +833,7 @@ canvas{display:block}
 </div>
 
 <script>
-const DURATIONS = [7000,9000,7000,8000,9000,9000,8000,9000,7000, 8000,8000,7000,8000, 9000];
+const DURATIONS = [7000,9000,9000,8000,8000,8000,9000,8000,8000,8000,9000,8000,9000,8000,9000,8000,8000,8000,9000,9000];
 const N = DURATIONS.length;
 const scenes = Array.from(document.querySelectorAll('.scene'));
 const progress = document.getElementById('progress');
@@ -865,19 +1060,34 @@ function countUpAll(sceneSel,delay=500,dur=1400){
   return ()=>timers.forEach(clearTimeout);
 }
 
-// Scene 2-8: 見出し・スクリーンショットの段階的フェードイン(ズームは#s0 .screen-body imgのCSSで常時適用)
-ANIMS[2]=()=>staggerFadeIn('#s2');
-ANIMS[3]=()=>staggerFadeIn('#s3');
-ANIMS[4]=()=>{const c1=staggerFadeIn('#s4');const c2=countUpAll('#s4');return()=>{c1();c2();};};
-ANIMS[5]=()=>staggerFadeIn('#s5');
-ANIMS[6]=()=>staggerFadeIn('#s6');
-ANIMS[7]=()=>staggerFadeIn('#s7');
-ANIMS[8]=()=>staggerFadeIn('#s8');
+// グリッド概観(テナント/PF管理者機能)のカードを自動で順にハイライト
+function autoHighlight(sceneSel,intervalMs=900){
+  const cards=document.querySelectorAll(sceneSel+' .ov-card');
+  if(!cards.length)return()=>{};
+  let i=-1;
+  const timers=[];
+  const step=()=>{
+    cards.forEach(c=>c.classList.remove('hl'));
+    i=(i+1)%cards.length;
+    cards[i].classList.add('hl');
+    timers.push(setTimeout(step,intervalMs));
+  };
+  timers.push(setTimeout(step,600));
+  return ()=>{timers.forEach(clearTimeout);cards.forEach(c=>c.classList.remove('hl'));};
+}
 
-// Scene 9: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
-ANIMS[9]=()=>{
-  const cleanup1=staggerFadeIn('#s9');
-  const rows=document.querySelectorAll('#s9 .sim-row-status');
+// Scene 2: テナント管理者機能 グリッド概観
+ANIMS[2]=()=>{const c1=staggerFadeIn('#s2',60);const c2=autoHighlight('#s2',900);return()=>{c1();c2();};};
+
+// Scene 3-5: ブートストラップトークン管理・デバイス証明書発行・OTA配信
+ANIMS[3]=()=>staggerFadeIn('#s3');
+ANIMS[4]=()=>staggerFadeIn('#s4');
+ANIMS[5]=()=>staggerFadeIn('#s5');
+
+// Scene 6: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
+ANIMS[6]=()=>{
+  const cleanup1=staggerFadeIn('#s6');
+  const rows=document.querySelectorAll('#s6 .sim-row-status');
   const timers=[];
   rows.forEach(badge=>{
     const seq=(badge.dataset.seq||'').split(',').filter(Boolean);
@@ -894,17 +1104,45 @@ ANIMS[9]=()=>{
   return ()=>{cleanup1();timers.forEach(clearTimeout);};
 };
 
-// Scene 10: 利用量ベース課金 — 請求額のカウントアップ
+// Scene 7: デバイスグループ管理 — カードを順に表示
+ANIMS[7]=()=>staggerFadeIn('#s7',120);
+
+// Scene 8: 閾値アラートルール設定
+ANIMS[8]=()=>staggerFadeIn('#s8');
+
+// Scene 9: 利用量ベース課金 — 請求額のカウントアップ
+ANIMS[9]=()=>{const c1=staggerFadeIn('#s9');const c2=countUpAll('#s9');return()=>{c1();c2();};};
+
+// Scene 10: リアルタイムダッシュボード — 統計のカウントアップ
 ANIMS[10]=()=>{const c1=staggerFadeIn('#s10');const c2=countUpAll('#s10');return()=>{c1();c2();};};
 
-// Scene 11: デバイスグループ管理 — カードを順に表示
-ANIMS[11]=()=>staggerFadeIn('#s11',120);
+// Scene 11: ユーザー管理・公開ダッシュボードURL
+ANIMS[11]=()=>staggerFadeIn('#s11');
 
-// Scene 12: AIアシスタント(RAG) — チャットをタイプライター風に表示
-ANIMS[12]=()=>{
-  const cleanup1=staggerFadeIn('#s12');
-  const bot=document.querySelector('#s12 .chat-bubble.bot .typed');
-  const confirmBox=document.querySelector('#s12 .chat-confirm');
+// Scene 12: PF管理者機能 グリッド概観
+ANIMS[12]=()=>{const c1=staggerFadeIn('#s12',60);const c2=autoHighlight('#s12',900);return()=>{c1();c2();};};
+
+// Scene 13-17: テナント一覧・単価マスタ・請求バッチ・MFA・RAG設定
+ANIMS[13]=()=>staggerFadeIn('#s13');
+ANIMS[14]=()=>staggerFadeIn('#s14');
+ANIMS[15]=()=>staggerFadeIn('#s15');
+ANIMS[16]=()=>staggerFadeIn('#s16');
+ANIMS[17]=()=>staggerFadeIn('#s17');
+
+// Scene 18: AIアシスタント(RAG) — チャット→確認→実行をステップ送りで表示
+ANIMS[18]=()=>{
+  const cleanup1=staggerFadeIn('#s18');
+  const bot=document.querySelector('#s18 .chat-bubble.bot .typed');
+  const confirmBox=document.querySelector('#s18 .chat-confirm');
+  const doneMsg=document.querySelector('#s18 .done-msg');
+  const steps=document.querySelectorAll('#s18 .step');
+  const setStep=(n)=>{
+    steps.forEach(s=>{
+      const sn=parseInt(s.dataset.step,10);
+      s.classList.toggle('done',sn<n);
+      s.classList.toggle('active',sn===n);
+    });
+  };
   const timers=[];
   if(bot){
     const full=bot.dataset.full||'';
@@ -914,23 +1152,27 @@ ANIMS[12]=()=>{
       i++;
       bot.textContent=full.slice(0,i);
       if(i<full.length){timers.push(setTimeout(typeNext,45));}
-      else if(confirmBox){timers.push(setTimeout(()=>confirmBox.classList.add('show'),300));}
+      else if(confirmBox){
+        timers.push(setTimeout(()=>{confirmBox.classList.add('show');setStep(2);},300));
+        timers.push(setTimeout(()=>{
+          confirmBox.classList.remove('show');
+          setStep(3);
+          if(doneMsg)doneMsg.style.display='block';
+        },2100));
+      }
     };
     timers.push(setTimeout(typeNext,900));
   }
-  return ()=>{cleanup1();timers.forEach(clearTimeout);};
+  return ()=>{cleanup1();timers.forEach(clearTimeout);setStep(1);if(confirmBox)confirmBox.classList.remove('show');if(doneMsg)doneMsg.style.display='none';};
 };
 
-// Scene 13: summary stagger
-ANIMS[13]=()=>{
-  const items=document.querySelectorAll('#s13 .feat-item');
-  items.forEach(el=>{el.style.opacity='0';el.style.transform='translateY(10px)';el.style.transition='opacity .4s ease,transform .4s ease';});
-  const ts=[];
-  items.forEach((el,i)=>{
-    const t=setTimeout(()=>{el.style.opacity='1';el.style.transform='none';},i*80+100);
-    ts.push(t);
-  });
-  return()=>{ts.forEach(t=>clearTimeout(t));items.forEach(el=>{el.style.opacity='';el.style.transform='';el.style.transition='';});};
+// Scene 19: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
+ANIMS[19]=()=>{
+  const items=document.querySelectorAll('#s19 .feat-item, #s19 .stack-badge');
+  items.forEach(el=>{el.classList.add('fade-item');el.classList.remove('show');});
+  const c1=staggerFadeIn('#s19',60);
+  const c2=countUpAll('#s19');
+  return()=>{c1();c2();};
 };
 
 // Start
