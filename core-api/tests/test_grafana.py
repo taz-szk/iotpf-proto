@@ -261,12 +261,13 @@ def test_build_templating_has_group_before_device_name():
     names = [v["name"] for v in templating]
     assert names == ["group", "device_name", "archived_device_name"]
     device_var = next(v for v in templating if v["name"] == "device_name")
-    # device_nameは${group}に依存させない(依存させるとGrafana側でこのテンプレート
-    # 変数クエリ自体が実行されなくなる不具合を実機で確認したため)
-    assert "${group}" not in device_var["query"]["query"]
+    # 書式指定子(raw)を付けないと、Grafanaが正規表現埋め込み用に値をエスケープして
+    # しまい一覧が常に空になる不具合を実機で確認したため、${group:raw}であること
+    assert "${group:raw}" in device_var["query"]["query"]
     archived_var = next(v for v in templating if v["name"] == "archived_device_name")
     assert archived_var["query"]["query"] == _FLUX_DEVICE_VAR_ARCHIVED
-    assert "${group}" not in archived_var["query"]["query"]
+    # アーカイブ変数はグループ絞り込みの対象外(${group}を含まない)
+    assert "${group" not in archived_var["query"]["query"]
 
 def test_sync_tenant_dashboard_groups_replaces_templating_only():
     existing_dashboard = {
@@ -354,12 +355,14 @@ def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
         assert 'r.hasStatus and not r.hasDeleted' in flux
 
 
-def test_device_var_flux_does_not_depend_on_group_variable():
-    """device_name変数のクエリが他の変数(${group})に依存していると、Grafana側がこの
-    テンプレート変数クエリ自体を一切実行しなくなる(ブラウザがリクエストすら送らない)
-    不具合を実機で確認した。再発防止のため、${group}参照は一切含まないこと。"""
-    assert '${group}' not in _FLUX_DEVICE_VAR_TENANT
-    assert '${group}' not in _FLUX_DEVICE_VAR
+def test_device_var_flux_group_filter_uses_raw_format_specifier():
+    """${group}を書式指定子(raw)なしで埋め込むと、Grafanaが正規表現埋め込み用に
+    値をエスケープしてしまい(".*"が"\\.\\*"になる等)groupの値が既に正規表現である
+    ことを無視して文字通りの文字列として扱われ、一覧が常に空になる不具合を実機で
+    確認した。再発防止のため、${group:raw}(書式指定子付き)であること。"""
+    assert '${group:raw}' in _FLUX_DEVICE_VAR_TENANT
+    assert '${group}' not in _FLUX_DEVICE_VAR_TENANT.replace('${group:raw}', '')
+    assert '${group' not in _FLUX_DEVICE_VAR
 
 
 def test_device_var_flux_includes_devices_with_only_old_telemetry():

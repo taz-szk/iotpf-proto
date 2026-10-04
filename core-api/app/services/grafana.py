@@ -42,10 +42,8 @@ _FLUX_TELEMETRY = (
 # 見られなくなる問題があった。telemetry measurementの全期間distinct(device_name)を
 # historyとして追加し、status/historyいずれかがあれば候補に残すようにしている。
 #
-# status_filter(${group}参照)は最終フィルタの1箇所だけに挿入すること。
-# 一度status/historyの2箇所に挿入したところ、Grafana側で同一クエリ内に同じ変数
-# 参照(${group})が複数回出現すると、そのテンプレート変数クエリ自体が一切実行
-# されなくなる(ブラウザがリクエストすら送らない)不具合を実機で確認した。
+# status_filter(${group}参照)は最終フィルタの1箇所だけに挿入する(以前は
+# status/historyの2箇所に挿入していたが、1箇所に統一した際に不要になった)。
 #
 # 注意: findColumn()で配列化しcontains()で絞り込む方式は、同一スクリプト内に
 # from(bucket:"telemetry")が複数回登場する場合に配列が空になる(実機で確認済みの
@@ -96,13 +94,14 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
 
 _FLUX_DEVICE_VAR = _flux_exclude_deleted_devices("")
 
-# テナントダッシュボード専用。本来は${group}参照でグループ絞り込みをしたいが、
-# device_name変数のクエリが他の変数(${group})に依存していると、Grafana側がこの
-# テンプレート変数クエリ自体を一切実行しなくなる不具合を実機で確認した(${group}を
-# 1箇所だけにしても再現、完全に依存を外すと解消)。暫定対応として依存を外し、
-# デバイス一覧は常に全件表示にする(グループ変数自体はUI上残るが絞り込みには使えない)。
-# グループ絞り込みを復活させる場合は、Grafana側の原因切り分けが別途必要。
-_FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices("")
+# テナントダッシュボード専用: グループ変数(${group})でデバイス一覧を絞り込む。
+# 変数参照は${group:raw}と書式指定子(raw)を付けること。${group}のまま(書式指定子
+# なし)だと、Grafanaが正規表現埋め込み用に値をエスケープしてしまい(".*"が"\.\*"になる
+# 等)、groupの値が既に正規表現であることを無視して文字通りの文字列として扱われ、
+# マッチするデバイスが無くなり一覧が常に空になる不具合を実機で確認した。
+_FLUX_DEVICE_VAR_TENANT = _flux_exclude_deleted_devices(
+    '  |> filter(fn: (r) => r.device_name =~ /${group:raw}/)\n'
+)
 
 # アーカイブ(Del_接頭辞)専用のデバイス一覧変数。削除済みデバイスが増え続けると稼働中用の
 # device_name一覧が埋まって分かりにくくなるため、稼働中側からは完全に除外し、
