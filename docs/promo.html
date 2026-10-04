@@ -393,7 +393,7 @@ canvas{display:block}
             <table class="ui-tbl">
               <thead><tr><th>IMSI</th><th>種別</th><th>状態</th><th>セッション</th><th>速度クラス</th><th>紐づけデバイス</th></tr></thead>
               <tbody>
-                <tr><td>440103812200441</td><td>nano</td><td><span class="ui-badge active sim-row-status" data-seq="active,suspended,standby,active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.fast</td><td>sensor-003</td></tr>
+                <tr><td>440103812200441</td><td>nano</td><td><span class="ui-badge active sim-row-status" data-seq="active,suspended,standby,active">使用中</span></td><td><span class="live sim-row-session">オンライン</span></td><td>s1.fast</td><td>sensor-003</td></tr>
                 <tr><td>440103812200442</td><td>nano</td><td><span class="ui-badge active">使用中</span></td><td><span class="live">オンライン</span></td><td>s1.standard</td><td>sensor-007</td></tr>
                 <tr><td>440103812200443</td><td>virtual</td><td><span class="ui-badge standby">利用開始待ち</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.minimum</td><td>—</td></tr>
                 <tr><td>440103812200444</td><td>nano</td><td><span class="ui-badge inactive">休止中</span></td><td><span style="color:var(--ui-tm);font-size:.78rem">オフライン</span></td><td>s1.standard</td><td>sensor-012</td></tr>
@@ -1092,11 +1092,19 @@ ANIMS[6]=()=>{
   rows.forEach(badge=>{
     const seq=(badge.dataset.seq||'').split(',').filter(Boolean);
     if(seq.length<2)return;
+    const sessionEl=badge.closest('tr')?.querySelector('.sim-row-session');
     let i=0;
     const next=()=>{
       i=(i+1)%seq.length;
       badge.className='ui-badge '+seq[i]+' flip';
       badge.textContent=({active:'使用中',inactive:'休止中',standby:'利用開始待ち',suspended:'利用中断中'})[seq[i]]||seq[i];
+      if(sessionEl){
+        const online=seq[i]==='active';
+        sessionEl.className=online?'live sim-row-session':'sim-row-session';
+        sessionEl.style.color=online?'':'var(--ui-tm)';
+        sessionEl.style.fontSize=online?'':'.78rem';
+        sessionEl.textContent=online?'オンライン':'オフライン';
+      }
       timers.push(setTimeout(next,2200));
     };
     timers.push(setTimeout(next,2200));
