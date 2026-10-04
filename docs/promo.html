@@ -497,9 +497,9 @@ canvas{display:block}
             <table class="ui-tbl">
               <thead><tr><th>請求期間</th><th>金額</th><th>状態</th></tr></thead>
               <tbody>
-                <tr><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">draft</span></td></tr>
-                <tr><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">finalized</span></td></tr>
-                <tr><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">finalized</span></td></tr>
+                <tr><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">集計中（今月）</span></td></tr>
+                <tr><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">確定</span></td></tr>
+                <tr><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">確定</span></td></tr>
               </tbody>
             </table>
           </div>
@@ -598,7 +598,7 @@ canvas{display:block}
         <div class="ov-grid" id="ov-pf" style="grid-template-columns:repeat(5,1fr)">
           <div class="ov-card fade-item"><div class="ov-icon">🏢</div><div class="ov-name">テナント管理</div><div class="ov-desc">作成時にDB・InfluxDB・Grafana orgを自動構築</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">💰</div><div class="ov-name">料金テーブル設定</div><div class="ov-desc">テナント単位の単価マスタ、スナップショット設計</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🧾</div><div class="ov-name">請求・統計処理</div><div class="ov-desc">日次バッチでdraft→finalized、修正にも対応</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">🧾</div><div class="ov-name">請求・統計処理</div><div class="ov-desc">日次バッチで集計中→確定、確定後の再集計にも対応</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">🔑</div><div class="ov-name">多要素認証(MFA)設定</div><div class="ov-desc">TOTP、プラットフォーム/テナント別にON/OFF</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">🤖</div><div class="ov-name">AIアシスタント設定</div><div class="ov-desc">ローカルLLM・ベクトル検索、確認フロー付き操作代行</div></div>
         </div>
@@ -663,9 +663,9 @@ canvas{display:block}
                 <table class="ui-tbl">
                   <thead><tr><th>テナント</th><th>状態</th><th>金額</th></tr></thead>
                   <tbody>
-                    <tr class="fade-item"><td>AAA</td><td><span class="ui-badge warning">draft</span></td><td>¥128,400</td></tr>
-                    <tr class="fade-item"><td>BBB</td><td><span class="ui-badge warning">draft</span></td><td>¥14,850</td></tr>
-                    <tr class="fade-item"><td>CCC</td><td><span class="ui-badge active">finalized</span></td><td>¥198,230</td></tr>
+                    <tr class="fade-item"><td>AAA</td><td><span class="ui-badge warning">集計中</span></td><td>¥128,400</td></tr>
+                    <tr class="fade-item"><td>BBB</td><td><span class="ui-badge warning">集計中</span></td><td>¥14,850</td></tr>
+                    <tr class="fade-item"><td>CCC</td><td><span class="ui-badge active">確定</span></td><td>¥198,230</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -683,21 +683,17 @@ canvas{display:block}
         <div class="vcol" style="flex:1;justify-content:center">
           <div style="display:flex;align-items:center;gap:0;justify-content:center">
             <div class="group-card fade-item" style="width:200px">
-              <div class="g-name">draft</div>
+              <div class="g-name">集計中（今月）</div>
               <div style="font-size:.72rem;color:var(--textm)">日次バッチが当月分を暫定算出</div>
             </div>
             <div style="width:50px;text-align:center;color:var(--textm);font-size:1.2rem" class="fade-item">→</div>
             <div class="group-card fade-item" style="width:200px;border-color:var(--green)">
-              <div class="g-name" style="color:var(--green)">finalized</div>
+              <div class="g-name" style="color:var(--green)">確定</div>
               <div style="font-size:.72rem;color:var(--textm)">月末に確定、単価をスナップショット保存</div>
             </div>
-            <div style="width:50px;text-align:center;color:var(--textm);font-size:1.2rem" class="fade-item">→</div>
-            <div class="group-card fade-item" style="width:200px;border-color:var(--orange)">
-              <div class="g-name" style="color:var(--orange)">corrected</div>
-              <div style="font-size:.72rem;color:var(--textm)">誤り発覚時にPF管理者が再確定</div>
-            </div>
           </div>
-          <div class="fade-item" style="text-align:center;margin-top:20px;font-size:.78rem;color:var(--textm)">全テナントの統計処理をバッチで一括実行、PF管理者がいつでも全体を閲覧できます。</div>
+          <div class="fade-item" style="text-align:center;margin-top:20px;font-size:.78rem;color:var(--textm)">確定後に誤りが見つかった場合も、ステータスは「確定」のまま再集計し差額を反映できます。</div>
+          <div class="fade-item" style="text-align:center;margin-top:6px;font-size:.78rem;color:var(--textm)">全テナントの統計処理をバッチで一括実行、PF管理者がいつでも全体を閲覧できます。</div>
         </div>
       </div>
     </section>
