@@ -37,6 +37,11 @@ _FLUX_TELEMETRY = (
 # (=再登録後は改めてデバイス一覧に出力される)。Del_接頭辞のアーカイブ名義自体は
 # 除外対象外(一覧に残し、登録状態パネルで「削除済み」として表示させる)。
 #
+# statusは直近30日のdevice_statusのみを見るため、30日以上オフライン(かつ削除も
+# されていない)デバイスは候補から消えてしまい、選択できず過去のテレメトリも一切
+# 見られなくなる問題があった。telemetry measurementの全期間distinct(device_name)を
+# historyとして追加し、status/historyいずれかがあれば候補に残すようにしている。
+#
 # 注意: findColumn()で配列化しcontains()で絞り込む方式は、同一スクリプト内に
 # from(bucket:"telemetry")が複数回登場する場合に配列が空になる(実機で確認済みの
 # Flux/InfluxDB側の既知の癖)。union()+group()+reduce()によるテーブルベースの
@@ -52,6 +57,15 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
         '  |> last()\n'
         '  |> map(fn: (r) => ({device_name: r.device_name, src: "status"}))\n'
         '\n'
+        'history = from(bucket: "telemetry")\n'
+        '  |> range(start: 0)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        f'{status_filter}'
+        '  |> keep(columns: ["device_name"])\n'
+        '  |> group()\n'
+        '  |> distinct(column: "device_name")\n'
+        '  |> map(fn: (r) => ({device_name: r._value, src: "status"}))\n'
+        '\n'
         'deleted = from(bucket: "telemetry")\n'
         '  |> range(start: -30d)\n'
         '  |> filter(fn: (r) => r._measurement == "device_deleted")\n'
@@ -61,7 +75,7 @@ def _flux_exclude_deleted_devices(status_filter: str) -> str:
         '  |> filter(fn: (r) => r._value == 1)\n'
         '  |> map(fn: (r) => ({device_name: r.device_name, src: "deleted"}))\n'
         '\n'
-        'union(tables: [status, deleted])\n'
+        'union(tables: [status, history, deleted])\n'
         '  |> group(columns: ["device_name"])\n'
         '  |> reduce(\n'
         '       fn: (r, accumulator) => ({\n'

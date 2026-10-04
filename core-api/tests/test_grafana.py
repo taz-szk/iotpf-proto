@@ -355,6 +355,17 @@ def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
     assert '${group}' not in _FLUX_DEVICE_VAR
 
 
+def test_device_var_flux_includes_devices_with_only_old_telemetry():
+    """直近30日のdevice_statusが無くても、telemetry measurementに過去データが
+    あるdevice_nameは一覧から消えない(=選択して過去データを見られる)こと。"""
+    for flux in (_FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT):
+        history_block = flux.split('history = from')[1].split('deleted = from')[0]
+        assert 'range(start: 0)\n' in history_block
+        assert 'r._measurement == "telemetry"' in history_block
+        assert 'distinct(column: "device_name")' in history_block
+        assert 'union(tables: [status, history, deleted])' in flux
+
+
 def test_device_var_flux_only_treats_latest_value_1_as_deleted():
     """device_deletedマーカーは存在するだけでなく、last()で得られる最新の値が1の場合のみ
     削除済みとして扱う必要がある。再登録時にrevive_device_in_influxdb()がdeleted=0の
