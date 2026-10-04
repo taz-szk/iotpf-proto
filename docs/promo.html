@@ -341,8 +341,8 @@ canvas{display:block}
     </section>
     <!-- Scene 5: Grafana -->
     <section class="scene" id="s5">
-      <div class="eyebrow fade-item">プラットフォーム管理者 — 統計</div>
-      <div class="scene-title fade-item">テナント稼働統計</div>
+      <div class="eyebrow fade-item">プラットフォーム管理者 — 課金</div>
+      <div class="scene-title fade-item">テナント単価マスタ & 請求状況</div>
       <div class="scene-body">
         <div class="screen fade-item">
           <div class="screen-hdr">
@@ -350,18 +350,32 @@ canvas{display:block}
             <div class="url">https://iot.suzuki-net.org/admin/</div>
           </div>
           <div class="screen-body">
-            <table class="ui-tbl">
-              <thead><tr><th>テナント</th><th>デバイス数</th><th>直近30日データ点</th><th>アラート件数</th></tr></thead>
-              <tbody>
-                <tr class="fade-item"><td>株式会社AAA</td><td>48</td><td>284,920</td><td>3</td></tr>
-                <tr class="fade-item"><td>株式会社Ryu</td><td>12</td><td>41,208</td><td>0</td></tr>
-                <tr class="fade-item"><td>Suzuki Net</td><td>65</td><td>512,330</td><td>7</td></tr>
-              </tbody>
-            </table>
-            <div class="fade-item" style="margin-top:18px;display:flex;flex-direction:column;gap:10px">
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">AAA</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="84" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Ryu</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="22" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
-              <div style="display:flex;align-items:center;gap:10px"><div style="width:90px;font-size:.72rem;color:var(--ui-tm)">Suzuki Net</div><div style="flex:1;height:8px;background:#E2E8F0;border-radius:4px;overflow:hidden"><div class="tenant-bar" data-target="100" style="width:0;height:100%;background:linear-gradient(90deg,#2563EB,#60A5FA);border-radius:4px;transition:width 1.4s ease"></div></div></div>
+            <div style="display:grid;grid-template-columns:1.3fr 1fr;gap:20px">
+              <div>
+                <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;color:var(--ui-t);margin-bottom:4px">株式会社AAA の単価設定</div>
+                <div class="fade-item" style="font-size:.68rem;color:var(--ui-tm);margin-bottom:10px">単価変更は翌月1日から適用(当月の即時適用・日割りは不可)</div>
+                <table class="ui-tbl">
+                  <thead><tr><th>課金項目</th><th>単価</th></tr></thead>
+                  <tbody>
+                    <tr class="fade-item"><td>基本料金</td><td>¥5,000</td></tr>
+                    <tr class="fade-item"><td>データポイント数</td><td>¥0.02/件</td></tr>
+                    <tr class="fade-item"><td>デバイス数・稼働中</td><td>¥300/台</td></tr>
+                    <tr class="fade-item"><td>アラート発報件数</td><td>¥10/件</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;color:var(--ui-t);margin-bottom:4px">全テナント請求状況</div>
+                <div class="fade-item" style="font-size:.68rem;color:var(--ui-tm);margin-bottom:10px">今月分</div>
+                <table class="ui-tbl">
+                  <thead><tr><th>テナント</th><th>状態</th><th>金額</th></tr></thead>
+                  <tbody>
+                    <tr class="fade-item"><td>AAA</td><td><span class="ui-badge warning">draft</span></td><td>¥128,400</td></tr>
+                    <tr class="fade-item"><td>Ryu</td><td><span class="ui-badge warning">draft</span></td><td>¥14,850</td></tr>
+                    <tr class="fade-item"><td>Suzuki Net</td><td><span class="ui-badge active">finalized</span></td><td>¥198,230</td></tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         </div>
@@ -413,14 +427,6 @@ canvas{display:block}
                 <tr class="fade-item"><td>sensor-012</td><td><span class="ui-badge inactive">オフライン</span></td><td>v1.3.0</td><td>13:58:40</td></tr>
               </tbody>
             </table>
-            <div class="fade-item" style="margin-top:16px">
-              <div style="font-size:.7rem;color:var(--ui-tm);margin-bottom:8px">OTA配信中 — v1.4.2</div>
-              <div class="device-row" style="padding:0;border-bottom:none">
-                <div class="device-name" style="color:var(--ui-t)">sensor-012</div>
-                <div class="progress-bar" style="margin:0 10px;background:#E2E8F0"><div class="progress-fill ota-progress" data-target="62"></div></div>
-                <div class="device-status" style="color:var(--ui-acc)">62%</div>
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -859,25 +865,13 @@ function countUpAll(sceneSel,delay=500,dur=1400){
   return ()=>timers.forEach(clearTimeout);
 }
 
-// バー・進捗の幅を0から data-target% まで伸ばす(.tenant-bar / .ota-progress 共通)
-function growBars(sceneSel,delay=700){
-  const els=document.querySelectorAll(sceneSel+' .tenant-bar, '+sceneSel+' .ota-progress');
-  const timers=[];
-  els.forEach(el=>{
-    el.style.width='0';
-    const t=setTimeout(()=>{el.style.width=(el.dataset.target||'0')+'%';},delay);
-    timers.push(t);
-  });
-  return ()=>timers.forEach(clearTimeout);
-}
-
 // Scene 2-8: 見出し・スクリーンショットの段階的フェードイン(ズームは#s0 .screen-body imgのCSSで常時適用)
 ANIMS[2]=()=>staggerFadeIn('#s2');
 ANIMS[3]=()=>staggerFadeIn('#s3');
 ANIMS[4]=()=>{const c1=staggerFadeIn('#s4');const c2=countUpAll('#s4');return()=>{c1();c2();};};
-ANIMS[5]=()=>{const c1=staggerFadeIn('#s5');const c2=growBars('#s5');return()=>{c1();c2();};};
+ANIMS[5]=()=>staggerFadeIn('#s5');
 ANIMS[6]=()=>staggerFadeIn('#s6');
-ANIMS[7]=()=>{const c1=staggerFadeIn('#s7');const c2=growBars('#s7');return()=>{c1();c2();};};
+ANIMS[7]=()=>staggerFadeIn('#s7');
 ANIMS[8]=()=>staggerFadeIn('#s8');
 
 // Scene 9: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
