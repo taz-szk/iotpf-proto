@@ -60,6 +60,48 @@ def test_list_current_prices_returns_effective_prices():
     assert by_key == {"base_fee": "5000", "data_points": "0.01"}
 
 
+def test_list_scheduled_prices_requires_platform_auth():
+    resp = client.get(f"/tenants/{TENANT_ID}/billing/prices/scheduled")
+    assert resp.status_code == 401
+
+
+def test_list_scheduled_prices_rejects_tenant_token():
+    resp = client.get(
+        f"/tenants/{TENANT_ID}/billing/prices/scheduled",
+        headers={"Authorization": f"Bearer {_tenant_token()}"},
+    )
+    assert resp.status_code == 401
+
+
+def test_list_scheduled_prices_returns_future_rows():
+    row = MagicMock()
+    row.item_key = "base_fee"
+    row.unit_price = Decimal("6000")
+    row.effective_from = date(2099, 1, 1)
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.get_scheduled_unit_prices", return_value=[row]):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/prices/scheduled",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == [{"item_key": "base_fee", "unit_price": "6000", "effective_from": "2099-01-01"}]
+
+
+def test_list_scheduled_prices_empty_when_no_future_changes():
+    with patch("app.routers.billing.SessionLocal") as mock_session, \
+         patch("app.routers.billing.get_scheduled_unit_prices", return_value=[]):
+        mock_session.return_value = _session_ctx()
+        resp = client.get(
+            f"/tenants/{TENANT_ID}/billing/prices/scheduled",
+            headers={"Authorization": f"Bearer {_platform_token()}"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
 def test_create_price_success():
     created = MagicMock()
     created.item_key = "base_fee"

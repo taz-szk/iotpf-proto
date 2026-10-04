@@ -16,6 +16,7 @@ from app.services.billing import (
     get_effective_bill_shock_threshold,
     get_effective_unit_prices,
     get_invoice_detail_aggregated,
+    get_scheduled_unit_prices,
     list_invoices_aggregated,
     set_unit_price,
     validate_bill_shock_threshold,
@@ -55,6 +56,22 @@ def list_current_prices(tenant_id: str, _: dict = Depends(_require_platform)):
     return [
         {"item_key": item_key, "unit_price": str(unit_price), "effective_from": month_start}
         for item_key, unit_price in prices.items()
+    ]
+
+
+@router.get("/prices/scheduled", response_model=list[UnitPriceOut])
+def list_scheduled_prices(tenant_id: str, _: dict = Depends(_require_platform)):
+    """今月より後の日付から適用される、未適用の単価変更を一覧で返す。
+    単価を設定した直後でも「次月から何に変わるか」を確認できるようにするためのもの。"""
+    tenant_id = _validate_uuid(tenant_id)
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        rows = get_scheduled_unit_prices(db, tenant_id)
+    return [
+        {"item_key": row.item_key, "unit_price": str(row.unit_price), "effective_from": row.effective_from}
+        for row in rows
     ]
 
 

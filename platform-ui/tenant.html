@@ -709,7 +709,12 @@
                 <tr>
                   <td class="px-4 py-3 font-medium" x-text="item.label"></td>
                   <td class="px-4 py-3 text-gray-400" x-text="item.unit"></td>
-                  <td class="px-4 py-3" x-text="billingPrices[item.key] !== undefined ? ('¥' + billingPrices[item.key]) : '未設定'"></td>
+                  <td class="px-4 py-3">
+                    <div x-text="billingPrices[item.key] !== undefined ? ('¥' + billingPrices[item.key]) : '未設定'"></div>
+                    <div x-show="billingScheduledPrices[item.key]" class="text-xs text-amber-600 mt-0.5">
+                      <span x-text="billingScheduledPrices[item.key] ? (billingScheduledPrices[item.key].effective_from + ' から ¥' + billingScheduledPrices[item.key].unit_price + ' に変更予定') : ''"></span>
+                    </div>
+                  </td>
                   <td class="px-4 py-3 text-right">
                     <button @click="openBillingPriceForm(item.key)" class="text-blue-500 hover:text-blue-700 text-xs">設定</button>
                   </td>
@@ -1408,6 +1413,7 @@
           { key: 'alert_events', label: 'アラートイベント数', unit: '件あたり' },
         ],
         billingPrices: {},
+        billingScheduledPrices: {},
         billingSuccess: '',
         billingPricesForm: { open: false, item_key: '', unit_price: '', effective_month: '', error: '' },
         bsThreshold: '', bsThresholdIsDefault: true, bsEffective: '', savingBsThreshold: false, bsThresholdSaved: false,
@@ -1563,6 +1569,13 @@
           } catch(e) {
             this.error = e.message;
           }
+          try {
+            const scheduled = await api.request('GET', `/tenants/${tenantId}/billing/prices/scheduled`);
+            this.billingScheduledPrices = {};
+            for (const r of scheduled) { this.billingScheduledPrices[r.item_key] = r; }
+          } catch(e) {
+            this.error = e.message;
+          }
           this.loadInvoices();
           this.loadBsThreshold();
           this.loadRetentionDays();
@@ -1710,6 +1723,7 @@
             });
             this.billingSuccess = `${this.billingItemLabel(saved.item_key)} の単価を ${saved.effective_from} から ¥${saved.unit_price} に設定しました`;
             this.closeBillingPriceForm();
+            this.billingScheduledPrices[saved.item_key] = saved;
             setTimeout(() => { this.billingSuccess = ''; }, 8000);
           } catch(e) {
             this.billingPricesForm.error = e.message || '保存に失敗しました';

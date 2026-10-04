@@ -5,6 +5,7 @@ import pytest
 from app.services.billing import (
     InvalidEffectiveDateError,
     get_effective_unit_prices,
+    get_scheduled_unit_prices,
     set_unit_price,
 )
 
@@ -38,6 +39,31 @@ def test_get_effective_unit_prices_empty_when_no_rows():
     mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
     result = get_effective_unit_prices(mock_db, "tenant-1", 2026, 9)
     assert result == {}
+
+
+def test_get_scheduled_unit_prices_picks_earliest_future_row_per_item():
+    mock_db = MagicMock()
+    # サービス側は item_key 昇順・effective_from 昇順で取得する想定(直近の変更を優先するため)。
+    rows = [
+        _price_row("base_fee", Decimal("6000"), date(2099, 1, 1)),
+        _price_row("base_fee", Decimal("7000"), date(2099, 3, 1)),
+        _price_row("data_points", Decimal("0.03"), date(2099, 2, 1)),
+    ]
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = rows
+
+    result = get_scheduled_unit_prices(mock_db, "tenant-1")
+
+    assert [(r.item_key, r.unit_price, r.effective_from) for r in result] == [
+        ("base_fee", Decimal("6000"), date(2099, 1, 1)),
+        ("data_points", Decimal("0.03"), date(2099, 2, 1)),
+    ]
+
+
+def test_get_scheduled_unit_prices_empty_when_no_future_rows():
+    mock_db = MagicMock()
+    mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+    result = get_scheduled_unit_prices(mock_db, "tenant-1")
+    assert result == []
 
 
 def test_set_unit_price_rejects_non_first_of_month():

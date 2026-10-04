@@ -70,6 +70,23 @@ def get_effective_unit_prices(db: Session, tenant_id: str, year: int, month: int
     return result
 
 
+def get_scheduled_unit_prices(db: Session, tenant_id: str) -> list[BillingUnitPrice]:
+    """まだ適用されていない(今月より後の)単価変更を item_key ごとに直近1件ずつ返す。
+    単価を設定した直後でも「次月から何に変わるか」を確認できるようにするためのもの。"""
+    current_month_start = date.today().replace(day=1)
+    rows = (
+        db.query(BillingUnitPrice)
+        .filter(BillingUnitPrice.tenant_id == tenant_id, BillingUnitPrice.effective_from > current_month_start)
+        .order_by(BillingUnitPrice.item_key, BillingUnitPrice.effective_from.asc())
+        .all()
+    )
+    result: dict[str, BillingUnitPrice] = {}
+    for row in rows:
+        if row.item_key not in result:
+            result[row.item_key] = row
+    return list(result.values())
+
+
 def set_unit_price(db: Session, tenant_id: str, item_key: str, unit_price: Decimal, effective_from: date) -> BillingUnitPrice:
     """単価を設定する。同じ tenant_id・item_key・effective_from の行が既にあれば更新、なければ新規作成する。
     effective_from は必ず月初日かつ「翌月以降」でなければならない（当月中の変更・日割りは許可しない）。"""
