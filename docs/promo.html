@@ -367,8 +367,16 @@ canvas{display:block}
                 <tr class="fade-item"><td>v1.3.0</td><td>38.8 MB</td><td>2026-07-02</td><td><span class="ui-btn secondary" style="padding:4px 10px">配信</span></td></tr>
               </tbody>
             </table>
-            <div class="fade-item" style="margin-top:14px;background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px;font-size:.76rem;color:var(--ui-t)">
+            <div class="fade-item" style="margin-top:14px;font-size:.76rem;color:var(--ui-t)">
               配信先: デバイスグループ「<strong>大阪工場</strong>」22台
+            </div>
+            <div style="margin-top:8px;border:1px solid var(--ui-b);border-radius:8px;overflow:hidden">
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--ui-b)"><span style="font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ui-t);min-width:90px">sensor-101</span><span class="ui-badge active" style="font-size:.66rem">完了</span></div>
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--ui-b)"><span style="font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ui-t);min-width:90px">sensor-102</span><span class="ui-badge active" style="font-size:.66rem">完了</span></div>
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--ui-b)"><span style="font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ui-t);min-width:90px">sensor-103</span><span class="ui-badge warning" style="font-size:.66rem">配信中</span><div class="progress-bar" style="margin:0;background:#E2E8F0"><div class="progress-fill ota-live" style="width:0"></div></div></div>
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--ui-b)"><span style="font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ui-t);min-width:90px">sensor-104</span><span style="font-size:.7rem;color:var(--ui-tm)">待機中</span></div>
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px;border-bottom:1px solid var(--ui-b)"><span style="font-family:'JetBrains Mono',monospace;font-size:.74rem;color:var(--ui-t);min-width:90px">sensor-105</span><span style="font-size:.7rem;color:var(--ui-tm)">待機中</span></div>
+              <div class="fade-item" style="display:flex;align-items:center;gap:10px;padding:7px 12px"><span style="font-size:.7rem;color:var(--ui-tm)">他 17台 待機中</span></div>
             </div>
             <div class="fade-item" style="margin-top:10px;font-size:.7rem;color:var(--ui-tm)">最大100MBのファームウェアをオブジェクトストレージに格納。ダウンロードは署名付きJWT(24時間有効)で認可し、パストラバーサルを防止します。</div>
           </div>
@@ -1082,7 +1090,13 @@ ANIMS[2]=()=>{const c1=staggerFadeIn('#s2',60);const c2=autoHighlight('#s2',900)
 // Scene 3-5: ブートストラップトークン管理・デバイス証明書発行・OTA配信
 ANIMS[3]=()=>staggerFadeIn('#s3');
 ANIMS[4]=()=>staggerFadeIn('#s4');
-ANIMS[5]=()=>staggerFadeIn('#s5');
+ANIMS[5]=()=>{
+  const c1=staggerFadeIn('#s5');
+  const bar=document.querySelector('#s5 .ota-live');
+  const timers=[];
+  if(bar){bar.style.width='0';timers.push(setTimeout(()=>{bar.style.width='58%';},700));}
+  return()=>{c1();timers.forEach(clearTimeout);};
+};
 
 // Scene 6: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
 ANIMS[6]=()=>{
