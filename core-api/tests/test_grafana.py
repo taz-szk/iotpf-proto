@@ -8,6 +8,8 @@ from app.services.grafana import (
     _FLUX_DEVICE_VAR, _FLUX_DEVICE_VAR_TENANT, _FLUX_DEVICE_VAR_ARCHIVED,
     _FLUX_TELEMETRY_ARCHIVED, _FLUX_DELETED_ARCHIVED, _FLUX_STATUS_ARCHIVED,
     list_archived_devices, purge_archived_device_from_influxdb,
+    _fetch_org_influxdb_datasource_uid, _inject_datasource_uid,
+    sync_tenant_dashboard, sync_tenant_dashboard_with_configs,
 )
 
 def _mock_resp(status=200, json_data=None):
@@ -37,9 +39,102 @@ def test_setup_grafana_datasource_calls_api():
 
 def test_create_default_dashboard_calls_api():
     with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.return_value = _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-1"}])
         mock_httpx.post.return_value = _mock_resp(200, {"id": 1, "uid": "abc", "url": "/d/abc"})
         create_default_dashboard(org_id=42, tenant_name="test-tenant")
     assert mock_httpx.post.called
+
+
+def test_fetch_org_influxdb_datasource_uid_finds_influxdb_type():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.return_value = _mock_resp(200, [
+            {"type": "other", "uid": "not-this"},
+            {"type": "influxdb", "uid": "ds-uid-1"},
+        ])
+        result = _fetch_org_influxdb_datasource_uid(org_id=42)
+    assert result == "ds-uid-1"
+
+
+def test_fetch_org_influxdb_datasource_uid_returns_none_on_error():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.side_effect = Exception("network error")
+        result = _fetch_org_influxdb_datasource_uid(org_id=42)
+    assert result is None
+
+
+def test_inject_datasource_uid_sets_panel_and_target_level():
+    panels = [
+        {"id": 1, "type": "row"},
+        {"id": 2, "datasource": {"type": "influxdb"}, "targets": [{"refId": "A", "datasource": {"type": "influxdb"}}]},
+    ]
+    _inject_datasource_uid(panels, "ds-uid-1")
+    assert panels[1]["datasource"] == {"type": "influxdb", "uid": "ds-uid-1"}
+    assert panels[1]["targets"][0]["datasource"] == {"type": "influxdb", "uid": "ds-uid-1"}
+
+
+def test_inject_datasource_uid_recurses_into_collapsed_row_panels():
+    panels = [
+        {"id": 101, "type": "row", "collapsed": True, "panels": [
+            {"id": 102, "targets": [{"refId": "A", "datasource": {"type": "influxdb"}}]},
+        ]},
+    ]
+    _inject_datasource_uid(panels, "ds-uid-2")
+    nested_target = panels[0]["panels"][0]["targets"][0]
+    assert nested_target["datasource"] == {"type": "influxdb", "uid": "ds-uid-2"}
+
+
+def test_create_default_dashboard_injects_datasource_uid_into_panels():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.return_value = _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-3"}])
+        mock_httpx.post.return_value = _mock_resp(200, {"id": 1, "uid": "abc", "url": "/d/abc"})
+        create_default_dashboard(org_id=42, tenant_name="test-tenant")
+    posted = mock_httpx.post.call_args_list[0].kwargs["json"]
+    for target in posted["dashboard"]["panels"][1]["targets"]:
+        assert target["datasource"] == {"type": "influxdb", "uid": "ds-uid-3"}
+
+
+def test_create_default_dashboard_does_not_mutate_shared_template():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.return_value = _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-tenant-a"}])
+        mock_httpx.post.return_value = _mock_resp(200, {"id": 1, "uid": "abc", "url": "/d/abc"})
+        create_default_dashboard(org_id=1, tenant_name="tenant-a")
+
+        mock_httpx.get.return_value = _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-tenant-b"}])
+        create_default_dashboard(org_id=2, tenant_name="tenant-b")
+
+    first_posted = mock_httpx.post.call_args_list[0].kwargs["json"]
+    assert first_posted["dashboard"]["panels"][1]["targets"][0]["datasource"]["uid"] == "ds-uid-tenant-a"
+
+
+def test_sync_tenant_dashboard_injects_datasource_uid():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.side_effect = [
+            _mock_resp(200, {"homeDashboardUID": "uid1"}),
+            _mock_resp(200, {"dashboard": {"version": 3}}),
+            _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-sync"}]),
+        ]
+        mock_httpx.post.return_value = _mock_resp(200, {"uid": "uid1"})
+        sync_tenant_dashboard(org_id=42, tenant_name="acme")
+    posted = mock_httpx.post.call_args.kwargs["json"]
+    for target in posted["dashboard"]["panels"][1]["targets"]:
+        assert target["datasource"] == {"type": "influxdb", "uid": "ds-uid-sync"}
+
+
+def test_sync_tenant_dashboard_with_configs_injects_datasource_uid():
+    with patch("app.services.grafana.httpx") as mock_httpx:
+        mock_httpx.get.side_effect = [
+            _mock_resp(200, {"homeDashboardUID": "uid1"}),
+            _mock_resp(200, {"dashboard": {"version": 3}}),
+            _mock_resp(200, [{"type": "influxdb", "uid": "ds-uid-sync2"}]),
+        ]
+        mock_httpx.post.return_value = _mock_resp(200, {"uid": "uid1"})
+        sync_tenant_dashboard_with_configs(
+            org_id=42, tenant_name="acme",
+            configs=[{"sensor_key": "temp", "panel_type": "timeseries"}],
+        )
+    posted = mock_httpx.post.call_args.kwargs["json"]
+    sensor_panel = next(p for p in posted["dashboard"]["panels"] if p.get("title") == "temp")
+    assert sensor_panel["targets"][0]["datasource"] == {"type": "influxdb", "uid": "ds-uid-sync2"}
 
 
 def test_panel_data_mode_has_all_types():

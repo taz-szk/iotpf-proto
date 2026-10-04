@@ -878,11 +878,53 @@ def _get_influxdb_org_name(org_id: str) -> str | None:
         pass
     return None
 
+def _fetch_org_influxdb_datasource_uid(org_id: int) -> str | None:
+    """org内のinfluxdb型データソースのUIDを取得する(テナントは通常1個のみ持つ)。
+    Grafana 13でパネル・ターゲットのdatasource参照にUIDを明示するために使う
+    (UID省略時の「org内のデフォルトデータソースへの暗黙解決」に依存しないようにする)。
+    取得できない場合はNoneを返し、呼び出し側は従来通りUID省略のまま続行する。"""
+    try:
+        resp = httpx.get(
+            f"{settings.grafana_url}/api/datasources",
+            auth=_admin_auth(),
+            headers={"X-Grafana-Org-Id": str(org_id)},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        for ds in resp.json():
+            if ds.get("type") == "influxdb":
+                return ds.get("uid")
+    except Exception as e:
+        print(f"[grafana] datasource uid lookup failed for org {org_id}: {e}")
+    return None
+
+
+def _inject_datasource_uid(panels: list[dict], uid: str) -> None:
+    """パネル・ターゲットのdatasource参照にUIDを明示する。折りたたみ行の入れ子
+    panelsも再帰的に処理する。呼び出し側は変更してよい(共有元を書き換えない)
+    パネルリストを渡すこと。"""
+    ds = {"type": "influxdb", "uid": uid}
+    for panel in panels:
+        if "datasource" in panel:
+            panel["datasource"] = dict(ds)
+        for target in panel.get("targets", []):
+            target["datasource"] = dict(ds)
+        if panel.get("panels"):
+            _inject_datasource_uid(panel["panels"], uid)
+
+
 def create_default_dashboard(org_id: int, tenant_name: str, groups: list[dict] | None = None) -> str:
     """ダッシュボードを作成し、org のホームに設定する。ダッシュボード UID を返す。"""
+    import copy
     dashboard = dict(_DEFAULT_DASHBOARD)
     dashboard["dashboard"] = dict(dashboard["dashboard"])
     dashboard["dashboard"]["title"] = f"テレメトリ監視 - {tenant_name}"
+    # _DEFAULT_DASHBOARDはモジュール共有のテンプレートなので、deepcopyしてから
+    # UIDを注入する(そのまま書き換えると他テナントのダッシュボードに混入する)
+    dashboard["dashboard"]["panels"] = copy.deepcopy(dashboard["dashboard"]["panels"])
+    ds_uid = _fetch_org_influxdb_datasource_uid(org_id)
+    if ds_uid:
+        _inject_datasource_uid(dashboard["dashboard"]["panels"], ds_uid)
     if groups is not None:
         dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
     resp = httpx.post(
@@ -1274,6 +1316,9 @@ def sync_tenant_dashboard(org_id: int, tenant_name: str, groups: list[dict] | No
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
     dashboard["dashboard"]["panels"] = build_dashboard_panels(configs or [])
+    ds_uid = _fetch_org_influxdb_datasource_uid(org_id)
+    if ds_uid:
+        _inject_datasource_uid(dashboard["dashboard"]["panels"], ds_uid)
     if groups is not None:
         dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
 
@@ -1321,6 +1366,9 @@ def sync_tenant_dashboard_with_configs(org_id: int, tenant_name: str, configs: l
     dashboard["dashboard"]["uid"] = uid
     dashboard["dashboard"]["version"] = current_version
     dashboard["dashboard"]["panels"] = build_dashboard_panels(configs)
+    ds_uid = _fetch_org_influxdb_datasource_uid(org_id)
+    if ds_uid:
+        _inject_datasource_uid(dashboard["dashboard"]["panels"], ds_uid)
     if groups is not None:
         dashboard["dashboard"]["templating"] = {"list": build_templating(groups)}
 
