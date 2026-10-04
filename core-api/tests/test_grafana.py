@@ -355,6 +355,13 @@ def test_device_var_flux_excludes_deleted_names_but_keeps_del_prefixed():
     assert '${group}' not in _FLUX_DEVICE_VAR
 
 
+def test_device_var_flux_group_filter_appears_exactly_once():
+    """${group}変数参照が同一クエリ内に複数回出現すると、Grafana側でそのテンプレート変数
+    クエリ自体が実行されなくなる(ブラウザが一切リクエストしない)不具合を実機で確認した。
+    status/historyの2箇所に重複して挿入する実装に戻さないための回帰テスト。"""
+    assert _FLUX_DEVICE_VAR_TENANT.count('${group}') == 1
+
+
 def test_device_var_flux_includes_devices_with_only_old_telemetry():
     """直近30日のdevice_statusが無くても、telemetry measurementに過去データが
     あるdevice_nameは一覧から消えない(=選択して過去データを見られる)こと。"""
