@@ -398,6 +398,7 @@ canvas{display:block}
               <span class="live">連携中</span>
               <span style="font-size:.72rem;color:var(--ui-tm);font-family:'JetBrains Mono',monospace">Auth Key ****7f3a　coverage: jp</span>
             </div>
+            <div class="fade-item" style="font-size:.68rem;color:var(--ui-tm);margin-bottom:14px">認証情報(Auth Key)は暗号化してデータベースに保管し、画面には末尾4桁のみ表示します。</div>
             <table class="ui-tbl">
               <thead><tr><th>IMSI</th><th>種別</th><th>状態</th><th>セッション</th><th>速度クラス</th><th>紐づけデバイス</th></tr></thead>
               <tbody>
@@ -735,14 +736,15 @@ canvas{display:block}
             <div class="url">https://iot.suzuki-net.org/admin/</div>
           </div>
           <div class="screen-body">
-            <table class="ui-tbl" style="margin-bottom:14px">
-              <thead><tr><th>設定項目</th><th>値</th></tr></thead>
+            <table class="ui-tbl" style="margin-bottom:6px">
+              <thead><tr><th>設定項目</th><th>モデル(名前:パラメータ数)</th></tr></thead>
               <tbody>
                 <tr class="fade-item"><td>Ollama URL</td><td>http://ollama:11434</td></tr>
-                <tr class="fade-item"><td>チャットモデル</td><td>qwen2.5:3b</td></tr>
-                <tr class="fade-item"><td>埋め込みモデル</td><td>nomic-embed-text</td></tr>
+                <tr class="fade-item"><td>チャットモデル(会話応答用)</td><td>qwen2.5:3b</td></tr>
+                <tr class="fade-item"><td>埋め込みモデル(文書検索用)</td><td>nomic-embed-text</td></tr>
               </tbody>
             </table>
+            <div class="fade-item" style="font-size:.66rem;color:var(--ui-tm);margin-bottom:14px">※ Ollamaの命名規則「モデル名:パラメータ数」に従います(例: qwen2.5:3b = Qwen2.5の3Bパラメータ版)</div>
             <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
               <span style="font-size:.78rem;color:var(--ui-tm)">design.html / install-guide.html / CLAUDE.md を検索対象に再構築</span>
               <span class="ui-btn primary">ドキュメント再インデックス</span>
