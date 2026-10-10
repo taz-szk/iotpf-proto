@@ -57,15 +57,20 @@ done
 
 DATE=$(date '+%Y-%m-%d %H:%M %Z')
 
+# 詳細は標準出力に出す（cronのリダイレクトでvuln-scan.logに残る）。
+# Slackには件数とイメージ別サマリのみ送る（全件埋め込むとSlackのメッセージサイズ上限で
+# 本文が切れてしまうため）。
 if [ "$TOTAL_FINDINGS" -eq 0 ]; then
-    TEXT=$(printf '🔍 脆弱性スキャン実施（%s）\n対象%s イメージ、Critical/High（修正版あり）の検出なし' "$DATE" "$IMAGE_COUNT")
+    SLACK_TEXT=$(printf '🔍 脆弱性スキャン実施（%s）\n対象%s イメージ、Critical/High（修正版あり）の検出なし' "$DATE" "$IMAGE_COUNT")
 else
-    TEXT=$(printf '🚨 脆弱性スキャン実施（%s）\n対象%s イメージ、Critical/High（修正版あり）%s件検出\n\n%s' \
-        "$DATE" "$IMAGE_COUNT" "$TOTAL_FINDINGS" "$(cat "$REPORT_FILE")")
+    SUMMARY=$(grep '^\*' "$REPORT_FILE")
+    SLACK_TEXT=$(printf '🚨 脆弱性スキャン実施（%s）\n対象%s イメージ、Critical/High（修正版あり）%s件検出\n\n%s\n\n詳細はサーバー上のvuln-scan.logを確認してください。' \
+        "$DATE" "$IMAGE_COUNT" "$TOTAL_FINDINGS" "$SUMMARY")
+    printf '%s\n' "$(cat "$REPORT_FILE")"
 fi
 
 curl -sf -X POST -H 'Content-Type: application/json' \
-    --data "$(jq -n --arg text "$TEXT" '{text: $text}')" \
+    --data "$(jq -n --arg text "$SLACK_TEXT" '{text: $text}')" \
     "$VULN_SCAN_SLACK_WEBHOOK_URL" > /dev/null
 
 echo "通知しました（検出件数: ${TOTAL_FINDINGS}）"
