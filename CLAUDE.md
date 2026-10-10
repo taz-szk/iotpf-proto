@@ -108,7 +108,7 @@ docker compose restart nginx emqx
 | influxdb | influxdb:2-alpine | 時系列テレメトリ |
 | emqx | emqx:5 | MQTT ブローカー（mTLS） |
 | step-ca | smallstep/step-ca | 内部 CA（デバイス証明書発行） |
-| minio | minio/minio | ファームウェアストレージ |
+| minio | pgsty/minio（`minio/minio`はサポート切れのため切替済み） | ファームウェアストレージ |
 | grafana | grafana/grafana-oss | ダッシュボード（Auth Proxy SSO） |
 | nginx | nginx:1.25-alpine | リバースプロキシ（TLS終端） |
 | mailhog | axllent/mailpit | SMTP テスト用（サービス名・コンテナ名は`mailhog`のまま。Web UI / APIは :8025、APIは`/api/v1/messages`） |
@@ -164,7 +164,7 @@ RAG+エージェント機能（ローカルLLMによるドキュメントQ&A・�
 - **コンテナ権限** — Pythonサービスは非root、`no-new-privileges` + `cap_drop: ALL`。core-apiにstep-caボリューム（CA秘密鍵）はマウントせず、プロビジョナのパスワードは `STEP_CA_PASSWORD` 環境変数で渡す
 - **パスワードポリシー** — 12文字以上・72バイト以下（`services/password_policy.py`、全設定経路で共通）。ログイン照合には適用しない
 - **パスワード変更でセッション失効** — テナントJWTに `pwv`（パスワード指紋）、PF管理者Cookieは `tok_ver`/`is_active` をDBで再検証（`tenant_session.py` / `platform_session.py`）
-- **Grafanaイメージ固定** — `GRAFANA_IMAGE`（既定 `grafana/grafana-oss:13.0.2`）
+- **Grafanaイメージ固定** — `GRAFANA_IMAGE`（既定 `grafana/grafana:13.2.0`）
 - **管理コンソールのURLは公開文書に載せない** — 記録先は `nginx/conf.d/api.conf`（管理コンソール用のlocation）とインストーラ完了画面。docs/・README・CLAUDE.md には書かない（docs/ は `/docs/` で公開され、AIアシスタントの検索対象にもなる）
 
 ## デバッグに使うコマンド集
