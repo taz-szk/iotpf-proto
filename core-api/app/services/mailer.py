@@ -82,3 +82,48 @@ def send_test_email(to_emails: list[str], tenant_name: str, sender_email: str) -
         return {"ok": True, "error": None}
     except Exception as e:
         return {"ok": False, "error": _describe_smtp_exception(e)}
+
+
+def send_signup_verification_email(to_email: str, tenant_name: str, verification_url: str) -> None:
+    """サインアップの確認メールを送信する。送信失敗は呼び出し元(POST /signup)に伝播させ、
+    ユーザーに失敗として返す(送信できていないのに成功扱いにしない)。
+    本文は既存のsend_bill_shock_email等と同じく英語にする(日本語を混在させると
+    Content-Transfer-Encodingがbase64になり、URLが生テキストから読み取れなくなるため)。"""
+    tenant_name_clean = str(tenant_name).replace("\r", "").replace("\n", "")
+    msg = MIMEMultipart()
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_email
+    msg["Subject"] = f"[IoT Platform] Confirm your signup for {tenant_name_clean}"
+    msg.attach(MIMEText(
+        f"Click the link below to complete your signup (within 24 hours).\n\n{verification_url}\n",
+        "plain",
+    ))
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+        if settings.smtp_user:
+            server.starttls()
+            server.login(settings.smtp_user, settings.smtp_password)
+        server.sendmail(settings.smtp_from, [to_email], msg.as_string())
+
+
+def send_trial_expiry_warning_email(to_email: str, tenant_name: str, expires_at_date: str) -> None:
+    """トライアル期限7日前の警告メールを送信する。送信失敗はログ出力のみ
+    (既存のsend_bill_shock_emailと同じ方針。バッチ全体を止めない)。
+    本文は英語(理由はsend_signup_verification_emailのdocstring参照)。"""
+    tenant_name_clean = str(tenant_name).replace("\r", "").replace("\n", "")
+    msg = MIMEMultipart()
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_email
+    msg["Subject"] = f"[IoT Platform] Trial expiring soon for {tenant_name_clean}"
+    msg.attach(MIMEText(
+        f"The trial period for tenant '{tenant_name_clean}' expires on {expires_at_date}.\n"
+        "If you wish to continue using it, please request an extension from the admin console.\n",
+        "plain",
+    ))
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+            if settings.smtp_user:
+                server.starttls()
+                server.login(settings.smtp_user, settings.smtp_password)
+            server.sendmail(settings.smtp_from, [to_email], msg.as_string())
+    except Exception as e:
+        print(f"Trial expiry warning email send failed: {e}")
