@@ -11,7 +11,7 @@ from app.database import SessionLocal, engine
 from app.services.auth import verify_token, hash_password
 from app.services.password_policy import validate_password
 from app.services.tenant_session import forget_session
-from app.services.grafana import ensure_grafana_user_in_org
+from app.services.tenant_users import create_tenant_user_record
 from app.services.audit import log_audit
 
 router = APIRouter(prefix="/tenants/{tenant_id}/users", tags=["tenant-users"])
@@ -43,25 +43,19 @@ def create_tenant_user(tenant_id: UUID, body: TenantUserCreate, payload: dict = 
     user_id = str(uuid.uuid4())
     password_hash = hash_password(body.password)
 
-    with engine.connect() as conn:
-        try:
-            conn.execute(
-                text(f'''
-                    INSERT INTO "{schema}".users (id, email, password_hash, role)
-                    VALUES (:id, :email, :hash, :role)
-                '''),
-                {"id": user_id, "email": body.email, "hash": password_hash, "role": body.role}
-            )
-            if tenant.grafana_org_id:
-                ensure_grafana_user_in_org(int(tenant.grafana_org_id), body.email, _ROLE_GRAFANA[body.role], str(tenant_id))
-            conn.commit()
-        except IntegrityError:
-            raise HTTPException(status_code=409, detail="Email already exists")
-        except HTTPException:
-            raise
-        except Exception as e:
-            print(f"[create_tenant_user] unexpected error: {e}")
-            raise HTTPException(status_code=502, detail="Grafana sync failed; user not created")
+    try:
+        create_tenant_user_record(
+            tenant_id=tenant_id_str, schema=schema, email=body.email,
+            password_hash=password_hash, role=body.role,
+            grafana_org_id=tenant.grafana_org_id, user_id=user_id,
+        )
+    except IntegrityError:
+        raise HTTPException(status_code=409, detail="Email already exists")
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[create_tenant_user] unexpected error: {e}")
+        raise HTTPException(status_code=502, detail="Grafana sync failed; user not created")
 
     log_audit("platform", payload["sub"], payload["email"], "create_tenant_user",
               tenant_id=tenant_id_str, resource_type="tenant_user", resource_id=body.email)

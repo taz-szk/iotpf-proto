@@ -20,8 +20,8 @@ def _make_tenant(tid="22222222-2222-2222-2222-222222222222"):
 def test_create_tenant_user_success():
     tenant = _make_tenant()
     with patch("app.routers.tenant_users.SessionLocal") as mock_sl, \
-         patch("app.routers.tenant_users.engine") as mock_engine, \
-         patch("app.routers.tenant_users.ensure_grafana_user_in_org") as mock_grafana, \
+         patch("app.services.tenant_users.engine") as mock_engine, \
+         patch("app.services.tenant_users.ensure_grafana_user_in_org") as mock_grafana, \
          patch("app.routers.tenant_users.hash_password", return_value="hashed"):
         mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
         mock_conn = MagicMock()
@@ -49,7 +49,7 @@ def test_create_tenant_user_success():
 def test_create_tenant_user_duplicate_email():
     tenant = _make_tenant()
     with patch("app.routers.tenant_users.SessionLocal") as mock_sl, \
-         patch("app.routers.tenant_users.engine") as mock_engine, \
+         patch("app.services.tenant_users.engine") as mock_engine, \
          patch("app.routers.tenant_users.hash_password", return_value="hashed"):
         mock_sl.return_value.__enter__.return_value.query.return_value.filter.return_value.first.return_value = tenant
         mock_conn = MagicMock()
