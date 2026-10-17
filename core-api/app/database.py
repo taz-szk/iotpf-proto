@@ -625,3 +625,34 @@ def migrate_create_rag_tables() -> None:
             )
         """))
         conn.commit()
+
+
+def migrate_add_trial_columns() -> None:
+    """tenants テーブルにセルフサインアップ・トライアル管理用カラムを追加する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS signup_source VARCHAR(20) NOT NULL DEFAULT 'platform_created',
+            ADD COLUMN IF NOT EXISTS trial_expires_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS trial_warning_sent_at TIMESTAMPTZ,
+            ADD COLUMN IF NOT EXISTS trial_extension_requested_at TIMESTAMPTZ
+        """))
+        conn.commit()
+
+
+def migrate_create_tenant_signup_requests() -> None:
+    """tenant_signup_requests テーブル(メール確認待ちの仮登録)を作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS tenant_signup_requests (
+                id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                email            VARCHAR(255) NOT NULL,
+                tenant_name      VARCHAR(255) NOT NULL,
+                slug             VARCHAR(100) NOT NULL UNIQUE,
+                password_hash    TEXT NOT NULL,
+                verification_token VARCHAR(64) NOT NULL UNIQUE,
+                created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+                expires_at       TIMESTAMPTZ NOT NULL
+            )
+        """))
+        conn.commit()

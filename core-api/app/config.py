@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     smtp_user: str = ""
     smtp_password: str = ""
     smtp_from: str = "alerts@iot-platform.local"
+    recaptcha_site_key: str = ""
+    recaptcha_secret_key: str = ""
+    recaptcha_min_score: float = 0.5
+    # vuln-scan.sh / secrets-rotation-check.sh と同じSlack Webhookをプラットフォーム通知に再利用する
+    vuln_scan_slack_webhook_url: str = ""
 
     class Config:
         env_file = ".env"

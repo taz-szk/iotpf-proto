@@ -17,6 +17,10 @@ class Tenant(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     bill_shock_threshold_amount = Column(Integer, nullable=True)
     data_retention_days = Column(Integer, nullable=True)
+    signup_source = Column(String(20), nullable=False, default="platform_created")
+    trial_expires_at = Column(DateTime(timezone=True), nullable=True)
+    trial_warning_sent_at = Column(DateTime(timezone=True), nullable=True)
+    trial_extension_requested_at = Column(DateTime(timezone=True), nullable=True)
 
 class PlatformUser(Base):
     __tablename__ = "platform_users"
@@ -28,6 +32,17 @@ class PlatformUser(Base):
     totp_secret = Column(String(64), nullable=True)
     totp_enabled = Column(Boolean, nullable=False, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class TenantSignupRequest(Base):
+    __tablename__ = "tenant_signup_requests"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), nullable=False)
+    tenant_name = Column(String(255), nullable=False)
+    slug = Column(String(100), nullable=False, unique=True)
+    password_hash = Column(String, nullable=False)
+    verification_token = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
 
 class ProvisioningToken(Base):
     __tablename__ = "provisioning_tokens"
