@@ -167,12 +167,24 @@ RECAPTCHA_MIN_SCORE=0.5
 
 ## 画面
 
-- **公開サインアップページ**(`platform-ui`配下、新規): テナント名・email・パスワード入力 +
-  reCAPTCHA v3(スコア型なので画面上にチェックボックス等は出ない)。既存の`promo.html`系と
-  同じトーンのデザインに合わせる
-- **確認メール送信後の案内ページ**: 「確認メールを送信しました」の静的ページ
-- **admin-ui テナント一覧**: 既存画面に「トライアル期限」「延長申請中」列を追加し、
-  申請中テナントに承認ボタンを表示(`POST /tenants/{tenant_id}/trial-extension/approve`を呼ぶ)
+**訂正**: `platform-ui`はプラットフォーム管理者専用の非公開コンソール(`/iotairx-console/`、
+CLAUDE.mdで「URLを公開文書に載せない」と明記されている)であり、公開ページを置く場所ではない。
+`admin-ui`も既存はテナントログイン後の画面群(`/admin/`)。公開サインアップ用に
+**新規の静的ディレクトリ`public-ui/`**を追加する。
+
+- **`public-ui/signup.html`**(新規): テナント名・email・パスワード入力 + reCAPTCHA v3
+  (スコア型なので画面上にチェックボックス等は出ない)。既存の`docs/promo.html`と同じトーンの
+  デザインに合わせる。JSから`POST /api/signup`を呼ぶ(既存ページが`/api/...`を呼ぶのと同じ規約)
+- **`public-ui/signup-pending.html`**(新規): 「確認メールを送信しました」の静的案内ページ
+- **nginx**: `nginx/conf.d/api.conf`に`location /signup/ { alias /usr/share/nginx/public-ui/; index signup.html; try_files $uri $uri/ /signup/signup.html; }`を追加。
+  `docker-compose.yml`のnginxサービスに`./public-ui:/usr/share/nginx/public-ui:ro`のvolumeマウントを追加。
+  `/api/signup`(POST)は既存の`/api/auth/login`と同じ理由(ブルートフォース/スパム対策)で
+  `nginx/conf.d/rate-limit.conf`に新しいゾーン(例: `limit_req_zone $binary_remote_addr zone=signup:10m rate=10r/m;`)を追加し、
+  `location = /api/signup { limit_req zone=signup burst=5 nodelay; ... }`を他のレート制限済みエンドポイントと同じ形で追加する
+- **プラットフォーム管理者のテナント一覧**(`platform-ui/tenants.html`、既存、`/iotairx-console/`配下):
+  「トライアル期限」「延長申請中」列を追加し、申請中テナントに承認ボタンを表示
+  (`POST /tenants/{tenant_id}/trial-extension/approve`を呼ぶ)。この画面はプラットフォーム管理者
+  専用のため、承認操作をここに置くのは自然(admin-uiではなく既存のplatform-ui/tenants.htmlを使う)
 
 ## Global Constraints
 
