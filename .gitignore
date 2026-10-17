@@ -47,3 +47,6 @@ docs/totp-recovery.md
 
 # Claude Codeのプロジェクト指示ファイル(ローカル専用、リポジトリには上げない)
 CLAUDE.md
+
+# シークレットローテーションの運用状態(値は持たないが運用データなのでgitignore)
+scripts/secrets-rotation-state.json
