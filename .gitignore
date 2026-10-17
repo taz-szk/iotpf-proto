@@ -44,3 +44,6 @@ docs/totp-recovery.md
 
 # Local git worktrees
 .worktrees/
+
+# Claude Codeのプロジェクト指示ファイル(ローカル専用、リポジトリには上げない)
+CLAUDE.md
