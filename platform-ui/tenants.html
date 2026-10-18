@@ -271,9 +271,11 @@
           this.deleting = true;
           this.error = '';
           try {
-            await api.tenants.delete(this.tenant.id);
+            const deletedId = this.tenant.id;
+            const onDelete = this._onDelete;
+            await api.tenants.delete(deletedId);
             this.close();
-            if (this._onDelete) this._onDelete(this.tenant.id);
+            if (onDelete) onDelete(deletedId);
           } catch(e) {
             this.error = e.message || '削除に失敗しました';
             this.deleting = false;
