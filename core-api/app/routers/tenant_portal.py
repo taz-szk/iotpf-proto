@@ -131,6 +131,11 @@ def get_me(payload: dict = Depends(_require_tenant)):
         "signup_source": tenant.signup_source,
         "trial_expires_at": tenant.trial_expires_at,
         "trial_extension_requested_at": tenant.trial_extension_requested_at,
+        "map_default_lat": tenant.map_default_lat,
+        "map_default_lng": tenant.map_default_lng,
+        "map_default_zoom": tenant.map_default_zoom,
+        "map_tile_url_template": settings.map_tile_url_template,
+        "map_tile_attribution": settings.map_tile_attribution,
     }
 
 
@@ -161,6 +166,34 @@ def toggle_public_access(body: PublicAccessBody, payload: dict = Depends(_requir
         "public_token": token,
         "public_url": f"/public/{token}" if token else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# 位置情報タブ: 地図デフォルト表示
+# ---------------------------------------------------------------------------
+
+class MapDefaultViewBody(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    zoom: int = Field(ge=0, le=22)
+
+
+@router.put("/me/map-default-view")
+def update_map_default_view(body: MapDefaultViewBody, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        tenant.map_default_lat = body.lat
+        tenant.map_default_lng = body.lng
+        tenant.map_default_zoom = body.zoom
+        db.commit()
+        return {
+            "map_default_lat": tenant.map_default_lat,
+            "map_default_lng": tenant.map_default_lng,
+            "map_default_zoom": tenant.map_default_zoom,
+        }
 
 
 # ---------------------------------------------------------------------------
