@@ -1,7 +1,7 @@
 import uuid as _audit_uuid
-from datetime import timedelta
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response, status
-from pydantic import BaseModel
+from datetime import datetime, timedelta, timezone
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, HTTPException, Request, Response, status
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from app.schemas.tenant_auth import TenantLoginRequest, TenantLoginResponse
 import secrets as _secrets
@@ -11,7 +11,9 @@ from app.services.auth import verify_password, create_access_token, hash_passwor
 from app.services.tenant_session import require_tenant_session, forget_session, password_fingerprint
 from app.services.rate_limiter import is_rate_limited, record_failure, clear_failures
 from app.services.grafana import ensure_grafana_user_in_org, set_user_default_org_via_proxy
-from app.models.public import Tenant, MfaSettings
+from app.services.recaptcha import verify_recaptcha
+from app.services.mailer import send_password_reset_email
+from app.models.public import Tenant, MfaSettings, PasswordResetToken
 from app.database import SessionLocal, engine
 from app.config import settings
 
@@ -150,6 +152,63 @@ def tenant_logout(response: Response, iot_token: str | None = Cookie(default=Non
                       tenant_id=payload_data.get("tenant_id"))
     response.delete_cookie(key="iot_token", path="/")
     return {"ok": True}
+
+
+class ForgotPasswordRequest(BaseModel):
+    tenant_slug: str
+    email: EmailStr
+    recaptcha_token: str
+
+
+def _send_password_reset_email_safe(to_email: str, tenant_name: str, reset_url: str) -> None:
+    """BackgroundTasksから呼ばれる。クライアントは既にレスポンスを受け取っているため、
+    送信失敗はログに残すだけで伝播先が無い（既存のsend_trial_expiry_warning_email等と同じ方針）。"""
+    try:
+        send_password_reset_email(to_email, tenant_name, reset_url)
+    except Exception as e:
+        print(f"Password reset email send failed: {e}")
+
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, request: Request, background_tasks: BackgroundTasks):
+    ip = request.client.host if request.client else "unknown"
+    rate_key = f"tenant_password_reset:{ip}"
+    # 失敗時だけでなく全リクエストを数える。失敗時のみ数えると、429の出方の違いで
+    # テナント/メールアドレスの存在確認に使われてしまうため。
+    record_failure(rate_key)
+    if is_rate_limited(rate_key):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
+
+    if verify_recaptcha(req.recaptcha_token, ip):
+        with SessionLocal() as db:
+            tenant = db.query(Tenant).filter(
+                Tenant.slug == req.tenant_slug, Tenant.status == "active",
+            ).first()
+            if tenant:
+                schema = f"tenant_{str(tenant.id).replace('-', '_')}"
+                with engine.connect() as conn:
+                    row = conn.execute(
+                        text(f'SELECT id, email FROM "{schema}".users WHERE email = :email AND is_active = TRUE'),
+                        {"email": req.email},
+                    ).fetchone()
+                if row:
+                    existing = db.query(PasswordResetToken).filter(
+                        PasswordResetToken.user_id == row.id,
+                    ).first()
+                    if existing:
+                        db.delete(existing)
+                        db.flush()
+                    token = _secrets.token_urlsafe(32)
+                    db.add(PasswordResetToken(
+                        id=_audit_uuid.uuid4(), tenant_id=tenant.id, user_id=row.id,
+                        email=row.email, token=token,
+                        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                    ))
+                    db.commit()
+                    reset_url = f"https://{settings.platform_domain}/admin/reset-password.html?token={token}"
+                    background_tasks.add_task(_send_password_reset_email_safe, row.email, tenant.name, reset_url)
+
+    return {"status": "requested"}
 
 
 class ChangePasswordRequest(BaseModel):
