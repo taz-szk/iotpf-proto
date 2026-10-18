@@ -592,6 +592,31 @@ td code { font-size: 12px; }
         <div class="req-card-title">テナント単位のモバイル回線管理</div>
         <div class="req-card-body">SORACOM連携によるテナント単位の回線管理（一覧・状態変更[有効化/停止/利用中断/利用開始待ち]・速度クラス変更・デバイス紐づけ、SIM種別・セッション状態の表示）</div>
       </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-14 AIアシスタント（選択制）</div>
+        <div class="req-card-title">RAGによるドキュメントQ&amp;A・確認付き操作代行</div>
+        <div class="req-card-body">Ollama（別インスタンス前提）+ pgvectorによるRAG。プラットフォーム管理者向け・テナント管理者向けウィジェットの両方に対応。接続先がDB設定で未設定の間は機能全体が無効。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-15 監査ログ</div>
+        <div class="req-card-title">操作履歴の記録・閲覧</div>
+        <div class="req-card-body">プラットフォーム管理者・テナントユーザーの操作（作成・削除・設定変更等）を記録し、全テナント横断（プラットフォーム）・自テナント（テナント）それぞれで閲覧できる。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-16 テナントセルフサインアップ</div>
+        <div class="req-card-title">90日間トライアルの自己登録</div>
+        <div class="req-card-body">プラットフォーム管理者への連絡なしに、見込み利用者が自分でテナントを作成し試用できる。reCAPTCHA v3によるボット対策、メール確認、期限7日前の警告・延長申請（Slack通知）・放置時の自動削除。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-17 パスワード再設定</div>
+        <div class="req-card-title">テナントユーザーのセルフサービス再設定</div>
+        <div class="req-card-body">テナント管理者への連絡なしに、テナントユーザーが自分でパスワードを再設定できる。reCAPTCHA v3、メールアドレスの存在有無を外部に漏らさない設計、1時間有効なトークン。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-18 デバイス位置情報</div>
+        <div class="req-card-title">GPSによる地図表示（全体・履歴）</div>
+        <div class="req-card-body">テナント内デバイスの最新位置を地図上にピン表示する全体表示と、1台の移動履歴を表示する履歴画面。デバイスグループによる絞り込み、テナントごとの地図デフォルト表示保存に対応。</div>
+      </div>
     </div>
   </div>
 
@@ -993,6 +1018,91 @@ td code { font-size: 12px; }
         </table>
       </div>
     </div>
+    <div class="subsection">
+      <h3>監査ログ (/audit-logs, /tenant-portal/audit-logs)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/audit-logs</code></td><td>全テナント横断の操作履歴一覧（tenant_id・action・期間での絞り込み、ページング）</td><td>Platform JWT</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenant-portal/audit-logs</code></td><td>自テナントの操作履歴一覧</td><td>Tenant Cookie</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>AIアシスタント（選択制） (/platform/assistant, /tenants/{id}/assistant)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/platform/assistant/settings</code></td><td>Ollama接続先・モデル設定の取得</td><td>Platform JWT</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/platform/assistant/settings</code></td><td>接続先・モデル設定の更新（<code>ollama_url</code>がNULLの間は機能全体が無効）</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/platform/assistant/settings/test-connection</code></td><td>接続テスト</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/platform/assistant/reindex</code></td><td>ドキュメント全文の再インデックス（埋め込み再生成、長時間処理）</td><td>Platform JWT</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/assistant/chat</code></td><td>RAGによるQ&amp;A・操作提案</td><td>Tenant Cookie</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/assistant/confirm-action</code></td><td>提案された操作の確認実行（pending_action方式）</td><td>Tenant Cookie</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>テナントセルフサインアップ (/signup)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/signup</code></td><td>テナント作成申込み（reCAPTCHA v3検証、確認メール送信）</td><td>なし（レート制限・reCAPTCHA）</td></tr>
+            <tr><td><code>GET</code></td><td><code>/signup/verify</code></td><td>確認メールのトークンを検証し、テナント・初期管理者ユーザーを作成（90日間トライアル）</td><td>確認トークン</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-portal/me/trial-extension-request</code></td><td>トライアル延長申請（Slack通知）</td><td>Tenant Cookie / admin</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenants/{id}/trial-extension/approve</code></td><td>延長申請の承認（期限を90日後に更新）</td><td>Platform JWT</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">期限7日前に警告メールを送信し、放置されたまま期限切れになったトライアルは日次バッチ（<code>trial_expiry_check</code>）が自動削除する。</p>
+    </div>
+    <div class="subsection">
+      <h3>パスワード再設定 (/tenant-auth/forgot-password, /tenant-auth/reset-password)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/forgot-password</code></td><td>テナントスラッグ・メールアドレスを指定して再設定メールを要求（reCAPTCHA v3）</td><td>なし（レート制限）</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/reset-password</code></td><td>トークン検証後、新しいパスワードを設定（有効期限1時間）</td><td>再設定トークン</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">テナント・メールアドレスの存在有無に関わらず常に同じレスポンスを返し、DBアクセスを伴う処理はBackgroundTaskで非同期化することで、応答内容・速度の両方から存在確認に使われないようにしている。</p>
+    </div>
+    <div class="subsection">
+      <h3>デバイス位置情報 (/me/device-locations, /me/devices/{did}/location-history)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/me/device-locations</code></td><td>全デバイスの最新位置（<code>group_id</code>で絞り込み可。1時間より古い位置は<code>stale</code>フラグ）</td><td>viewer 以上</td></tr>
+            <tr><td><code>GET</code></td><td><code>/me/devices/{did}/location-history</code></td><td>1台の移動履歴（<code>start</code>/<code>end</code>指定、最大7日間）</td><td>viewer 以上</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/me/map-default-view</code></td><td>地図の初期中心・ズームをテナントごとに保存</td><td>admin / operator</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:13px;color:var(--text-3)">位置情報は既存のテレメトリ経路（MQTT→InfluxDB）に<code>latitude</code>/<code>longitude</code>という名前のセンサー値として乗せる。地図描画はLeaflet.js（ローカル配置）、タイル画像のみ外部（既定はOpenStreetMap、設定値で切替可）から読み込む。</p>
+    </div>
+    <div class="subsection">
+      <h3>SORACOM回線管理 (/tenant-portal/me/sim)</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+          <tbody>
+            <tr><td><code>GET</code></td><td><code>/tenant-portal/me/sim/credentials</code></td><td>SORACOM認証情報の設定状況取得</td><td>admin</td></tr>
+            <tr><td><code>PUT</code></td><td><code>/tenant-portal/me/sim/credentials</code></td><td>SORACOM Auth Keyの設定（暗号化保存）</td><td>admin</td></tr>
+            <tr><td><code>GET</code></td><td><code>/tenant-portal/me/sim/lines</code></td><td>SIM回線一覧</td><td>viewer 以上</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-portal/me/sim/lines/{imsi}/activate</code></td><td>回線の有効化</td><td>admin / operator</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-portal/me/sim/lines/{imsi}/bind</code></td><td>デバイスとSIMの紐づけ（1 SIM : 1デバイス）</td><td>admin / operator</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div class="section">
@@ -1027,6 +1137,63 @@ td code { font-size: 12px; }
             <tr><td><code>grafana_org_id</code></td><td>VARCHAR</td><td>Grafana org ID</td></tr>
             <tr><td><code>public_token</code></td><td>VARCHAR(255) UNIQUE</td><td>認証なし閲覧用トークン</td></tr>
             <tr><td><code>status</code></td><td>VARCHAR(20)</td><td>active / suspended / deleted</td></tr>
+            <tr><td><code>signup_source</code></td><td>VARCHAR(20)</td><td>platform_created / self_signup</td></tr>
+            <tr><td><code>trial_expires_at</code></td><td>TIMESTAMPTZ NULL</td><td>トライアル期限（self_signupのみ、既定90日後）</td></tr>
+            <tr><td><code>trial_warning_sent_at</code></td><td>TIMESTAMPTZ NULL</td><td>期限警告メール送信済み時刻</td></tr>
+            <tr><td><code>trial_extension_requested_at</code></td><td>TIMESTAMPTZ NULL</td><td>延長申請時刻（承認でNULLに戻り期限を90日後に更新）</td></tr>
+            <tr><td><code>map_default_lat</code> / <code>map_default_lng</code> / <code>map_default_zoom</code></td><td>DOUBLE PRECISION / DOUBLE PRECISION / INTEGER、全てNULL可</td><td>位置情報タブの地図デフォルト表示（テナントごと）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.audit_logs</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>ログID</td></tr>
+            <tr><td><code>actor_type</code></td><td>VARCHAR(20)</td><td>platform / tenant / self_signup / system</td></tr>
+            <tr><td><code>actor_id</code></td><td>UUID</td><td>操作者ID</td></tr>
+            <tr><td><code>actor_email</code></td><td>VARCHAR(255)</td><td>操作者メールアドレス</td></tr>
+            <tr><td><code>tenant_id</code></td><td>UUID NULL</td><td>対象テナント（テナント削除時はSET NULL）</td></tr>
+            <tr><td><code>action</code></td><td>VARCHAR(100)</td><td>操作種別（例: delete_device, approve_trial_extension）</td></tr>
+            <tr><td><code>resource_type</code> / <code>resource_id</code></td><td>VARCHAR(50) / VARCHAR(255)、NULL可</td><td>操作対象</td></tr>
+            <tr><td><code>detail</code></td><td>JSONB NULL</td><td>追加情報</td></tr>
+            <tr><td><code>result</code></td><td>VARCHAR(10)</td><td>success / failure（既定success）</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.tenant_signup_requests</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>仮登録ID</td></tr>
+            <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>申込みメールアドレス</td></tr>
+            <tr><td><code>tenant_name</code></td><td>VARCHAR(255)</td><td>テナント名（確定前）</td></tr>
+            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>自動生成されたテナントスラッグ（重複時は連番付与）</td></tr>
+            <tr><td><code>password_hash</code></td><td>TEXT</td><td>初期管理者ユーザーのbcryptハッシュ</td></tr>
+            <tr><td><code>verification_token</code></td><td>VARCHAR(64) UNIQUE</td><td>確認メールのトークン</td></tr>
+            <tr><td><code>expires_at</code></td><td>TIMESTAMPTZ</td><td>確認期限（24時間）。期限切れ・確認済みの行は日次バッチで削除</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="subsection">
+      <h3>public.password_reset_tokens</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>カラム</th><th>型</th><th>説明</th></tr></thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>UUID PK</td><td>トークンID</td></tr>
+            <tr><td><code>tenant_id</code></td><td>UUID</td><td>対象テナント</td></tr>
+            <tr><td><code>user_id</code></td><td>UUID</td><td>対象ユーザー（テナントスキーマ側の<code>users.id</code>、外部キー制約なし）</td></tr>
+            <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>宛先メールアドレス</td></tr>
+            <tr><td><code>token</code></td><td>VARCHAR(64) UNIQUE</td><td>再設定トークン</td></tr>
+            <tr><td><code>expires_at</code></td><td>TIMESTAMPTZ</td><td>有効期限（1時間）。再要求で同一ユーザーの既存トークンは削除される</td></tr>
           </tbody>
         </table>
       </div>
