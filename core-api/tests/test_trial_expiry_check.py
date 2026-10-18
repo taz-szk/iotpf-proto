@@ -46,9 +46,9 @@ def test_does_not_rewarn_already_warned_tenant():
     mock_mail.assert_not_called()
 
 
-def test_deletes_expired_tenant_without_extension_request():
+def test_deletes_expired_tenant_already_warned_without_extension_request():
     now = datetime.now(timezone.utc)
-    tenant = _tenant("t1", "active", now - timedelta(days=1))
+    tenant = _tenant("t1", "active", now - timedelta(days=1), warning_sent=now - timedelta(days=8))
     with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session, \
          patch("app.scripts.trial_expiry_check.send_trial_expiry_warning_email"), \
          patch("app.scripts.trial_expiry_check.teardown_tenant") as mock_teardown:
@@ -59,15 +59,72 @@ def test_deletes_expired_tenant_without_extension_request():
     assert result == {"warned": 0, "deleted": 1}
 
 
-def test_does_not_delete_when_extension_requested():
+def test_does_not_delete_when_extension_requested_recently():
     now = datetime.now(timezone.utc)
-    tenant = _tenant("t1", "active", now - timedelta(days=1), ext_requested=now - timedelta(days=1))
+    tenant = _tenant(
+        "t1", "active", now - timedelta(days=1),
+        warning_sent=now - timedelta(days=8), ext_requested=now - timedelta(days=1),
+    )
     with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session, \
          patch("app.scripts.trial_expiry_check.teardown_tenant") as mock_teardown:
         mock_session.return_value = _session_ctx([tenant])
         run_trial_expiry_check()
     mock_teardown.assert_not_called()
     assert tenant.status == "active"
+
+
+def test_deletes_when_extension_request_is_stale():
+    # 延長申請が7日より前の古いもので無視された(放置された)場合は、次の削除サイクルで削除する
+    now = datetime.now(timezone.utc)
+    tenant = _tenant(
+        "t1", "active", now - timedelta(days=1),
+        warning_sent=now - timedelta(days=8), ext_requested=now - timedelta(days=10),
+    )
+    with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session, \
+         patch("app.scripts.trial_expiry_check.teardown_tenant") as mock_teardown:
+        mock_session.return_value = _session_ctx([tenant])
+        result = run_trial_expiry_check()
+    assert tenant.status == "deleted"
+    mock_teardown.assert_called_once_with("t1", "org", "5")
+    assert result == {"warned": 0, "deleted": 1}
+
+
+def test_expired_tenant_never_warned_gets_warning_instead_of_deletion():
+    # cronが止まっていた等でトライアル期限前に警告が送られなかった場合、
+    # いきなり削除せず、まず警告を送って次サイクル以降の削除に回す
+    now = datetime.now(timezone.utc)
+    tenant = _tenant("t1", "active", now - timedelta(days=1))
+    with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session, \
+         patch("app.scripts.trial_expiry_check.send_trial_expiry_warning_email", return_value=True) as mock_mail, \
+         patch("app.scripts.trial_expiry_check.teardown_tenant") as mock_teardown:
+        mock_session.return_value = _session_ctx([tenant])
+        result = run_trial_expiry_check()
+    assert mock_mail.called
+    assert tenant.trial_warning_sent_at is not None
+    mock_teardown.assert_not_called()
+    assert tenant.status == "active"
+    assert result == {"warned": 1, "deleted": 0}
+
+
+def test_warning_flag_not_set_when_send_fails():
+    now = datetime.now(timezone.utc)
+    tenant = _tenant("t1", "active", now + timedelta(days=5))
+    with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session, \
+         patch("app.scripts.trial_expiry_check.send_trial_expiry_warning_email", return_value=False), \
+         patch("app.scripts.trial_expiry_check.teardown_tenant"):
+        mock_session.return_value = _session_ctx([tenant])
+        result = run_trial_expiry_check()
+    assert tenant.trial_warning_sent_at is None
+    assert result == {"warned": 0, "deleted": 0}
+
+
+def test_cleans_up_expired_pending_signup_requests():
+    now = datetime.now(timezone.utc)
+    with patch("app.scripts.trial_expiry_check.SessionLocal") as mock_session:
+        db = _session_ctx([])
+        mock_session.return_value = db
+        run_trial_expiry_check()
+    db.query.return_value.filter.return_value.delete.assert_called_once()
 
 
 def test_does_not_delete_suspended_tenant():

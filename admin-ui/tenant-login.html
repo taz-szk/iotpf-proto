@@ -45,7 +45,7 @@
   <script>
     function tenantLoginApp() {
       return {
-        form: { tenant_slug: '', email: '', password: '' },
+        form: { tenant_slug: new URLSearchParams(window.location.search).get('slug') || '', email: '', password: '' },
         loading: false,
         error: '',
 

@@ -1100,6 +1100,23 @@ echo "RECAPTCHA_SECRET_KEY=（発行されたシークレットキー）" &gt;&g
       </div>
     </div>
 
+    <div class="step">
+      <div class="step-num step-num-win">5</div>
+      <div class="step-body">
+        <div class="step-title">トライアル期限チェックのcronを登録する</div>
+        <div class="step-desc">
+          セルフサインアップしたテナントのトライアル期限(90日)を日次でチェックし、
+          期限7日前の警告メール送信・期限切れテナントの自動削除を行うバッチ。これを登録しないと
+          警告も自動削除も一切行われない(手動で延長申請を承認してもトライアルは消えないが、
+          リソースが無期限に残り続ける)。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>(crontab -l 2>/dev/null; echo "0 9 * * * cd $(pwd) && docker compose exec -T core-api python -m app.scripts.trial_expiry_check >> /var/log/trial-expiry-check.log 2>&amp;1") | crontab -</pre>
+        </div>
+      </div>
+    </div>
+
   </div>
 </section>
 

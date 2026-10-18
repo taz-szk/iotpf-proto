@@ -219,6 +219,10 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASSWORD: "${SMTP_PASSWORD:-}"
       SMTP_FROM: "${SMTP_FROM:-alerts@iot-platform.local}"
+      RECAPTCHA_SITE_KEY: "${RECAPTCHA_SITE_KEY:-}"
+      RECAPTCHA_SECRET_KEY: "${RECAPTCHA_SECRET_KEY:-}"
+      RECAPTCHA_MIN_SCORE: "${RECAPTCHA_MIN_SCORE:-0.5}"
+      VULN_SCAN_SLACK_WEBHOOK_URL: "${VULN_SCAN_SLACK_WEBHOOK_URL:-}"
     expose:
       - "8000"
     healthcheck:

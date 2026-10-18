@@ -16,7 +16,7 @@ from app.services.password_policy import validate_password
 from app.services.rate_limiter import is_rate_limited, record_failure
 from app.services.recaptcha import verify_recaptcha
 from app.services.slug import slugify
-from app.services.tenant import setup_tenant
+from app.services.tenant import setup_tenant, teardown_tenant
 from app.services.tenant_users import create_tenant_user_record
 
 router = APIRouter()
@@ -68,11 +68,17 @@ def signup(body: SignupRequest, request: Request):
             expires_at=now + _REQUEST_TTL,
         )
         db.add(signup_req)
-        db.flush()
-
-        verification_url = f"https://{settings.platform_domain}/signup/verify?token={token}"
         try:
-            send_signup_verification_email(body.email, body.tenant_name, verification_url)
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                detail="A signup with this email or tenant name is already in progress, please try again")
+
+        # /api プレフィックス付きでなければnginxの静的 /signup/ ロケーションに吸われてAPIに届かない
+        verification_url = f"https://{settings.platform_domain}/api/signup/verify?token={token}"
+        try:
+            send_signup_verification_email(body.email, body.tenant_name, verification_url, slug)
         except Exception:
             db.rollback()
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -114,22 +120,34 @@ def verify_signup(token: str):
                                 detail="Slug already taken, please try signing up again")
 
         tenant_id_str = str(tenant_id)
+        slug = signup_req.slug
         org_id, influx_token, grafana_org_id = setup_tenant(tenant_id_str, signup_req.tenant_name)
         tenant.influxdb_org_id = org_id
         tenant.influxdb_token = influx_token
         tenant.grafana_org_id = str(grafana_org_id)
 
-        schema = f"tenant_{tenant_id_str.replace('-', '_')}"
-        create_tenant_user_record(
-            tenant_id=tenant_id_str, schema=schema, email=signup_req.email,
-            password_hash=signup_req.password_hash, role="admin", grafana_org_id=str(grafana_org_id),
-        )
+        try:
+            schema = f"tenant_{tenant_id_str.replace('-', '_')}"
+            create_tenant_user_record(
+                tenant_id=tenant_id_str, schema=schema, email=signup_req.email,
+                password_hash=signup_req.password_hash, role="admin", grafana_org_id=str(grafana_org_id),
+            )
 
-        write_audit_log(db, "self_signup", tenant_id_str, signup_req.email,
-                        "signup_tenant", tenant_id=tenant_id_str, resource_type="tenant",
-                        resource_id=signup_req.tenant_name)
+            write_audit_log(db, "self_signup", tenant_id_str, signup_req.email,
+                            "signup_tenant", tenant_id=tenant_id_str, resource_type="tenant",
+                            resource_id=signup_req.tenant_name)
 
-        db.delete(signup_req)
-        db.commit()
+            db.delete(signup_req)
+            db.commit()
+        except Exception:
+            # setup_tenantが作ったInfluxDB org/Grafana orgが残ったままになるのを防ぐ
+            # (ここで失敗してもpending行は残るため、ユーザーは同じリンクで再試行できる)
+            db.rollback()
+            try:
+                teardown_tenant(tenant_id_str, org_id, str(grafana_org_id))
+            except Exception:
+                pass
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                detail="Failed to complete tenant setup, please try the link again")
 
-    return {"status": "tenant_created", "tenant_id": tenant_id_str}
+    return {"status": "tenant_created", "tenant_id": tenant_id_str, "slug": slug}

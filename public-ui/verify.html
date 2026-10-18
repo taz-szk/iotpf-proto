@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>サインアップ確認 - IoTAirx</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 100px auto; padding: 0 20px; color: #1f2937; text-align: center; }
+    .slug { display: inline-block; margin-top: 0.5rem; padding: 0.4rem 0.8rem; background: #f3f4f6; border-radius: 0.375rem; font-family: monospace; font-size: 1rem; }
+    a.button { display: inline-block; margin-top: 1.5rem; padding: 0.75rem 1.5rem; background: #2563eb; color: white; border-radius: 0.375rem; text-decoration: none; }
+    #error { color: #dc2626; }
+  </style>
+</head>
+<body>
+  <div id="loading">確認中...</div>
+  <div id="success" style="display:none;">
+    <h1>テナントを作成しました</h1>
+    <p>ログインに使うテナントスラッグ:</p>
+    <div class="slug" id="slug-value"></div>
+    <p style="margin-top:1.5rem;">このスラッグ・メールアドレス・パスワードでログインしてください。</p>
+    <a class="button" id="login-link" href="/admin/tenant-login.html">ログインページへ</a>
+  </div>
+  <div id="error" style="display:none;"></div>
+  <script>
+    (async () => {
+      const token = new URLSearchParams(window.location.search).get('token');
+      const loadingEl = document.getElementById('loading');
+      const errorEl = document.getElementById('error');
+      if (!token) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = '確認リンクが不正です。';
+        return;
+      }
+      try {
+        const resp = await fetch(`/api/signup/verify?token=${encodeURIComponent(token)}`);
+        const body = await resp.json().catch(() => ({}));
+        loadingEl.style.display = 'none';
+        if (!resp.ok) {
+          errorEl.style.display = 'block';
+          errorEl.textContent = body.detail || '確認に失敗しました。';
+          return;
+        }
+        document.getElementById('slug-value').textContent = body.slug;
+        document.getElementById('login-link').href = `/admin/tenant-login.html?slug=${encodeURIComponent(body.slug)}`;
+        document.getElementById('success').style.display = 'block';
+      } catch (err) {
+        loadingEl.style.display = 'none';
+        errorEl.style.display = 'block';
+        errorEl.textContent = '確認に失敗しました。通信エラーが発生しました。';
+      }
+    })();
+  </script>
+</body>
+</html>

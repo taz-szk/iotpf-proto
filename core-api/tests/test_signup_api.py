@@ -45,6 +45,18 @@ def test_signup_creates_pending_request_and_sends_email():
     assert mock_mail.called
 
 
+def test_signup_returns_409_on_concurrent_duplicate_slug():
+    clear_failures("signup:testclient")
+    with patch("app.routers.signup.verify_recaptcha", return_value=True), \
+         patch("app.routers.signup.SessionLocal") as mock_session:
+        db = _session_ctx(query_results=None)
+        db.flush.side_effect = IntegrityError("dup", {}, Exception("dup"))
+        mock_session.return_value = db
+        resp = client.post("/signup", json=_signup_body())
+    assert resp.status_code == 409
+    assert db.rollback.called
+
+
 def test_signup_fails_when_email_send_fails_and_rolls_back():
     clear_failures("signup:testclient")
     with patch("app.routers.signup.verify_recaptcha", return_value=True), \
@@ -112,3 +124,25 @@ def test_verify_creates_tenant_and_deletes_signup_request():
     assert db.add.called  # 新しいTenant行
     assert mock_create_user.called
     assert db.delete.called  # tenant_signup_requests行の削除
+    assert resp.json()["slug"] == "acme-corp"  # ログインに必要なスラッグをレスポンスに含める
+
+
+def test_verify_tears_down_resources_when_post_setup_step_fails():
+    valid_request = MagicMock(
+        id="r1", email="user@example.com", tenant_name="Acme Corp", slug="acme-corp",
+        password_hash="hashed",
+        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+    )
+    with patch("app.routers.signup.SessionLocal") as mock_session, \
+         patch("app.routers.signup.setup_tenant", return_value=("org1", "tok1", "5")), \
+         patch("app.routers.signup.teardown_tenant") as mock_teardown, \
+         patch("app.routers.signup.create_tenant_user_record", side_effect=RuntimeError("grafana down")), \
+         patch("app.routers.signup.write_audit_log"):
+        db = _session_ctx(query_results=valid_request)
+        mock_session.return_value = db
+        resp = client.get("/signup/verify", params={"token": "valid-token"})
+    assert resp.status_code == 500
+    assert mock_teardown.called
+    teardown_args = mock_teardown.call_args[0]
+    assert teardown_args == (mock_teardown.call_args[0][0], "org1", "5")
+    assert db.rollback.called

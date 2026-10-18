@@ -101,6 +101,24 @@
     <!-- エラーバー -->
     <div x-show="error" class="bg-red-50 border-b border-red-200 text-red-600 px-6 py-2 text-sm flex-shrink-0" x-text="error"></div>
 
+    <!-- トライアル期限バナー(セルフサインアップのテナントのみ) -->
+    <div x-show="me.signup_source === 'self_signup' && me.trial_expires_at"
+         class="bg-amber-50 border-b border-amber-200 text-amber-800 px-6 py-2 text-sm flex-shrink-0 flex items-center justify-between gap-3">
+      <span>
+        トライアル期限:
+        <span x-text="me.trial_expires_at ? new Date(me.trial_expires_at).toLocaleDateString('ja-JP') : '-'" class="font-medium"></span>
+        <template x-if="me.trial_extension_requested_at">
+          <span class="ml-2">(延長申請中・プラットフォーム管理者の承認待ちです)</span>
+        </template>
+      </span>
+      <button x-show="isAdmin && !me.trial_extension_requested_at" @click="requestTrialExtension()"
+              :disabled="requestingExtension"
+              class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1 rounded text-xs flex-shrink-0">
+        <span x-show="!requestingExtension">延長を申請する</span>
+        <span x-show="requestingExtension">送信中...</span>
+      </button>
+    </div>
+
     <!-- ローディング -->
     <div x-show="pageLoading" class="flex-1 flex items-center justify-center text-gray-400 text-sm">読み込み中...</div>
 
@@ -1748,6 +1766,20 @@ function portalApp() {
     copyPublicUrl() {
       const url = location.origin + this.me.public_url;
       navigator.clipboard.writeText(url).catch(() => {});
+    },
+
+    // トライアル延長申請(セルフサインアップのテナントのみ)
+    requestingExtension: false,
+    async requestTrialExtension() {
+      this.requestingExtension = true;
+      try {
+        const result = await portalFetch('POST', '/me/trial-extension-request');
+        this.me = { ...this.me, trial_extension_requested_at: result.trial_extension_requested_at || new Date().toISOString() };
+      } catch (e) {
+        this.error = e.message || '延長申請に失敗しました';
+      } finally {
+        this.requestingExtension = false;
+      }
     },
 
     // テナント削除

@@ -128,6 +128,9 @@ def get_me(payload: dict = Depends(_require_tenant)):
         "public_token": public_token,
         "public_url": f"/public/{public_token}" if public_token else None,
         "assistant_configured": assistant_configured,
+        "signup_source": tenant.signup_source,
+        "trial_expires_at": tenant.trial_expires_at,
+        "trial_extension_requested_at": tenant.trial_extension_requested_at,
     }
 
 
@@ -1409,4 +1412,5 @@ def request_trial_extension(payload: dict = Depends(_require_admin)):
                     f"tenant_id: {tenant_id}"
                 )
                 post_slack_message(settings.vuln_scan_slack_webhook_url, text)
-    return {"status": "requested"}
+        requested_at = tenant.trial_extension_requested_at
+    return {"status": "requested", "trial_extension_requested_at": requested_at}

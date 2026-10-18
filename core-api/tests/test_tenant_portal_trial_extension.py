@@ -48,6 +48,7 @@ def test_trial_extension_request_notifies_slack_and_sets_timestamp():
     assert resp.status_code == 200
     assert tenant.trial_extension_requested_at is not None
     assert mock_slack.called
+    assert resp.json()["trial_extension_requested_at"] is not None
 
 
 def test_trial_extension_request_skips_slack_when_webhook_not_configured():
