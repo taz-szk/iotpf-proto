@@ -1080,7 +1080,10 @@ echo "RECAPTCHA_SECRET_KEY=（発行されたシークレットキー）" &gt;&g
         <div class="step-desc">
           静的ファイル配信のみでテンプレート展開の仕組みが無いため、両ファイル内の
           <code>__RECAPTCHA_SITE_KEY__</code>という文字列(各2箇所)を、手順2で発行した実際のサイトキーに
-          直接置換する。
+          直接置換する。<strong>すでにサインアップ機能の初期セットアップを済ませた環境に
+          パスワード再設定機能を追加した場合も、<code>admin-ui/forgot-password.html</code>に対して
+          この置換が必要</strong>(置換を忘れると、画面上は「メールが届きます」と表示されるのに
+          実際には送信されない状態になる)。
         </div>
         <div class="code-block">
           <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>

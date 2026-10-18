@@ -169,6 +169,41 @@ def _send_password_reset_email_safe(to_email: str, tenant_name: str, reset_url: 
         print(f"Password reset email send failed: {e}")
 
 
+def _process_forgot_password(tenant_slug: str, email: str) -> None:
+    """テナント・ユーザーの検索からトークン作成・メール送信までをまとめてBackgroundTaskで行う。
+    forgot_password本体がDBに一切触れずに即座にレスポンスを返せるようにするため
+    （見つかった/見つからない経路の応答速度差で存在確認に使われるのを防ぐ）。"""
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(
+            Tenant.slug == tenant_slug, Tenant.status == "active",
+        ).first()
+        if not tenant:
+            return
+        schema = f"tenant_{str(tenant.id).replace('-', '_')}"
+        with engine.connect() as conn:
+            row = conn.execute(
+                text(f'SELECT id, email FROM "{schema}".users WHERE email = :email AND is_active = TRUE'),
+                {"email": email},
+            ).fetchone()
+        if not row:
+            return
+        existing = db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == row.id,
+        ).first()
+        if existing:
+            db.delete(existing)
+            db.flush()
+        token = _secrets.token_urlsafe(32)
+        db.add(PasswordResetToken(
+            id=_audit_uuid.uuid4(), tenant_id=tenant.id, user_id=row.id,
+            email=row.email, token=token,
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        ))
+        db.commit()
+        reset_url = f"https://{settings.platform_domain}/admin/reset-password.html?token={token}"
+    _send_password_reset_email_safe(row.email, tenant.name, reset_url)
+
+
 @router.post("/forgot-password")
 def forgot_password(req: ForgotPasswordRequest, request: Request, background_tasks: BackgroundTasks):
     ip = request.client.host if request.client else "unknown"
@@ -180,33 +215,9 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, background_tas
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Too many requests")
 
     if verify_recaptcha(req.recaptcha_token, ip):
-        with SessionLocal() as db:
-            tenant = db.query(Tenant).filter(
-                Tenant.slug == req.tenant_slug, Tenant.status == "active",
-            ).first()
-            if tenant:
-                schema = f"tenant_{str(tenant.id).replace('-', '_')}"
-                with engine.connect() as conn:
-                    row = conn.execute(
-                        text(f'SELECT id, email FROM "{schema}".users WHERE email = :email AND is_active = TRUE'),
-                        {"email": req.email},
-                    ).fetchone()
-                if row:
-                    existing = db.query(PasswordResetToken).filter(
-                        PasswordResetToken.user_id == row.id,
-                    ).first()
-                    if existing:
-                        db.delete(existing)
-                        db.flush()
-                    token = _secrets.token_urlsafe(32)
-                    db.add(PasswordResetToken(
-                        id=_audit_uuid.uuid4(), tenant_id=tenant.id, user_id=row.id,
-                        email=row.email, token=token,
-                        expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
-                    ))
-                    db.commit()
-                    reset_url = f"https://{settings.platform_domain}/admin/reset-password.html?token={token}"
-                    background_tasks.add_task(_send_password_reset_email_safe, row.email, tenant.name, reset_url)
+        background_tasks.add_task(_process_forgot_password, req.tenant_slug, req.email)
+    else:
+        print(f"forgot-password: reCAPTCHA check failed for ip={ip}")
 
     return {"status": "requested"}
 
