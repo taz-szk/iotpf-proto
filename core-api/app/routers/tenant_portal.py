@@ -1478,6 +1478,7 @@ def _query_latest_device_locations(tenant: Tenant, device_ids: Optional[list[str
         '  |> filter(fn: (r) => r._field == "latitude" or r._field == "longitude")\n'
         f'{device_filter}'
         '  |> group(columns: ["device_id", "_field"])\n'
+        '  |> sort(columns: ["_time"])\n'
         '  |> last()\n'
         '  |> keep(columns: ["_time", "device_id", "device_name", "_field", "_value"])'
     )
@@ -1525,6 +1526,9 @@ def _query_latest_device_locations(tenant: Tenant, device_ids: Optional[list[str
 
 @router.get("/me/device-locations")
 def get_device_locations(group_id: Optional[str] = None, payload: dict = Depends(_require_tenant)):
+    if group_id:
+        group_id = _validate_uuid(group_id, "group_id")
+
     tenant_id = payload["tenant_id"]
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()

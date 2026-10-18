@@ -553,7 +553,26 @@
                 </button>
               </div>
               <div id="location-map" style="height:500px;" class="rounded border border-gray-200"></div>
-              <p class="text-xs text-gray-400 mt-2">※ 直近1時間以内に位置情報を受信していないデバイスは「位置不明」として表示されません。</p>
+              <p class="text-xs text-gray-400 mt-2">※ 直近1時間以内に位置情報を受信していないデバイスは地図上のピンには出ません(下の一覧には出ます)。</p>
+
+              <div class="bg-white rounded shadow-sm border border-gray-200 mt-4">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">デバイス名</th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">位置情報</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="d in locationDeviceList()" :key="d.device_id">
+                      <tr class="cursor-pointer hover:bg-gray-50" @click="d.known && openLocationHistory(d.device_id)">
+                        <td class="px-4 py-2 font-medium" x-text="d.device_name"></td>
+                        <td class="px-4 py-2" :class="d.known ? 'text-gray-600' : 'text-gray-400'" x-text="d.status_label"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div x-show="locationSubView === 'history'">
@@ -1820,8 +1839,12 @@ function portalApp() {
     locationSubView: 'overview',
     selectedLocationGroupId: '', selectedHistoryDeviceId: null, selectedHistoryRangeHours: 24,
     savingMapDefaultView: false,
+    locationDevices: [],
     _ensureLocationMap() {
       if (this.locationMap) return;
+      // 同梱のleaflet.cssはデフォルトアイコンの置き場所をimages/に決め打ちしているため、
+      // 実際の配置先(leaflet-images/)を明示しないとマーカー画像が壊れた画像になる
+      L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
       const lat = this.me.map_default_lat ?? 36.2;
       const lng = this.me.map_default_lng ?? 138.3;
       const zoom = this.me.map_default_zoom ?? 5;
@@ -1830,19 +1853,41 @@ function portalApp() {
     },
     async loadDeviceLocations() {
       this._ensureLocationMap();
+      this.locationMap.invalidateSize();
       try {
         const qs = this.selectedLocationGroupId ? `?group_id=${this.selectedLocationGroupId}` : '';
         const locations = await portalFetch('GET', `/me/device-locations${qs}`);
         this.locationMarkers.forEach(m => this.locationMap.removeLayer(m));
         this.locationMarkers = [];
+        this.locationDevices = locations.map(loc => ({ ...loc, has_position: true }));
         for (const loc of locations) {
           if (loc.stale) continue;
           const marker = L.marker([loc.latitude, loc.longitude]).addTo(this.locationMap);
-          marker.bindTooltip(loc.device_name);
+          // device_nameはテナント管理者が自由に設定できる文字列なので、innerHTMLで解釈されないよう
+          // テキストノードとして描画する(XSS対策)
+          const label = document.createElement('span');
+          label.textContent = loc.device_name;
+          marker.bindTooltip(label);
           marker.on('click', () => this.openLocationHistory(loc.device_id));
           this.locationMarkers.push(marker);
         }
       } catch (e) { this.error = e.message; }
+    },
+    locationDeviceList() {
+      // 位置情報APIは位置を一度も送っていないデバイスを返さないため、デバイス一覧(this.devices)と
+      // 突き合わせて「位置不明」も含めた全件のステータスを作る(spec要求: 除外するのではなく表示する)
+      const byId = {};
+      for (const loc of this.locationDevices) byId[loc.device_id] = loc;
+      return this.devices.map(d => {
+        const loc = byId[d.device_id];
+        const known = loc && !loc.stale;
+        return {
+          device_id: d.device_id,
+          device_name: d.device_name,
+          known,
+          status_label: known ? new Date(loc.last_seen_at).toLocaleString('ja-JP') : '位置不明',
+        };
+      });
     },
     async saveMapDefaultView() {
       if (!this.locationMap) return;
@@ -1862,11 +1907,13 @@ function portalApp() {
     },
     _ensureLocationHistoryMap() {
       if (this.locationHistoryMap) return;
+      L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
       this.locationHistoryMap = L.map('location-history-map').setView([36.2, 138.3], 5);
       L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationHistoryMap);
     },
     async loadLocationHistory() {
       this._ensureLocationHistoryMap();
+      this.locationHistoryMap.invalidateSize();
       try {
         const end = new Date();
         const start = new Date(end.getTime() - this.selectedHistoryRangeHours * 3600 * 1000);
@@ -2119,7 +2166,11 @@ function portalApp() {
       if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); await this.loadDevices(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
-      if (tab === 'location') { this.locationSubView = 'overview'; this.$nextTick(() => this.loadDeviceLocations()); }
+      if (tab === 'location') {
+        this.locationSubView = 'overview';
+        if (this.devices.length === 0) await this.loadDevices();
+        this.$nextTick(() => this.loadDeviceLocations());
+      }
     },
 
     async logout() {
