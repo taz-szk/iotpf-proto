@@ -223,6 +223,8 @@ services:
       RECAPTCHA_SECRET_KEY: "${RECAPTCHA_SECRET_KEY:-}"
       RECAPTCHA_MIN_SCORE: "${RECAPTCHA_MIN_SCORE:-0.5}"
       VULN_SCAN_SLACK_WEBHOOK_URL: "${VULN_SCAN_SLACK_WEBHOOK_URL:-}"
+      MAP_TILE_URL_TEMPLATE: "${MAP_TILE_URL_TEMPLATE:-https://tile.openstreetmap.org/{z}/{x}/{y}.png}"
+      MAP_TILE_ATTRIBUTION: "${MAP_TILE_ATTRIBUTION:-&copy; OpenStreetMap contributors}"
     expose:
       - "8000"
     healthcheck:
