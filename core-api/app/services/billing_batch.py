@@ -217,7 +217,9 @@ def run_monthly_billing_batch() -> list[dict]:
     year, month, target_year_month = _current_target_year_month()
 
     with SessionLocal() as db:
-        tenants = db.query(Tenant).filter(Tenant.status == "active").all()
+        tenants = db.query(Tenant).filter(
+            Tenant.status == "active", Tenant.signup_source != "self_signup"
+        ).all()
         tenant_infos = [
             (str(t.id), f"tenant_{str(t.id).lower().replace('-', '_')}", t.influxdb_org_id or "", t.influxdb_token or "")
             for t in tenants

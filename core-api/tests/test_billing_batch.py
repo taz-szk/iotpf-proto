@@ -353,3 +353,20 @@ def test_correct_invoice_sums_prior_corrections_into_running_total():
     assert result.subtotal == 10
     assert result.tax_amount == 1
     assert result.total_amount == 11
+
+
+def test_run_monthly_billing_batch_excludes_self_signup_tenants():
+    mock_list_db = MagicMock()
+    mock_list_db.__enter__ = lambda s: mock_list_db
+    mock_list_db.__exit__ = MagicMock(return_value=False)
+    mock_list_db.query.return_value.filter.return_value.all.return_value = []
+
+    with patch("app.services.billing_batch.SessionLocal", return_value=mock_list_db):
+        results = run_monthly_billing_batch()
+
+    assert results == []
+    filter_args = mock_list_db.query.return_value.filter.call_args[0]
+    assert any(
+        getattr(cond, "right", None) is not None and getattr(cond.right, "value", None) == "self_signup"
+        for cond in filter_args
+    ), f"expected a signup_source != 'self_signup' condition in filter args, got: {filter_args}"
