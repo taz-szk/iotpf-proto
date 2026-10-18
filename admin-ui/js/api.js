@@ -77,6 +77,7 @@ const api = {
         update: (id, name) => request('PATCH', `/tenants/${id}`, { name }),
         setStatus: (id, status) => request('PATCH', `/tenants/${id}/status`, { status }),
         delete: (id) => request('DELETE', `/tenants/${id}`),
+        approveTrialExtension: (id) => request('POST', `/tenants/${id}/trial-extension/approve`),
     },
     tenantDevices: {
         list: (tenantId) => request('GET', `/tenants/${tenantId}/devices`),

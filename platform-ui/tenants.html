@@ -6,7 +6,7 @@
   <title>テナント管理 - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
   <script src="/admin/static/alpine.min.js" defer></script>
-  <script src="/admin/js/api.js?v=10"></script>
+  <script src="/admin/js/api.js?v=11"></script>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
@@ -101,6 +101,7 @@
                 作成日 <span x-text="sortIcon('created_at')" class="text-gray-400"></span>
               </button>
             </th>
+            <th class="text-left px-6 py-3 text-xs font-medium text-gray-500 uppercase">トライアル期限</th>
             <th class="px-6 py-3"></th>
           </tr>
         </thead>
@@ -122,6 +123,27 @@
               </td>
               <td class="px-6 py-4 text-sm text-gray-500"
                   x-text="new Date(tenant.created_at).toLocaleDateString('ja-JP')"></td>
+              <td class="px-6 py-4 text-sm">
+                <template x-if="tenant.signup_source === 'self_signup'">
+                  <div>
+                    <span x-text="tenant.trial_expires_at ? new Date(tenant.trial_expires_at).toLocaleDateString('ja-JP') : '-'"
+                          class="text-gray-600"></span>
+                    <template x-if="tenant.trial_extension_requested_at">
+                      <div class="mt-1">
+                        <span class="inline-block px-2 py-0.5 bg-yellow-100 text-yellow-700 text-xs rounded">延長申請中</span>
+                        <button @click="approveExtension(tenant)"
+                                :disabled="tenant._approving"
+                                class="ml-1 px-2 py-0.5 text-xs font-medium text-blue-600 border border-blue-300 rounded hover:bg-blue-50 disabled:opacity-50">
+                          <span x-text="tenant._approving ? '処理中...' : '承認'"></span>
+                        </button>
+                      </div>
+                    </template>
+                  </div>
+                </template>
+                <template x-if="tenant.signup_source !== 'self_signup'">
+                  <span class="text-gray-400">-</span>
+                </template>
+              </td>
               <td class="px-6 py-4 text-right">
                 <div class="flex items-center justify-end gap-2">
                   <button @click="toggleStats(tenant)"
@@ -141,7 +163,7 @@
               </td>
             </tr>
             <tr x-show="expandedTenantId === tenant.id" class="bg-gray-50">
-              <td colspan="5" class="px-6 py-4">
+              <td colspan="6" class="px-6 py-4">
                 <div x-show="statsLoading[tenant.id]" class="text-sm text-gray-400 py-2">統計を取得中...</div>
                 <div x-show="!statsLoading[tenant.id] && tenantStats[tenant.id]"
                      class="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -322,6 +344,19 @@
           Alpine.store('deleteModal').show(tenant, (id) => {
             this.tenants = this.tenants.filter(t => t.id !== id);
           });
+        },
+
+        async approveExtension(tenant) {
+          tenant._approving = true;
+          try {
+            const updated = await api.tenants.approveTrialExtension(tenant.id);
+            tenant.trial_expires_at = updated.trial_expires_at;
+            tenant.trial_extension_requested_at = updated.trial_extension_requested_at;
+          } catch (e) {
+            this.error = e.message;
+          } finally {
+            tenant._approving = false;
+          }
         },
 
         provisionableLabel(s) {
