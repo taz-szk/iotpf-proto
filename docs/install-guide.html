@@ -1038,6 +1038,71 @@ git pull origin main</pre>
   </div>
 </section>
 
+<!-- ==================== テナントセルフサインアップ機能の導入 ==================== -->
+<section class="common-section" id="tenant-self-signup">
+  <h2>📝 テナントセルフサインアップ機能の導入手順</h2>
+  <div class="hero-sub" style="margin-bottom:24px">
+    プラットフォーム管理者への連絡なしに、見込み利用者が<code>/signup/</code>から自分でテナントを
+    作成して90日間トライアル利用できる機能。Google reCAPTCHA v3によるボット対策が必須のため、
+    サイトキー・シークレットキーの発行と設定が必要。
+  </div>
+
+  <div class="steps">
+
+    <div class="step">
+      <div class="step-num step-num-win">1</div>
+      <div class="step-body">
+        <div class="step-title">Google reCAPTCHA v3のキーを発行する</div>
+        <div class="step-desc">
+          <a href="https://www.google.com/recaptcha/admin" target="_blank" rel="noopener">reCAPTCHA Admin Console</a>
+          で新しいサイトを登録し、タイプは「reCAPTCHA v3」を選ぶ。ドメインには本番で使う
+          <code>platform_domain</code>の値を登録する。発行されるサイトキー・シークレットキーの2つを使う。
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">2</div>
+      <div class="step-body">
+        <div class="step-title"><code>.env</code>にキーを設定する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>echo "RECAPTCHA_SITE_KEY=（発行されたサイトキー）" &gt;&gt; .env
+echo "RECAPTCHA_SECRET_KEY=（発行されたシークレットキー）" &gt;&gt; .env</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">3</div>
+      <div class="step-body">
+        <div class="step-title"><code>public-ui/signup.html</code>内のサイトキーを置換する</div>
+        <div class="step-desc">
+          静的ファイル配信のみでテンプレート展開の仕組みが無いため、ファイル内の
+          <code>__RECAPTCHA_SITE_KEY__</code>という文字列(2箇所)を、手順2で発行した実際のサイトキーに
+          直接置換する。
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>sed -i 's/__RECAPTCHA_SITE_KEY__/（発行されたサイトキー）/g' public-ui/signup.html</pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-num step-num-win">4</div>
+      <div class="step-body">
+        <div class="step-title">再起動して反映する</div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker compose up -d --build core-api nginx</pre>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
 </main>
 </div><!-- /wrap -->
 
