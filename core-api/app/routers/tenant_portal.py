@@ -25,7 +25,8 @@ from app.schemas.device_group import GroupCreate, GroupOut, GroupUpdate
 from app.services.assistant_settings import is_assistant_configured
 from app.services.auth import hash_password, verify_password, verify_token
 from app.services.password_policy import validate_password
-from app.services.slack_webhook import validate_slack_webhook_url, mask_slack_webhook
+from app.services.slack_webhook import validate_slack_webhook_url, mask_slack_webhook, post_slack_message, slack_escape
+from app.config import settings
 from app.services.alert_test_notify import TestNotificationRequest, run_test_notification
 from app.services.tenant_session import require_tenant_session, forget_session
 from app.services.grafana import retire_device_in_influxdb, list_archived_devices, purge_archived_device_from_influxdb
@@ -1386,3 +1387,26 @@ def confirm_tenant_assistant_action(body: AssistantConfirmActionBody, payload: d
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending action not found or expired")
     return {"result": result}
+
+
+@router.post("/me/trial-extension-request")
+def request_trial_extension(payload: dict = Depends(_require_admin)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if tenant.signup_source != "self_signup":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Trial extension is only for self-signup tenants")
+        if tenant.trial_extension_requested_at is None:
+            tenant.trial_extension_requested_at = datetime.now(timezone.utc)
+            db.commit()
+            if settings.vuln_scan_slack_webhook_url:
+                text = (
+                    f"🔔 トライアル延長申請\n"
+                    f"テナント: {slack_escape(tenant.name)}\n"
+                    f"tenant_id: {tenant_id}"
+                )
+                post_slack_message(settings.vuln_scan_slack_webhook_url, text)
+    return {"status": "requested"}
