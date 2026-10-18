@@ -15,6 +15,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from device_worker import DeviceWorker
+from gps_simulation import random_offset, make_gps_payload_fn
 
 if getattr(sys, "frozen", False):
     _BASE_DIR = os.path.dirname(sys.executable)
@@ -373,6 +374,9 @@ class SimulatorApp(tk.Tk):
 
         self._use_random = tk.BooleanVar(value=True)
         self._interval   = tk.DoubleVar(value=5.0)
+        self._gps_enabled  = tk.BooleanVar(value=False)
+        self._gps_base_lat = tk.StringVar(value="")
+        self._gps_base_lon = tk.StringVar(value="")
         self._custom_json_text: Optional[scrolledtext.ScrolledText] = None
         self._log_text:         Optional[scrolledtext.ScrolledText] = None
         self._device_list_frame: Optional[tk.Frame] = None
@@ -443,6 +447,15 @@ class SimulatorApp(tk.Tk):
         self._custom_json_text.pack(fill=tk.BOTH, expand=True)
 
         self._refresh_mode()
+
+        # GPS移動シミュレーション
+        gf = ttk.LabelFrame(right, text="GPS移動シミュレーション", padding=4)
+        gf.pack(fill=tk.X, pady=(6, 0))
+        ttk.Checkbutton(gf, text="有効にする", variable=self._gps_enabled).pack(side=tk.LEFT)
+        ttk.Label(gf, text="基準緯度:").pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Entry(gf, textvariable=self._gps_base_lat, width=10).pack(side=tk.LEFT, padx=2)
+        ttk.Label(gf, text="基準経度:").pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Entry(gf, textvariable=self._gps_base_lon, width=10).pack(side=tk.LEFT, padx=2)
 
         # 送信コントロール
         ctrl = tk.Frame(right)
@@ -895,13 +908,27 @@ class SimulatorApp(tk.Tk):
         return fn
 
     def _start_sending(self) -> None:
-        fn = self._get_payload_fn()
-        if fn is None:
+        base_fn = self._get_payload_fn()
+        if base_fn is None:
             return
         interval = self._interval.get()
+        gps_enabled = self._gps_enabled.get()
+        base_lat = base_lon = None
+        if gps_enabled:
+            try:
+                base_lat = float(self._gps_base_lat.get())
+                base_lon = float(self._gps_base_lon.get())
+            except ValueError:
+                self._append_log("GPS基準緯度・経度が数値ではありません。GPSシミュレーションなしで送信します", level="warn")
         for w in self._workers.values():
             w.stop_sending()
-            w.start_sending(interval, fn)
+            if base_lat is not None and base_lon is not None:
+                start_lat, start_lon = random_offset(base_lat, base_lon)
+                gps_fn = make_gps_payload_fn(start_lat, start_lon)
+                combined_fn = lambda bf=base_fn, gf=gps_fn: {**bf(), **gf()}
+                w.start_sending(interval, combined_fn)
+            else:
+                w.start_sending(interval, base_fn)
 
     def _stop_sending(self) -> None:
         for w in self._workers.values():
@@ -1068,6 +1095,9 @@ class SimulatorApp(tk.Tk):
                 "interval":      self._interval.get(),
                 "custom_json":   custom_json,
                 "random_fields": self._collect_random_fields(),
+                "gps_enabled":  self._gps_enabled.get(),
+                "gps_base_lat": self._gps_base_lat.get(),
+                "gps_base_lon": self._gps_base_lon.get(),
             }
             with open(CONFIG_PATH, "w", encoding="utf-8") as f:
                 json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -1089,6 +1119,9 @@ class SimulatorApp(tk.Tk):
             self._refresh_tenant_list()
 
             self._use_random.set(cfg.get("use_random", True))
+            self._gps_enabled.set(cfg.get("gps_enabled", False))
+            self._gps_base_lat.set(cfg.get("gps_base_lat", ""))
+            self._gps_base_lon.set(cfg.get("gps_base_lon", ""))
             self._interval.set(cfg.get("interval", 5.0))
 
             if cfg.get("custom_json") and self._custom_json_text:
