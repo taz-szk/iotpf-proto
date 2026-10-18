@@ -282,6 +282,7 @@ canvas{display:block}
         <span class="pill pill-blue">利用量課金</span>
         <span class="pill pill-cyan">MFA</span>
         <span class="pill pill-green">AIチャット</span>
+        <span class="pill pill-blue">GPS位置管理</span>
       </div>
       <div class="caption fade-item">センサーやデバイスの種類を問わず、安全に収集・可視化・運用できるIoTプラットフォーム</div>
     </section>
@@ -296,9 +297,9 @@ canvas{display:block}
 
     <section class="scene" id="s2">
       <div class="eyebrow fade-item">テナント管理者機能</div>
-      <div class="scene-title fade-item">現場を支える8つの管理機能</div>
+      <div class="scene-title fade-item">現場を支える9つの管理機能</div>
       <div class="scene-body">
-        <div class="ov-grid" id="ov-tenant-grid">
+        <div class="ov-grid" id="ov-tenant-grid" style="grid-template-columns:repeat(3,1fr)">
           <div class="ov-card fade-item"><div class="ov-icon">🎫</div><div class="ov-name">ブートストラップトークン管理</div><div class="ov-desc">複数トークン発行、台数上限・有効期限を設定</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">🔐</div><div class="ov-name">デバイス管理</div><div class="ov-desc">トークン認証→証明書発行→登録を自動化</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">⬆️</div><div class="ov-name">OTAファームウェア更新</div><div class="ov-desc">署名付きJWT(24h)でセキュアに配信</div></div>
@@ -307,6 +308,7 @@ canvas{display:block}
           <div class="ov-card fade-item"><div class="ov-icon">💳</div><div class="ov-name">ビリング管理</div><div class="ov-desc">課金8項目の確認、請求書ライフサイクル閲覧</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">📊</div><div class="ov-name">ダッシュボード(内部)</div><div class="ov-desc">Grafana SSO、テナント別orgで完全分離</div></div>
           <div class="ov-card fade-item"><div class="ov-icon">🌐</div><div class="ov-name">ダッシュボード(公開)</div><div class="ov-desc">認証不要の統計API(/me/stats)で共有</div></div>
+          <div class="ov-card fade-item"><div class="ov-icon">📍</div><div class="ov-name">デバイス位置情報</div><div class="ov-desc">GPSで全体表示・移動履歴を地図に可視化</div></div>
         </div>
       </div>
     </section>
@@ -832,12 +834,47 @@ canvas{display:block}
     </section>
 
     <section class="scene" id="s20">
+      <div class="eyebrow fade-item">テナント管理者 — 位置情報</div>
+      <div class="scene-title fade-item">デバイス位置情報(GPS)マップ表示</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body" style="display:flex;gap:14px">
+            <div class="fade-item" style="flex:1.4;height:220px;border-radius:8px;position:relative;overflow:hidden;background:linear-gradient(135deg,#DCEFE3 0%,#CFE8F3 60%,#E7F0D8 100%)">
+              <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px);background-size:28px 28px"></div>
+              <div style="position:absolute;left:28%;top:34%;font-size:1.3rem" title="配送車両A">📍</div>
+              <div style="position:absolute;left:52%;top:58%;font-size:1.3rem" title="配送車両B">📍</div>
+              <div style="position:absolute;left:68%;top:30%;font-size:1.3rem;opacity:.35" title="位置不明">📍</div>
+              <div style="position:absolute;left:40%;top:46%;font-size:1.3rem" title="配送車両C">📍</div>
+              <div style="position:absolute;bottom:8px;right:10px;font-size:.6rem;color:#5b6b63;background:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px">© OpenStreetMap contributors</div>
+            </div>
+            <div style="flex:1" class="fade-item">
+              <table class="ui-tbl">
+                <thead><tr><th>デバイス</th><th>位置情報</th></tr></thead>
+                <tbody>
+                  <tr class="fade-item"><td>配送車両A</td><td style="color:var(--ui-tm)">10:42更新</td></tr>
+                  <tr class="fade-item"><td>配送車両B</td><td style="color:var(--ui-tm)">10:41更新</td></tr>
+                  <tr class="fade-item"><td>配送車両C</td><td style="color:var(--ui-tm)">10:40更新</td></tr>
+                  <tr class="fade-item"><td>配送車両D</td><td><span class="ui-badge inactive">位置不明</span></td></tr>
+                </tbody>
+              </table>
+              <div class="fade-item" style="margin-top:10px;font-size:.68rem;color:var(--ui-tm);line-height:1.6">全体表示(ピン)・1台ごとの移動履歴(軌跡)の2画面。デバイスグループで絞り込み、テナントごとに初期表示位置を保存できます。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s21">
       <div class="eyebrow">まとめ</div>
       <div class="scene-title">IoTAir-X — 全機能一覧</div>
       <div class="scene-body">
         <div style="flex:1;display:flex;flex-direction:column;gap:12px">
           <div class="fade-item" style="display:flex;gap:24px;justify-content:center">
-            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--accent)"><span class="count-up" data-target="13">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">対応機能(FR)数</div></div>
+            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--accent)"><span class="count-up" data-target="16">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">対応機能(FR)数</div></div>
             <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--cyan)"><span class="count-up" data-target="10">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">構成コンポーネント数</div></div>
             <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--green)"><span class="count-up" data-target="2">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">利用者ロール区分</div></div>
           </div>
@@ -855,6 +892,9 @@ canvas{display:block}
             <div class="feat-item"><div class="feat-icon">🗂️</div><div class="feat-text"><div class="name">デバイスグループ管理</div><div class="desc">拠点・用途別にデバイスをグルーピング</div></div></div>
             <div class="feat-item"><div class="feat-icon">🔑</div><div class="feat-text"><div class="name">多要素認証(MFA)</div><div class="desc">TOTPによる2段階認証、プラットフォーム/テナント別設定</div></div></div>
             <div class="feat-item"><div class="feat-icon">🤖</div><div class="feat-text"><div class="name">AIアシスタント</div><div class="desc">ローカルLLMによるQ&A・確認付き操作代行</div></div></div>
+            <div class="feat-item"><div class="feat-icon">📍</div><div class="feat-text"><div class="name">デバイス位置情報</div><div class="desc">GPSで全体表示・移動履歴を地図に可視化</div></div></div>
+            <div class="feat-item"><div class="feat-icon">📝</div><div class="feat-text"><div class="name">セルフサインアップ</div><div class="desc">90日間トライアルを自分で申込み・即利用開始</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🔓</div><div class="feat-text"><div class="name">パスワード再設定</div><div class="desc">管理者連絡なしでセルフサービスに再設定</div></div></div>
           </div>
           <div>
             <div style="font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--textm);font-weight:600;margin-bottom:8px">Tech Stack</div>
@@ -887,7 +927,7 @@ canvas{display:block}
 </div>
 
 <script>
-const DURATIONS = [7000,9000,9000,8000,8000,8000,8000,9000,8000,8000,8000,9000,8000,9000,8000,9000,8000,8000,8000,9000,9000];
+const DURATIONS = [7000,9000,9000,8000,8000,8000,8000,9000,8000,8000,8000,9000,8000,9000,8000,9000,8000,8000,8000,9000,8000,9000];
 const N = DURATIONS.length;
 const scenes = Array.from(document.querySelectorAll('.scene'));
 const progress = document.getElementById('progress');
@@ -1235,12 +1275,15 @@ ANIMS[19]=()=>{
   return ()=>{cleanup1();timers.forEach(clearTimeout);setStep(1);if(confirmBox)confirmBox.classList.remove('show');if(doneMsg)doneMsg.style.display='none';};
 };
 
-// Scene 19: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
-ANIMS[20]=()=>{
-  const items=document.querySelectorAll('#s20 .feat-item, #s20 .stack-badge');
+// Scene 20: デバイス位置情報(GPS)マップ表示
+ANIMS[20]=()=>staggerFadeIn('#s20');
+
+// Scene 21: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
+ANIMS[21]=()=>{
+  const items=document.querySelectorAll('#s21 .feat-item, #s21 .stack-badge');
   items.forEach(el=>{el.classList.add('fade-item');el.classList.remove('show');});
-  const c1=staggerFadeIn('#s20',60);
-  const c2=countUpAll('#s20');
+  const c1=staggerFadeIn('#s21',60);
+  const c2=countUpAll('#s21');
   return()=>{c1();c2();};
 };
 

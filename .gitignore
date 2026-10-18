@@ -50,3 +50,6 @@ CLAUDE.md
 
 # シークレットローテーションの運用状態(値は持たないが運用データなのでgitignore)
 scripts/secrets-rotation-state.json
+
+# Claude Codeのローカル設定(権限設定等、ローカル専用、リポジトリには上げない)
+.claude/
