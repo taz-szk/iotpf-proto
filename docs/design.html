@@ -486,6 +486,9 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(9)">
       <span class="sb-label">AI</span>AIアシスタント
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(10)">
+      <span class="sb-label">GEO</span>デバイス位置情報
+    </button>
   </nav>
 </aside>
 
@@ -2532,6 +2535,75 @@ sequenceDiagram
     <div class="section-title"><span class="section-num">04</span><h2>インデックス対象と分割方式</h2></div>
     <p>対象は <code>docs/design.html</code>・<code>docs/device-guide.html</code>・<code>docs/install-guide.html</code>・<code>docs/superpowers/specs/*.md</code>・<code>CLAUDE.md</code>（<code>plans/</code> は対象外）。HTMLは <code>&lt;h2&gt;</code>/<code>&lt;h3&gt;</code> 単位、Markdownは <code># 〜 ###</code> 単位で分割し、1チャンクが 1200 文字を超える場合は段落境界（無理なら文字数）でさらに分割する。これによりLLMのコンテキスト長を1チャンクで食い潰さないようにしている。</p>
     <p>core-api コンテナには <code>./docs:/docs:ro</code> と <code>./CLAUDE.md:/CLAUDE.md:ro</code> をバインドマウントする必要がある（マウント漏れのまま再インデックスしても、既存インデックスは消されず 500 エラーになる）。セットアップ手順は <a href="install-guide.html">インストールガイド</a> を参照。</p>
+  </div>
+</section>
+
+<!-- ==================== TAB 10: デバイス位置情報 ==================== -->
+<section class="doc-section" id="tab-10">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">デバイス位置情報（GPS）機能 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>参照: docs/superpowers/specs/2026-10-18-device-location-tracking-design.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>テナント内デバイスの位置（配送車両や分散拠点の機器など）を地図上で確認できるようにする機能。テナントポータルに「位置情報」タブを追加し、<strong>全体表示</strong>（全デバイスの最新位置をピン表示）と<strong>履歴</strong>（1台の移動履歴を軌跡表示）の2画面を提供する。</p>
+    <div class="callout">
+      <strong>本機能は、このプラットフォームで唯一「外部の地図タイルサーバーへの実行時通信」を許可している機能である。</strong>これまでTailwind/Alpine.js/QRCode.js/Leaflet.js本体は全てローカル配信とし、外部CDNへの依存を排除してきた方針の明示的な例外。地図の背景タイル画像（ラスタ画像）だけは、全世界分を自前でホストするのが非現実的なため、既定でOpenStreetMapの標準タイルサーバー（<code>tile.openstreetmap.org</code>）から直接読み込む。nginxのCSP（<code>/admin/</code>ロケーション）の<code>img-src</code>にこのホストのみを許可している。
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>データフロー・APIエンドポイント</h2></div>
+    <p>位置情報は新しい経路を作らず、既存のテレメトリパイプライン（デバイス → MQTT(mTLS) → EMQX → ingestion-service → InfluxDB）に<code>latitude</code>・<code>longitude</code>という名前のセンサー値として乗せる。ingestion-service・MQTTブローカー側の変更は不要（既存のセンサーキーは動的で固定スキーマが無いため）。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+        <tbody>
+          <tr><td><code>GET</code></td><td><code>/me/device-locations</code></td><td>全デバイスの最新<code>latitude</code>/<code>longitude</code>。<code>group_id</code>（UUID形式、デバイスグループ）で絞り込み可。InfluxDBのFluxクエリは<code>group()</code>+<code>last()</code>の並び順非保証を避けるため<code>sort(columns:["_time"])</code>を挟んでから<code>last()</code>を取る</td><td>viewer 以上</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/devices/{device_id}/location-history</code></td><td>1台の時系列データ。<code>start</code>/<code>end</code>（ISO8601）指定、期間は最大7日間（超過は422）。<code>device_id</code>は自テナントの<code>devices</code>テーブルに存在するかを先に確認し、他テナントのデバイスIDは404にする</td><td>viewer 以上</td></tr>
+          <tr><td><code>PUT</code></td><td><code>/me/map-default-view</code></td><td>全体表示の初期中心・ズームをテナントごとに保存（緯度±90・経度±180・ズーム0〜22の範囲外は422）</td><td>admin / operator</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">最新位置の「鮮度」判定は1時間でハードコードしている。直近1時間以内に<code>latitude</code>/<code>longitude</code>を受信していないデバイスは<code>stale: true</code>として返り、全体表示のピンには出さない（ただし一覧からは除外しない。配送車両の古い位置をそのまま現在地のように見せないため）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>地図描画と外部タイル連携</h2></div>
+    <p>地図描画はLeaflet.js（v1.9系、ローカル静的配置: <code>admin-ui/static/leaflet.js</code>/<code>leaflet.css</code>/<code>leaflet-images/</code>）を使う。タイルURLと帰属表示は<code>core-api/app/config.py</code>の<code>map_tile_url_template</code>・<code>map_tile_attribution</code>（<code>.env</code>経由、既定値はOpenStreetMap）を<code>GET /tenant-portal/me</code>のレスポンスに含めて配信し、フロントエンドの<code>L.tileLayer()</code>に渡す。</p>
+    <div class="callout">
+      <strong>タイルプロバイダを切り替える場合、nginxのCSPは自動追従しない。</strong>将来、商用利用規約の都合で有料タイルプロバイダ（MapTiler等）に切り替える場合は、<code>MAP_TILE_URL_TEMPLATE</code>の変更に加えて、<code>nginx/conf.d/api.conf</code>の<code>/admin/</code>ロケーションのCSP（<code>img-src</code>）も手動で更新する必要がある（既知の制約として受け入れ済み）。
+    </div>
+    <p>Leafletのマーカーアイコン画像は同梱の<code>leaflet.css</code>が既定で<code>images/</code>を参照するため、実際の配置先（<code>leaflet-images/</code>）を<code>L.Icon.Default.prototype.options.imagePath</code>で明示している。また、地図コンテナがAlpine.jsの<code>x-show</code>で非表示の間に初期表示位置を設定すると、Leafletが内部基準点をコンテナサイズ0で計算してしまい後でズームすると位置がずれるため、地図生成直後に<code>invalidateSize()</code>でサイズを認識させてから<code>setView()</code>する順序にしている。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>データモデル</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>項目</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>public.tenants.map_default_lat</code> / <code>map_default_lng</code> / <code>map_default_zoom</code></td><td>テナントごとの全体表示デフォルト（未設定ならフロントエンド側の既定値を使用）</td></tr>
+          <tr><td>InfluxDB <code>telemetry</code> measurement</td><td>既存の<code>tenant_id</code>/<code>device_id</code>/<code>device_name</code>タグ付きフィールドに<code>latitude</code>/<code>longitude</code>が加わるのみ。新規measurement・バケットは作らない</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>セキュリティ考慮事項</h2></div>
+    <ul class="checklist">
+      <li><strong>device_name経由のXSS対策:</strong> デバイス名はテナント管理者がプロビジョニング時に自由に設定できる文字列であり、Leafletのtooltipに文字列をそのまま渡すとinnerHTMLとして解釈される。<code>textContent</code>を設定した<code>&lt;span&gt;</code>要素を渡すことで、任意のHTML/スクリプトが実行されないようにしている。</li>
+      <li><strong>テナント分離:</strong> InfluxDBクエリはテナント専用org・スコープ付きトークンで実行し、位置履歴APIは事前にPostgreSQL側の<code>devices</code>テーブルで該当device_idが自テナントに存在するか確認する。デバイスグループによる絞り込みもテナントスキーマ内でのみ解決するため、他テナントのグループIDを渡しても404になり情報は漏れない。</li>
+      <li><strong>入力検証:</strong> <code>group_id</code>は既存の<code>_validate_uuid</code>パターンでUUID形式を検証（形式不正は422、未存在は404）。</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>動作確認（シミュレータ）</h2></div>
+    <p>IoT_Simulator（Windows向けexe）のGUIに「GPS移動シミュレーション」セクションを追加し、基準緯度・経度を入力すると各デバイス（ワーカー）が基準点から自動的に少しずらした位置を起点に、送信間隔ごとに小さくランダムに移動する（ランダムウォーク）。複数デバイスを同時に動かしても同じ座標に重ならないよう、各ワーカーが起動時に一度だけ基準点からのオフセットを割り当てる。</p>
   </div>
 </section>
 
