@@ -1845,11 +1845,16 @@ function portalApp() {
       // 同梱のleaflet.cssはデフォルトアイコンの置き場所をimages/に決め打ちしているため、
       // 実際の配置先(leaflet-images/)を明示しないとマーカー画像が壊れた画像になる
       L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
+      // x-showで直前まで非表示だったコンテナにsetViewすると、Leafletが実際のサイズを
+      // 把握する前に内部原点を計算してしまい、後でズームすると位置がずれる。
+      // 作成直後にinvalidateSizeで正しいサイズを認識させてからsetViewする。
+      this.locationMap = L.map('location-map');
+      L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationMap);
+      this.locationMap.invalidateSize();
       const lat = this.me.map_default_lat ?? 36.2;
       const lng = this.me.map_default_lng ?? 138.3;
       const zoom = this.me.map_default_zoom ?? 5;
-      this.locationMap = L.map('location-map').setView([lat, lng], zoom);
-      L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationMap);
+      this.locationMap.setView([lat, lng], zoom);
     },
     async loadDeviceLocations() {
       this._ensureLocationMap();
@@ -1908,8 +1913,10 @@ function portalApp() {
     _ensureLocationHistoryMap() {
       if (this.locationHistoryMap) return;
       L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
-      this.locationHistoryMap = L.map('location-history-map').setView([36.2, 138.3], 5);
+      this.locationHistoryMap = L.map('location-history-map');
       L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationHistoryMap);
+      this.locationHistoryMap.invalidateSize();
+      this.locationHistoryMap.setView([36.2, 138.3], 5);
     },
     async loadLocationHistory() {
       this._ensureLocationHistoryMap();
