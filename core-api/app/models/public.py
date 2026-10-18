@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, Integer, DateTime, ForeignKey, func, UniqueConstraint
+from sqlalchemy import Column, String, Boolean, Integer, DateTime, Float, ForeignKey, func, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 import uuid
 from app.database import Base
@@ -21,6 +21,9 @@ class Tenant(Base):
     trial_expires_at = Column(DateTime(timezone=True), nullable=True)
     trial_warning_sent_at = Column(DateTime(timezone=True), nullable=True)
     trial_extension_requested_at = Column(DateTime(timezone=True), nullable=True)
+    map_default_lat = Column(Float, nullable=True)
+    map_default_lng = Column(Float, nullable=True)
+    map_default_zoom = Column(Integer, nullable=True)
 
 class PlatformUser(Base):
     __tablename__ = "platform_users"

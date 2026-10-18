@@ -5,7 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>テナントポータル - IoTAir-X</title>
   <link rel="stylesheet" href="/admin/static/tailwind.css?v=2">
+  <link rel="stylesheet" href="/admin/static/leaflet.css">
   <script src="/admin/static/alpine.min.js" defer></script>
+  <script src="/admin/static/leaflet.js"></script>
   <style>
     /* ===== Design A: Dark Navy + Amber ===== */
 
@@ -527,6 +529,68 @@
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+
+          <!-- ===== 位置情報 ===== -->
+          <div x-show="activeTab === 'location'">
+            <div x-show="locationSubView === 'overview'">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                  <h3 class="font-medium text-gray-700">デバイス位置(全体表示)</h3>
+                  <select x-model="selectedLocationGroupId" @change="loadDeviceLocations()"
+                          class="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option value="">全てのグループ</option>
+                    <template x-for="g in groups" :key="g.id">
+                      <option :value="g.id" x-text="g.name"></option>
+                    </template>
+                  </select>
+                </div>
+                <button x-show="canEdit" @click="saveMapDefaultView()" :disabled="savingMapDefaultView"
+                        class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white text-sm px-3 py-1.5 rounded">
+                  <span x-show="!savingMapDefaultView">この表示をデフォルトにする</span>
+                  <span x-show="savingMapDefaultView">保存中...</span>
+                </button>
+              </div>
+              <div id="location-map" style="height:500px;" class="rounded border border-gray-200"></div>
+              <p class="text-xs text-gray-400 mt-2">※ 直近1時間以内に位置情報を受信していないデバイスは地図上のピンには出ません(下の一覧には出ます)。</p>
+
+              <div class="bg-white rounded shadow-sm border border-gray-200 mt-4">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">デバイス名</th>
+                      <th class="text-left px-4 py-2 text-xs font-medium text-gray-500">位置情報</th>
+                    </tr>
+                  </thead>
+                  <tbody class="divide-y divide-gray-100">
+                    <template x-for="d in locationDeviceList()" :key="d.device_id">
+                      <tr class="cursor-pointer hover:bg-gray-50" @click="d.known && openLocationHistory(d.device_id)">
+                        <td class="px-4 py-2 font-medium" x-text="d.device_name"></td>
+                        <td class="px-4 py-2" :class="d.known ? 'text-gray-600' : 'text-gray-400'" x-text="d.status_label"></td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div x-show="locationSubView === 'history'">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="font-medium text-gray-700">移動履歴</h3>
+                <div class="flex items-center gap-2">
+                  <select x-model.number="selectedHistoryRangeHours" @change="loadLocationHistory()"
+                          class="text-sm border border-gray-300 rounded px-2 py-1">
+                    <option :value="1">過去1時間</option>
+                    <option :value="24">過去24時間</option>
+                    <option :value="168">過去7日間</option>
+                  </select>
+                  <button @click="locationSubView = 'overview'" class="text-sm text-amber-600 hover:text-amber-800">
+                    ← 全体表示に戻る
+                  </button>
+                </div>
+              </div>
+              <div id="location-history-map" style="height:500px;" class="rounded border border-gray-200"></div>
             </div>
           </div>
 
@@ -1732,6 +1796,7 @@ function portalApp() {
         { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
         { id: 'groups',           label: 'グループ管理',             icon: '📁' },
         { id: 'devices',          label: 'デバイス',                 icon: '📡' },
+        { id: 'location',         label: '位置情報',                 icon: '📍' },
         { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
         { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
         { id: 'sim',              label: 'SIM管理',                 icon: '📶' },
@@ -1766,6 +1831,101 @@ function portalApp() {
     copyPublicUrl() {
       const url = location.origin + this.me.public_url;
       navigator.clipboard.writeText(url).catch(() => {});
+    },
+
+    // 位置情報タブ
+    locationMap: null, locationHistoryMap: null,
+    locationMarkers: [], locationHistoryLine: null,
+    locationSubView: 'overview',
+    selectedLocationGroupId: '', selectedHistoryDeviceId: null, selectedHistoryRangeHours: 24,
+    savingMapDefaultView: false,
+    locationDevices: [],
+    _ensureLocationMap() {
+      if (this.locationMap) return;
+      // 同梱のleaflet.cssはデフォルトアイコンの置き場所をimages/に決め打ちしているため、
+      // 実際の配置先(leaflet-images/)を明示しないとマーカー画像が壊れた画像になる
+      L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
+      const lat = this.me.map_default_lat ?? 36.2;
+      const lng = this.me.map_default_lng ?? 138.3;
+      const zoom = this.me.map_default_zoom ?? 5;
+      this.locationMap = L.map('location-map').setView([lat, lng], zoom);
+      L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationMap);
+    },
+    async loadDeviceLocations() {
+      this._ensureLocationMap();
+      this.locationMap.invalidateSize();
+      try {
+        const qs = this.selectedLocationGroupId ? `?group_id=${this.selectedLocationGroupId}` : '';
+        const locations = await portalFetch('GET', `/me/device-locations${qs}`);
+        this.locationMarkers.forEach(m => this.locationMap.removeLayer(m));
+        this.locationMarkers = [];
+        this.locationDevices = locations.map(loc => ({ ...loc, has_position: true }));
+        for (const loc of locations) {
+          if (loc.stale) continue;
+          const marker = L.marker([loc.latitude, loc.longitude]).addTo(this.locationMap);
+          // device_nameはテナント管理者が自由に設定できる文字列なので、innerHTMLで解釈されないよう
+          // テキストノードとして描画する(XSS対策)
+          const label = document.createElement('span');
+          label.textContent = loc.device_name;
+          marker.bindTooltip(label);
+          marker.on('click', () => this.openLocationHistory(loc.device_id));
+          this.locationMarkers.push(marker);
+        }
+      } catch (e) { this.error = e.message; }
+    },
+    locationDeviceList() {
+      // 位置情報APIは位置を一度も送っていないデバイスを返さないため、デバイス一覧(this.devices)と
+      // 突き合わせて「位置不明」も含めた全件のステータスを作る(spec要求: 除外するのではなく表示する)
+      const byId = {};
+      for (const loc of this.locationDevices) byId[loc.device_id] = loc;
+      return this.devices.map(d => {
+        const loc = byId[d.device_id];
+        const known = loc && !loc.stale;
+        return {
+          device_id: d.device_id,
+          device_name: d.device_name,
+          known,
+          status_label: known ? new Date(loc.last_seen_at).toLocaleString('ja-JP') : '位置不明',
+        };
+      });
+    },
+    async saveMapDefaultView() {
+      if (!this.locationMap) return;
+      this.savingMapDefaultView = true;
+      try {
+        const center = this.locationMap.getCenter();
+        const zoom = this.locationMap.getZoom();
+        const result = await portalFetch('PUT', '/me/map-default-view', { lat: center.lat, lng: center.lng, zoom });
+        this.me = { ...this.me, map_default_lat: result.map_default_lat, map_default_lng: result.map_default_lng, map_default_zoom: result.map_default_zoom };
+      } catch (e) { this.error = e.message; }
+      finally { this.savingMapDefaultView = false; }
+    },
+    openLocationHistory(deviceId) {
+      this.selectedHistoryDeviceId = deviceId;
+      this.locationSubView = 'history';
+      this.$nextTick(() => this.loadLocationHistory());
+    },
+    _ensureLocationHistoryMap() {
+      if (this.locationHistoryMap) return;
+      L.Icon.Default.prototype.options.imagePath = '/admin/static/leaflet-images/';
+      this.locationHistoryMap = L.map('location-history-map').setView([36.2, 138.3], 5);
+      L.tileLayer(this.me.map_tile_url_template, { attribution: this.me.map_tile_attribution }).addTo(this.locationHistoryMap);
+    },
+    async loadLocationHistory() {
+      this._ensureLocationHistoryMap();
+      this.locationHistoryMap.invalidateSize();
+      try {
+        const end = new Date();
+        const start = new Date(end.getTime() - this.selectedHistoryRangeHours * 3600 * 1000);
+        const points = await portalFetch('GET',
+          `/me/devices/${this.selectedHistoryDeviceId}/location-history?start=${encodeURIComponent(start.toISOString())}&end=${encodeURIComponent(end.toISOString())}`);
+        if (this.locationHistoryLine) { this.locationHistoryMap.removeLayer(this.locationHistoryLine); this.locationHistoryLine = null; }
+        if (points.length > 0) {
+          const latlngs = points.map(p => [p.latitude, p.longitude]);
+          this.locationHistoryLine = L.polyline(latlngs, { color: '#f59e0b' }).addTo(this.locationHistoryMap);
+          this.locationHistoryMap.fitBounds(this.locationHistoryLine.getBounds());
+        }
+      } catch (e) { this.error = e.message; }
     },
 
     // トライアル延長申請(セルフサインアップのテナントのみ)
@@ -2006,6 +2166,11 @@ function portalApp() {
       if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); await this.loadDevices(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
+      if (tab === 'location') {
+        this.locationSubView = 'overview';
+        if (this.devices.length === 0) await this.loadDevices();
+        this.$nextTick(() => this.loadDeviceLocations());
+      }
     },
 
     async logout() {

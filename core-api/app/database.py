@@ -673,3 +673,15 @@ def migrate_create_password_reset_tokens() -> None:
             )
         """))
         conn.commit()
+
+
+def migrate_add_map_default_view() -> None:
+    """tenants テーブルに位置情報タブの地図デフォルト表示カラムを追加する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            ALTER TABLE tenants
+            ADD COLUMN IF NOT EXISTS map_default_lat DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS map_default_lng DOUBLE PRECISION,
+            ADD COLUMN IF NOT EXISTS map_default_zoom INTEGER
+        """))
+        conn.commit()

@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     recaptcha_min_score: float = 0.5
     # vuln-scan.sh / secrets-rotation-check.sh と同じSlack Webhookをプラットフォーム通知に再利用する
     vuln_scan_slack_webhook_url: str = ""
+    map_tile_url_template: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    map_tile_attribution: str = "&copy; OpenStreetMap contributors"
 
     class Config:
         env_file = ".env"

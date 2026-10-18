@@ -131,6 +131,11 @@ def get_me(payload: dict = Depends(_require_tenant)):
         "signup_source": tenant.signup_source,
         "trial_expires_at": tenant.trial_expires_at,
         "trial_extension_requested_at": tenant.trial_extension_requested_at,
+        "map_default_lat": tenant.map_default_lat,
+        "map_default_lng": tenant.map_default_lng,
+        "map_default_zoom": tenant.map_default_zoom,
+        "map_tile_url_template": settings.map_tile_url_template,
+        "map_tile_attribution": settings.map_tile_attribution,
     }
 
 
@@ -161,6 +166,34 @@ def toggle_public_access(body: PublicAccessBody, payload: dict = Depends(_requir
         "public_token": token,
         "public_url": f"/public/{token}" if token else None,
     }
+
+
+# ---------------------------------------------------------------------------
+# 位置情報タブ: 地図デフォルト表示
+# ---------------------------------------------------------------------------
+
+class MapDefaultViewBody(BaseModel):
+    lat: float = Field(ge=-90, le=90)
+    lng: float = Field(ge=-180, le=180)
+    zoom: int = Field(ge=0, le=22)
+
+
+@router.put("/me/map-default-view")
+def update_map_default_view(body: MapDefaultViewBody, payload: dict = Depends(_require_admin_or_operator)):
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        tenant.map_default_lat = body.lat
+        tenant.map_default_lng = body.lng
+        tenant.map_default_zoom = body.zoom
+        db.commit()
+        return {
+            "map_default_lat": tenant.map_default_lat,
+            "map_default_lng": tenant.map_default_lng,
+            "map_default_zoom": tenant.map_default_zoom,
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -1414,3 +1447,183 @@ def request_trial_extension(payload: dict = Depends(_require_admin)):
                 post_slack_message(settings.vuln_scan_slack_webhook_url, text)
         requested_at = tenant.trial_extension_requested_at
     return {"status": "requested", "trial_extension_requested_at": requested_at}
+
+
+# ---------------------------------------------------------------------------
+# 位置情報タブ: 全体表示・履歴
+# ---------------------------------------------------------------------------
+
+_STALE_AFTER = timedelta(hours=1)
+_MAX_HISTORY_RANGE = timedelta(days=7)
+
+
+def _query_latest_device_locations(tenant: Tenant, device_ids: Optional[list[str]]) -> list[dict]:
+    """各device_idの最新latitude/longitudeとその受信時刻を返す。
+    device_idsがNoneなら全デバイス、空リストなら何も返さない。"""
+    import httpx
+
+    if device_ids is not None and not device_ids:
+        return []
+    if not tenant.influxdb_org_id or not tenant.influxdb_token:
+        return []
+
+    device_filter = ""
+    if device_ids is not None:
+        pattern = "^(" + "|".join(re.escape(d) for d in device_ids) + ")$"
+        device_filter = f'  |> filter(fn: (r) => r.device_id =~ /{pattern}/)\n'
+    query = (
+        'from(bucket: "telemetry")\n'
+        '  |> range(start: -30d)\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        '  |> filter(fn: (r) => r._field == "latitude" or r._field == "longitude")\n'
+        f'{device_filter}'
+        '  |> group(columns: ["device_id", "_field"])\n'
+        '  |> sort(columns: ["_time"])\n'
+        '  |> last()\n'
+        '  |> keep(columns: ["_time", "device_id", "device_name", "_field", "_value"])'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={tenant.influxdb_org_id}",
+            headers={"Authorization": f"Token {tenant.influxdb_token}", "Content-Type": "application/json"},
+            json={"query": query, "type": "flux"},
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return []
+    except Exception:
+        return []
+
+    by_device: dict[str, dict] = {}
+    header = None
+    for line in resp.text.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        parts = line.split(",")
+        if header is None:
+            header = parts
+            continue
+        row = dict(zip(header, parts))
+        did = row.get("device_id", "").strip()
+        field = row.get("_field", "").strip()
+        if not did or field not in ("latitude", "longitude"):
+            continue
+        entry = by_device.setdefault(did, {"device_id": did, "device_name": row.get("device_name", "").strip() or did})
+        try:
+            entry[field] = float(row.get("_value", "").strip())
+        except ValueError:
+            continue
+        t = row.get("_time", "").strip()
+        if t:
+            try:
+                ts = datetime.fromisoformat(t.replace("Z", "+00:00"))
+                if "last_seen_at" not in entry or ts > entry["last_seen_at"]:
+                    entry["last_seen_at"] = ts
+            except ValueError:
+                pass
+    return [e for e in by_device.values() if "latitude" in e and "longitude" in e and "last_seen_at" in e]
+
+
+@router.get("/me/device-locations")
+def get_device_locations(group_id: Optional[str] = None, payload: dict = Depends(_require_tenant)):
+    if group_id:
+        group_id = _validate_uuid(group_id, "group_id")
+
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    device_ids = None
+    if group_id:
+        schema = _schema(tenant_id)
+        try:
+            device_ids = list_group_device_ids(schema, group_id)
+        except GroupNotFoundError:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Group not found")
+
+    rows = _query_latest_device_locations(tenant, device_ids)
+    now = datetime.now(timezone.utc)
+    result = []
+    for r in rows:
+        last_seen = r["last_seen_at"]
+        result.append({
+            "device_id": r["device_id"], "device_name": r["device_name"],
+            "latitude": r["latitude"], "longitude": r["longitude"],
+            "last_seen_at": last_seen.isoformat(),
+            "stale": (now - last_seen) > _STALE_AFTER,
+        })
+    return result
+
+
+def _query_location_history(tenant: Tenant, device_id: str, start: datetime, end: datetime) -> list[dict]:
+    """1台のdevice_idの指定期間のlatitude/longitude時系列を時刻昇順で返す。"""
+    import httpx
+
+    if not tenant.influxdb_org_id or not tenant.influxdb_token:
+        return []
+
+    query = (
+        'from(bucket: "telemetry")\n'
+        f'  |> range(start: {start.isoformat()}, stop: {end.isoformat()})\n'
+        '  |> filter(fn: (r) => r._measurement == "telemetry")\n'
+        f'  |> filter(fn: (r) => r.device_id == "{device_id}")\n'
+        '  |> filter(fn: (r) => r._field == "latitude" or r._field == "longitude")\n'
+        '  |> keep(columns: ["_time", "_field", "_value"])\n'
+        '  |> sort(columns: ["_time"])'
+    )
+    try:
+        resp = httpx.post(
+            f"{settings.influxdb_url}/api/v2/query?orgID={tenant.influxdb_org_id}",
+            headers={"Authorization": f"Token {tenant.influxdb_token}", "Content-Type": "application/json"},
+            json={"query": query, "type": "flux"},
+            timeout=10.0,
+        )
+        if resp.status_code != 200:
+            return []
+    except Exception:
+        return []
+
+    by_time: dict[str, dict] = {}
+    header = None
+    for line in resp.text.splitlines():
+        if line.startswith("#") or not line.strip():
+            continue
+        parts = line.split(",")
+        if header is None:
+            header = parts
+            continue
+        row = dict(zip(header, parts))
+        t = row.get("_time", "").strip()
+        field = row.get("_field", "").strip()
+        if not t or field not in ("latitude", "longitude"):
+            continue
+        entry = by_time.setdefault(t, {"time": t})
+        try:
+            entry[field] = float(row.get("_value", "").strip())
+        except ValueError:
+            continue
+    points = [e for e in by_time.values() if "latitude" in e and "longitude" in e]
+    points.sort(key=lambda e: e["time"])
+    return points
+
+
+@router.get("/me/devices/{device_id}/location-history")
+def get_device_location_history(device_id: str, start: datetime, end: datetime, payload: dict = Depends(_require_tenant)):
+    if end - start > _MAX_HISTORY_RANGE:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Range too large (max 7 days)")
+
+    tenant_id = payload["tenant_id"]
+    schema = _schema(tenant_id)
+    with engine.connect() as conn:
+        row = conn.execute(
+            text(f'SELECT device_id FROM "{schema}".devices WHERE device_id = :did'),
+            {"did": device_id},
+        ).fetchone()
+    if not row:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+    return _query_location_history(tenant, device_id, start, end)
