@@ -1076,15 +1076,15 @@ echo "RECAPTCHA_SECRET_KEY=（発行されたシークレットキー）" &gt;&g
     <div class="step">
       <div class="step-num step-num-win">3</div>
       <div class="step-body">
-        <div class="step-title"><code>public-ui/signup.html</code>内のサイトキーを置換する</div>
+        <div class="step-title"><code>public-ui/signup.html</code>・<code>admin-ui/forgot-password.html</code>内のサイトキーを置換する</div>
         <div class="step-desc">
-          静的ファイル配信のみでテンプレート展開の仕組みが無いため、ファイル内の
-          <code>__RECAPTCHA_SITE_KEY__</code>という文字列(2箇所)を、手順2で発行した実際のサイトキーに
+          静的ファイル配信のみでテンプレート展開の仕組みが無いため、両ファイル内の
+          <code>__RECAPTCHA_SITE_KEY__</code>という文字列(各2箇所)を、手順2で発行した実際のサイトキーに
           直接置換する。
         </div>
         <div class="code-block">
           <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-          <pre>sed -i 's/__RECAPTCHA_SITE_KEY__/（発行されたサイトキー）/g' public-ui/signup.html</pre>
+          <pre>sed -i 's/__RECAPTCHA_SITE_KEY__/（発行されたサイトキー）/g' public-ui/signup.html admin-ui/forgot-password.html</pre>
         </div>
       </div>
     </div>
