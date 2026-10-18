@@ -211,6 +211,65 @@ def forgot_password(req: ForgotPasswordRequest, request: Request, background_tas
     return {"status": "requested"}
 
 
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/reset-password", status_code=status.HTTP_204_NO_CONTENT)
+def reset_password(req: ResetPasswordRequest):
+    with SessionLocal() as db:
+        token_row = db.query(PasswordResetToken).filter(
+            PasswordResetToken.token == req.token,
+        ).first()
+        if not token_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or already used token")
+
+        expires_at = token_row.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            db.delete(token_row)
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Reset link expired")
+
+        tenant = db.query(Tenant).filter(Tenant.id == token_row.tenant_id).first()
+        if not tenant or tenant.status != "active":
+            db.delete(token_row)
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or already used token")
+
+        schema = f"tenant_{str(token_row.tenant_id).replace('-', '_')}"
+        with engine.connect() as conn:
+            user_row = conn.execute(
+                text(f'SELECT id FROM "{schema}".users WHERE id = :uid AND is_active = TRUE'),
+                {"uid": str(token_row.user_id)},
+            ).fetchone()
+        if not user_row:
+            db.delete(token_row)
+            db.commit()
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or already used token")
+
+        validate_password(req.new_password, token_row.email)
+
+        new_hash = hash_password(req.new_password)
+        with engine.connect() as conn:
+            conn.execute(
+                text(f'UPDATE "{schema}".users SET password_hash = :hash WHERE id = :uid'),
+                {"hash": new_hash, "uid": str(token_row.user_id)},
+            )
+            conn.commit()
+
+        tenant_id_str = str(token_row.tenant_id)
+        user_id_str = str(token_row.user_id)
+        email = token_row.email
+        db.delete(token_row)
+        db.commit()
+
+    forget_session(tenant_id_str, user_id_str)
+    log_audit("tenant", user_id_str, email, "password_reset", tenant_id=tenant_id_str)
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
