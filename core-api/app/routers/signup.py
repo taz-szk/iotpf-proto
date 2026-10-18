@@ -75,8 +75,10 @@ def signup(body: SignupRequest, request: Request):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                                 detail="A signup with this email or tenant name is already in progress, please try again")
 
-        # /api プレフィックス付きでなければnginxの静的 /signup/ ロケーションに吸われてAPIに届かない
-        verification_url = f"https://{settings.platform_domain}/api/signup/verify?token={token}"
+        # public-ui/verify.html が /api/signup/verify を呼び出すランディングページ。
+        # メールのリンク先を直接APIにすると、生JSONが表示される上、メールスキャナーの
+        # リンク事前取得(GETの副作用)でトークンが消費されてしまう恐れがある。
+        verification_url = f"https://{settings.platform_domain}/signup/verify.html?token={token}"
         try:
             send_signup_verification_email(body.email, body.tenant_name, verification_url, slug)
         except Exception:

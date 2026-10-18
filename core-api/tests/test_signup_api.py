@@ -45,6 +45,22 @@ def test_signup_creates_pending_request_and_sends_email():
     assert mock_mail.called
 
 
+def test_signup_email_links_to_verify_landing_page_not_raw_api():
+    # メールのリンク先は/api/signup/verifyを直接指してはいけない
+    # (生JSONが表示される上、nginxの静的/signup/ロケーションに吸われるリスクもある)。
+    # public-ui/verify.htmlランディングページを経由させる。
+    clear_failures("signup:testclient")
+    with patch("app.routers.signup.verify_recaptcha", return_value=True), \
+         patch("app.routers.signup.SessionLocal") as mock_session, \
+         patch("app.routers.signup.send_signup_verification_email") as mock_mail:
+        db = _session_ctx(query_results=None)
+        mock_session.return_value = db
+        client.post("/signup", json=_signup_body())
+    verification_url = mock_mail.call_args[0][2]
+    assert "/signup/verify.html?token=" in verification_url
+    assert "/api/signup/verify" not in verification_url
+
+
 def test_signup_returns_409_on_concurrent_duplicate_slug():
     clear_failures("signup:testclient")
     with patch("app.routers.signup.verify_recaptcha", return_value=True), \
