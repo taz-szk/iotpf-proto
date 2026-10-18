@@ -44,6 +44,16 @@ class TenantSignupRequest(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     expires_at = Column(DateTime(timezone=True), nullable=False)
 
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), nullable=False)
+    email = Column(String(255), nullable=False)
+    token = Column(String(64), nullable=False, unique=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+
 class ProvisioningToken(Base):
     __tablename__ = "provisioning_tokens"
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)

@@ -656,3 +656,20 @@ def migrate_create_tenant_signup_requests() -> None:
             )
         """))
         conn.commit()
+
+
+def migrate_create_password_reset_tokens() -> None:
+    """password_reset_tokens テーブル(パスワード再設定の有効トークン)を作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS password_reset_tokens (
+                id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id   UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                user_id     UUID NOT NULL,
+                email       VARCHAR(255) NOT NULL,
+                token       VARCHAR(64) NOT NULL UNIQUE,
+                created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+                expires_at  TIMESTAMPTZ NOT NULL
+            )
+        """))
+        conn.commit()
