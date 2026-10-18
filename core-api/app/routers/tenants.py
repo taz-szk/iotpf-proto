@@ -19,6 +19,7 @@ from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to
 from app.services.device_groups import list_groups_with_devices
 from app.services.panel_configs import get_default_panel_configs
 from app.services.audit import write_audit_log
+from datetime import datetime, timedelta, timezone
 import time
 import uuid
 
@@ -37,7 +38,7 @@ def create_tenant(body: TenantCreate, payload: dict = Depends(_require_platform)
         existing = db.query(Tenant).filter(Tenant.slug == body.slug).first()
         if existing:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Slug already exists")
-        tenant = Tenant(id=uuid.uuid4(), name=body.name, slug=body.slug)
+        tenant = Tenant(id=uuid.uuid4(), name=body.name, slug=body.slug, signup_source="platform_created")
         db.add(tenant)
         db.flush()
         tenant_id = str(tenant.id)
@@ -229,3 +230,23 @@ def update_tenant_data_retention(tenant_id: str, body: DataRetentionSet, payload
         db.commit()
 
     return {"retention_days": str(new_days) if new_days is not None else None}
+
+
+_TRIAL_PERIOD = timedelta(days=90)
+
+
+@router.post("/{tenant_id}/trial-extension/approve", response_model=TenantOut)
+def approve_trial_extension(tenant_id: str, payload: dict = Depends(_require_platform)):
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        tenant.trial_expires_at = datetime.now(timezone.utc) + _TRIAL_PERIOD
+        tenant.trial_extension_requested_at = None
+        tenant.trial_warning_sent_at = None
+        write_audit_log(db, "platform", payload["sub"], payload["email"],
+                        "approve_trial_extension", tenant_id=tenant_id, resource_type="tenant",
+                        resource_id=tenant.name)
+        db.commit()
+        db.refresh(tenant)
+        return tenant

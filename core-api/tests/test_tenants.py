@@ -314,6 +314,9 @@ def test_get_tenant_includes_soracom_configured_flag(client):
     tenant.status = "active"
     tenant.created_at = MagicMock()
     tenant.grafana_org_id = "42"
+    tenant.signup_source = "platform_created"
+    tenant.trial_expires_at = None
+    tenant.trial_extension_requested_at = None
 
     with patch("app.routers.tenants.SessionLocal") as mock_session, \
          patch("app.routers.tenants.is_configured", return_value=True), \
