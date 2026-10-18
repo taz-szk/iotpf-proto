@@ -109,6 +109,26 @@ def send_signup_verification_email(to_email: str, tenant_name: str, verification
         server.sendmail(settings.smtp_from, [to_email], msg.as_string())
 
 
+def send_password_reset_email(to_email: str, tenant_name: str, reset_url: str) -> None:
+    """パスワード再設定メールを送信する。送信失敗は呼び出し元に伝播させる
+    (呼び出し元はBackgroundTasks内でこれを捕捉してログに残すだけにする想定)。
+    本文は既存のsend_signup_verification_email等と同じく英語にする(日本語混在でのbase64化を避けるため)。"""
+    tenant_name_clean = str(tenant_name).replace("\r", "").replace("\n", "")
+    msg = MIMEMultipart()
+    msg["From"] = settings.smtp_from
+    msg["To"] = to_email
+    msg["Subject"] = f"[IoT Platform] Password reset for {tenant_name_clean}"
+    msg.attach(MIMEText(
+        f"Click the link below to reset your password (within 1 hour).\n\n{reset_url}\n",
+        "plain",
+    ))
+    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
+        if settings.smtp_user:
+            server.starttls()
+            server.login(settings.smtp_user, settings.smtp_password)
+        server.sendmail(settings.smtp_from, [to_email], msg.as_string())
+
+
 def send_trial_expiry_warning_email(to_email: str, tenant_name: str, expires_at_date: str) -> bool:
     """トライアル期限7日前の警告メールを送信する。送信失敗はログ出力のみ
     (既存のsend_bill_shock_emailと同じ方針。バッチ全体を止めない)。
