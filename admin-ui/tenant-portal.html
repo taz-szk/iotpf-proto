@@ -368,6 +368,94 @@
             <p class="text-xs text-gray-400 mt-2">※ 削除済みデバイスも登録台数としてカウントされます。利用中＋削除済の合計がデバイス上限に達すると新規登録できなくなります。</p>
           </div>
 
+          <!-- ===== データエクスポート ===== -->
+          <div x-show="activeTab === 'exports'">
+            <div class="bg-white rounded shadow-sm border border-gray-200 p-4 mb-4">
+              <h3 class="font-medium text-gray-700 mb-3">定期エクスポート設定</h3>
+              <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">頻度</label>
+                  <select x-show="canEdit" :value="exportSchedule.frequency || ''"
+                          @change="exportSchedule.frequency = $event.target.value || null"
+                          class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <option value="">未設定</option>
+                    <option value="daily">毎日</option>
+                    <option value="weekly">毎週</option>
+                    <option value="monthly">毎月</option>
+                  </select>
+                  <span x-show="!canEdit" class="text-sm text-gray-700"
+                        x-text="{daily:'毎日', weekly:'毎週', monthly:'毎月'}[exportSchedule.frequency] || '未設定'"></span>
+                </div>
+                <label class="flex items-center gap-1.5 text-sm text-gray-600">
+                  <input type="checkbox" x-show="canEdit" x-model="exportSchedule.enabled">
+                  <span x-show="!canEdit" x-text="exportSchedule.enabled ? '有効' : '無効'"></span>
+                  <span x-show="canEdit">有効化</span>
+                </label>
+                <button x-show="canEdit" @click="saveExportSchedule()" :disabled="savingExportSchedule"
+                        class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
+                  <span x-show="!savingExportSchedule">保存</span>
+                  <span x-show="savingExportSchedule">保存中...</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="bg-white rounded shadow-sm border border-gray-200 mb-4">
+              <table class="w-full">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                  <tr>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">種別</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">サイズ</th>
+                    <th class="text-left px-4 py-3 text-xs font-medium text-gray-500">完了日時</th>
+                    <th class="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="kind in ['periodic', 'adhoc']" :key="kind">
+                    <tr class="border-t border-gray-100">
+                      <td class="px-4 py-3 text-sm text-gray-700" x-text="kind === 'periodic' ? '定期' : 'アドホック'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500" x-text="exportJob(kind) ? exportJob(kind).status : '-'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500"
+                          x-text="exportJob(kind) && exportJob(kind).file_size_bytes ? Math.round(exportJob(kind).file_size_bytes / 1024) + ' KB' : '-'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500"
+                          x-text="exportJob(kind) && exportJob(kind).completed_at ? new Date(exportJob(kind).completed_at).toLocaleString('ja-JP') : '-'"></td>
+                      <td class="px-4 py-3 text-right whitespace-nowrap">
+                        <a x-show="exportJob(kind) && exportJob(kind).status === 'done'"
+                           :href="`/api/tenant-portal/me/exports/${kind}/download`"
+                           class="text-blue-600 hover:text-blue-800 text-xs mr-3">ダウンロード</a>
+                        <button x-show="canEdit && exportJob(kind)" @click="deleteExport(kind)"
+                                class="text-red-500 hover:text-red-700 text-xs">削除</button>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+
+            <div x-show="canEdit" class="bg-white rounded shadow-sm border border-gray-200 p-4">
+              <h3 class="font-medium text-gray-700 mb-3">アドホック実行</h3>
+              <div x-show="exportRequestError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3"
+                   x-text="exportRequestError"></div>
+              <div class="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">開始日時</label>
+                  <input type="datetime-local" x-model="exportRequestForm.start"
+                         class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-600 mb-1">終了日時</label>
+                  <input type="datetime-local" x-model="exportRequestForm.end"
+                         class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                </div>
+                <button @click="requestExport()" :disabled="requestingExport || !exportRequestForm.start || !exportRequestForm.end"
+                        class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
+                  <span x-show="!requestingExport">実行</span>
+                  <span x-show="requestingExport">実行中...</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
           <!-- ===== デバイス ===== -->
           <div x-show="activeTab === 'devices'">
             <div class="flex items-center justify-between mb-4">
@@ -1802,6 +1890,7 @@ function portalApp() {
         { id: 'sim',              label: 'SIM管理',                 icon: '📶' },
         { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
         { id: 'stats-billing',    label: '統計・ビリング',           icon: '📊' },
+        { id: 'exports',          label: 'データエクスポート',       icon: '📤' },
       ];
       if (this.isAdmin) {
         base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
@@ -1972,6 +2061,13 @@ function portalApp() {
     showTokenForm: false,
     tokenForm: { preset: '365', custom: '', devicesPreset: 'limited', max_devices: 100 },
     expandedToken: null, tokenDevices: [], tokenDevicesLoading: false,
+    // データエクスポート
+    exportJobs: [],
+    exportSchedule: { frequency: null, device_ids: null, group_id: null, enabled: false },
+    exportRequestForm: { start: '', end: '', device_ids: null, group_id: null },
+    exportRequestError: '',
+    requestingExport: false,
+    savingExportSchedule: false,
     // アラート
     alertRules: [], sensorKeys: [], sensorKeySelect: '',
     alertDevices: [], deviceSearch: '', showDeviceDropdown: false,
@@ -2170,6 +2266,7 @@ function portalApp() {
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
       if (tab === 'stats-billing') await this.loadStatsAndBilling();
+      if (tab === 'exports') await this.loadExports();
       if (tab === 'sim')      { await this.loadSimCredentials(); await this.reloadSimLines(); await this.loadDevices(); }
       if (tab === 'devices')  this.startDevicesRefresh();
       if (tab !== 'devices' && this._devTimer) { clearInterval(this._devTimer); this._devTimer = null; }
@@ -2298,6 +2395,41 @@ function portalApp() {
       if (!confirm('このトークンを失効させますか？')) return;
       try { await portalFetch('DELETE', `/me/tokens/${id}`); this.tokens = await portalFetch('GET', '/me/tokens') || []; }
       catch(e) { this.error = e.message; }
+    },
+
+    // ----- データエクスポート -----
+    async loadExports() {
+      try {
+        this.exportJobs = await portalFetch('GET', '/me/exports') || [];
+        this.exportSchedule = await portalFetch('GET', '/me/export-schedule')
+          || { frequency: null, device_ids: null, group_id: null, enabled: false };
+      } catch(e) { this.error = e.message; }
+    },
+    exportJob(kind) {
+      return this.exportJobs.find(j => j.kind === kind) || null;
+    },
+    async requestExport() {
+      this.requestingExport = true;
+      this.exportRequestError = '';
+      try {
+        await portalFetch('POST', '/me/exports', { ...this.exportRequestForm });
+        this.exportJobs = await portalFetch('GET', '/me/exports') || [];
+      } catch(e) { this.exportRequestError = e.message; }
+      finally { this.requestingExport = false; }
+    },
+    async saveExportSchedule() {
+      this.savingExportSchedule = true;
+      try {
+        this.exportSchedule = await portalFetch('PUT', '/me/export-schedule', { ...this.exportSchedule });
+      } catch(e) { this.error = e.message; }
+      finally { this.savingExportSchedule = false; }
+    },
+    async deleteExport(kind) {
+      if (!confirm('このエクスポートファイルを削除しますか？')) return;
+      try {
+        await portalFetch('DELETE', `/me/exports/${kind}`);
+        this.exportJobs = await portalFetch('GET', '/me/exports') || [];
+      } catch(e) { this.error = e.message; }
     },
 
     // ----- アラート -----
