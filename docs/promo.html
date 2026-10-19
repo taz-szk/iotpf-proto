@@ -257,6 +257,13 @@ canvas{display:block}
 #ov-pf .ov-card.hl{border-color:var(--cyan);box-shadow:0 0 0 1px var(--cyan),0 10px 28px rgba(0,198,255,.22)}
 #ov-pf .ov-card.hl .ov-icon{background:var(--cyan);color:#06222C}
 
+/* ── チャプター見出しシーン ── */
+.chapter-wrap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px}
+.chapter-num{font-family:'Barlow Condensed',sans-serif;font-size:.78rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.chapter-icon{font-size:2.6rem;margin:6px 0}
+.chapter-title{font-family:'Barlow Condensed',sans-serif;font-size:2.6rem;font-weight:700;color:var(--text)}
+.chapter-desc{font-size:.9rem;color:var(--textm);max-width:560px;line-height:1.6}
+
 /* ── ステップフロー(統合機能: チャット→確認→実行) ── */
 .step-flow{display:flex;align-items:center;gap:8px;margin-bottom:16px}
 .step-flow .step{display:flex;align-items:center;gap:6px;font-size:.72rem;color:var(--textm);transition:color .3s ease}
@@ -281,7 +288,7 @@ canvas{display:block}
         <span class="pill pill-orange">アラート通知</span>
         <span class="pill pill-blue">利用量課金</span>
         <span class="pill pill-cyan">MFA</span>
-        <span class="pill pill-green">AIチャット</span>
+        <span class="pill pill-green">AIチャット(開発中)</span>
         <span class="pill pill-blue">GPS位置管理</span>
       </div>
       <div class="caption fade-item">センサーやデバイスの種類を問わず、安全に収集・可視化・運用できるIoTプラットフォーム</div>
@@ -289,27 +296,18 @@ canvas{display:block}
 
     <section class="scene" id="s1">
       <div class="eyebrow">システム構成</div>
-      <div class="scene-title">エンドツーエンド アーキテクチャ</div>
+      <div class="scene-title">アーキテクチャ概要</div>
       <div class="scene-body">
         <canvas id="arch-canvas"></canvas>
       </div>
     </section>
 
     <section class="scene" id="s2">
-      <div class="eyebrow fade-item">テナント管理者機能</div>
-      <div class="scene-title fade-item">現場を支える9つの管理機能</div>
-      <div class="scene-body">
-        <div class="ov-grid" id="ov-tenant-grid" style="grid-template-columns:repeat(3,1fr)">
-          <div class="ov-card fade-item"><div class="ov-icon">🎫</div><div class="ov-name">ブートストラップトークン管理</div><div class="ov-desc">複数トークン発行、台数上限・有効期限を設定</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🔐</div><div class="ov-name">デバイス管理</div><div class="ov-desc">トークン認証→証明書発行→登録を自動化</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">⬆️</div><div class="ov-name">OTAファームウェア更新</div><div class="ov-desc">署名付きJWT(24h)でセキュアに配信</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">📶</div><div class="ov-name">SIM(SORACOM)管理</div><div class="ov-desc">回線状態・速度クラス変更、デバイス紐づけ</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🗂️</div><div class="ov-name">グループ管理</div><div class="ov-desc">拠点・機種単位でアラート/OTA/表示を統制</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">💳</div><div class="ov-name">ビリング管理</div><div class="ov-desc">課金8項目の確認、請求書ライフサイクル閲覧</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">📊</div><div class="ov-name">ダッシュボード(内部)</div><div class="ov-desc">Grafana SSO、テナント別orgで完全分離</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🌐</div><div class="ov-name">ダッシュボード(公開)</div><div class="ov-desc">認証不要の統計API(/me/stats)で共有</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">📍</div><div class="ov-name">デバイス位置情報</div><div class="ov-desc">GPSで全体表示・移動履歴を地図に可視化</div></div>
-        </div>
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 01</div>
+        <div class="chapter-icon fade-item">🔐</div>
+        <div class="chapter-title fade-item">デバイス管理</div>
+        <div class="chapter-desc fade-item">ブートストラップトークン発行 → 証明書自動発行 → デバイス一覧 → OTAファームウェア配信</div>
       </div>
     </section>
 
@@ -423,6 +421,15 @@ canvas{display:block}
     </section>
 
     <section class="scene" id="s7">
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 02</div>
+        <div class="chapter-icon fade-item">📶</div>
+        <div class="chapter-title fade-item">SIM(SORACOM)管理</div>
+        <div class="chapter-desc fade-item">回線状態・速度クラス変更、デバイスとの紐づけ</div>
+      </div>
+    </section>
+
+    <section class="scene" id="s8">
       <div class="eyebrow fade-item">テナント管理者 — SORACOM連携</div>
       <div class="scene-title fade-item">SIMステータス管理</div>
       <div class="scene-body">
@@ -451,7 +458,16 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s8">
+    <section class="scene" id="s9">
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 03</div>
+        <div class="chapter-icon fade-item">🗂️</div>
+        <div class="chapter-title fade-item">グループ管理</div>
+        <div class="chapter-desc fade-item">拠点・機種単位でデバイスをグルーピングし、アラート・OTA・表示を統制</div>
+      </div>
+    </section>
+
+    <section class="scene" id="s10">
       <div class="eyebrow fade-item">テナント管理者</div>
       <div class="scene-title fade-item">デバイスグループ管理</div>
       <div class="scene-body">
@@ -482,7 +498,16 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s9">
+    <section class="scene" id="s11">
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 04</div>
+        <div class="chapter-icon fade-item">📊</div>
+        <div class="chapter-title fade-item">テレメトリ・位置情報</div>
+        <div class="chapter-desc fade-item">アラートルール → リアルタイムダッシュボード → GPS位置情報マップ</div>
+      </div>
+    </section>
+
+    <section class="scene" id="s12">
       <div class="eyebrow fade-item">アラート管理</div>
       <div class="scene-title fade-item">閾値アラートルール設定</div>
       <div class="scene-body">
@@ -509,46 +534,9 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s10">
-      <div class="eyebrow fade-item">テナント管理者 — 請求</div>
-      <div class="scene-title fade-item">利用量ベースの月次課金</div>
-      <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body">
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px">
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">データポイント</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">284,920</div>
-              </div>
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">デバイス数</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">48</div>
-              </div>
-              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
-                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">今月の請求額</div>
-                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-acc)">¥<span class="bill-total" data-target="128400">0</span></div>
-              </div>
-            </div>
-            <table class="ui-tbl">
-              <thead><tr><th>請求期間</th><th>金額</th><th>状態</th></tr></thead>
-              <tbody>
-                <tr><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">集計中（今月）</span></td></tr>
-                <tr><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">確定</span></td></tr>
-                <tr><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">確定</span></td></tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="scene" id="s11">
+    <section class="scene" id="s13">
       <div class="eyebrow fade-item">テナント管理者 — ダッシュボード(内部)</div>
-      <div class="scene-title fade-item">Grafanaによるリアルタイム監視</div>
+      <div class="scene-title fade-item">Grafanaによるテレメトリ情報の可視化</div>
       <div class="scene-body">
         <div class="screen fade-item grafana-screen">
           <div class="screen-hdr" style="background:#181b1f;border-bottom:1px solid #2c3235">
@@ -557,7 +545,19 @@ canvas{display:block}
           </div>
           <div class="screen-body grafana-screen" style="padding:14px">
             <div class="grafana-topbar fade-item">
-              <div class="grafana-brand"><span class="mark">◉</span> Grafana — 大阪工場 概要</div>
+              <div class="grafana-brand">
+                <svg width="20" height="20" viewBox="0 0 24 24" style="flex-shrink:0">
+                  <defs>
+                    <linearGradient id="grafanaGrad" x1="0" y1="1" x2="0.3" y2="0">
+                      <stop offset="0" stop-color="#F46800"/>
+                      <stop offset="1" stop-color="#FFCB05"/>
+                    </linearGradient>
+                  </defs>
+                  <path d="M12 2.2c-.3 1.6-1.2 2.4-2.2 3.2C8.4 6.6 7 7.9 7 10.3c0 .9.2 1.6.5 2.3-1 .9-1.7 2.2-1.7 3.9 0 3.4 2.8 6.3 6.2 6.3s6.2-2.9 6.2-6.3c0-1.9-.9-3.3-2-4.3.4-.8.6-1.7.6-2.7 0-2.6-1.7-4-3-5.1-1-.8-1.8-1.5-1.8-2.2z" fill="url(#grafanaGrad)" stroke="#F46800" stroke-width=".3"/>
+                  <circle cx="12" cy="15.6" r="2.3" fill="#181b1f"/>
+                </svg>
+                <span>Grafana — 大阪工場 概要</span>
+              </div>
               <div style="display:flex;gap:8px">
                 <span class="grafana-pill">🔄 30s</span>
                 <span class="grafana-pill">直近1時間 ▾</span>
@@ -569,12 +569,12 @@ canvas{display:block}
                 <div class="gf-stat-val"><span class="count-up" data-target="46">0</span><span style="font-size:.85rem;color:#8e9297"> / 48</span></div>
               </div>
               <div class="gf-panel fade-item">
-                <div class="gf-panel-title">平均気温 <span>⋮</span></div>
-                <div class="gf-stat-val">24.8℃</div>
+                <div class="gf-panel-title">本日のアラート発生 <span>⋮</span></div>
+                <div class="gf-stat-val" style="color:#FF6B35"><span class="count-up" data-target="3">0</span><span style="font-size:.85rem;color:#8e9297"> 件</span></div>
               </div>
               <div class="gf-panel fade-item">
-                <div class="gf-panel-title">直近1時間のデータ点 <span>⋮</span></div>
-                <div class="gf-stat-val" style="color:#73BF69"><span class="count-up" data-target="2304">0</span></div>
+                <div class="gf-panel-title">最終データ受信 <span>⋮</span></div>
+                <div class="gf-stat-val" style="color:#73BF69;font-size:1.2rem">14:32:05</div>
               </div>
             </div>
             <div class="gf-panel fade-item" style="margin-bottom:10px">
@@ -595,6 +595,7 @@ canvas{display:block}
                 <tbody>
                   <tr><td>sensor-003</td><td>24.8℃ / 58%RH</td><td style="color:#8e9297">14:32:05</td></tr>
                   <tr><td>sensor-007</td><td>23.1℃ / 61%RH</td><td style="color:#8e9297">14:32:03</td></tr>
+                  <tr><td>sensor-101</td><td>37.2℃ <span style="color:#F2495C">⚠</span></td><td style="color:#8e9297">14:31:58</td></tr>
                   <tr><td>sensor-012</td><td style="color:#8e9297">オフライン</td><td style="color:#8e9297">13:58:40</td></tr>
                 </tbody>
               </table>
@@ -604,7 +605,71 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s12">
+    <section class="scene" id="s14">
+      <div class="eyebrow fade-item">テナント管理者 — 位置情報</div>
+      <div class="scene-title fade-item">デバイス位置情報(GPS)マップ表示</div>
+      <div class="scene-body">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body" style="display:flex;gap:14px">
+            <div class="fade-item" style="flex:1.4;height:220px;border-radius:8px;position:relative;overflow:hidden;background:#EAF1E4">
+              <svg viewBox="0 0 400 220" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" style="display:block">
+                <rect width="400" height="220" fill="#EAF1E4"/>
+                <ellipse cx="55" cy="175" rx="58" ry="40" fill="#C9E6C4"/>
+                <ellipse cx="345" cy="35" rx="52" ry="36" fill="#C9E6C4"/>
+                <path d="M -10 40 C 80 72, 140 18, 220 58 C 300 96, 335 150, 420 168" stroke="#AFD4E8" stroke-width="16" fill="none"/>
+                <rect x="150" y="88" width="26" height="18" rx="2" fill="#D9DEE2"/>
+                <rect x="183" y="94" width="20" height="22" rx="2" fill="#D9DEE2"/>
+                <rect x="212" y="130" width="30" height="20" rx="2" fill="#D9DEE2"/>
+                <rect x="247" y="104" width="18" height="16" rx="2" fill="#D9DEE2"/>
+                <rect x="118" y="58" width="22" height="16" rx="2" fill="#D9DEE2"/>
+                <rect x="275" y="138" width="22" height="16" rx="2" fill="#D9DEE2"/>
+                <path d="M -10 108 C 100 100, 260 118, 410 88" stroke="#B9C2C9" stroke-width="10" fill="none"/>
+                <path d="M -10 108 C 100 100, 260 118, 410 88" stroke="#FFFFFF" stroke-width="7" fill="none"/>
+                <path d="M -10 108 C 100 100, 260 118, 410 88" stroke="#DCE2E6" stroke-width="1.4" stroke-dasharray="6 5" fill="none"/>
+                <path d="M 70 -10 C 110 60, 140 140, 185 230" stroke="#B9C2C9" stroke-width="9" fill="none"/>
+                <path d="M 70 -10 C 110 60, 140 140, 185 230" stroke="#FFFFFF" stroke-width="6" fill="none"/>
+                <path d="M 300 -10 C 270 70, 250 150, 230 230" stroke="#B9C2C9" stroke-width="9" fill="none"/>
+                <path d="M 300 -10 C 270 70, 250 150, 230 230" stroke="#FFFFFF" stroke-width="6" fill="none"/>
+                <path d="M -10 165 L 410 150" stroke="#B9C2C9" stroke-width="7" fill="none"/>
+                <path d="M -10 165 L 410 150" stroke="#FFFFFF" stroke-width="5" fill="none"/>
+              </svg>
+              <div style="position:absolute;left:26%;top:40%;font-size:1.3rem;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))" title="配送車両A">📍</div>
+              <div style="position:absolute;left:53%;top:62%;font-size:1.3rem;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))" title="配送車両B">📍</div>
+              <div style="position:absolute;left:70%;top:28%;font-size:1.3rem;opacity:.35;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))" title="位置不明">📍</div>
+              <div style="position:absolute;left:44%;top:48%;font-size:1.3rem;filter:drop-shadow(0 1px 1px rgba(0,0,0,.35))" title="配送車両C">📍</div>
+              <div style="position:absolute;bottom:8px;right:10px;font-size:.6rem;color:#5b6b63;background:rgba(255,255,255,.75);padding:2px 6px;border-radius:4px">© OpenStreetMap contributors</div>
+            </div>
+            <div style="flex:1" class="fade-item">
+              <table class="ui-tbl">
+                <thead><tr><th>デバイス</th><th>位置情報</th></tr></thead>
+                <tbody>
+                  <tr class="fade-item"><td>配送車両A</td><td style="color:var(--ui-tm)">10:42更新</td></tr>
+                  <tr class="fade-item"><td>配送車両B</td><td style="color:var(--ui-tm)">10:41更新</td></tr>
+                  <tr class="fade-item"><td>配送車両C</td><td style="color:var(--ui-tm)">10:40更新</td></tr>
+                  <tr class="fade-item"><td>配送車両D</td><td><span class="ui-badge inactive">位置不明</span></td></tr>
+                </tbody>
+              </table>
+              <div class="fade-item" style="margin-top:10px;font-size:.68rem;color:var(--ui-tm);line-height:1.6">全体表示(ピン)・1台ごとの移動履歴(軌跡)の2画面。デバイスグループで絞り込み、テナントごとに初期表示位置を保存できます。</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s15">
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 05</div>
+        <div class="chapter-icon fade-item">👤</div>
+        <div class="chapter-title fade-item">ユーザー・テナント管理</div>
+        <div class="chapter-desc fade-item">ユーザー管理・公開ダッシュボードURL・利用量ベース課金の確認</div>
+      </div>
+    </section>
+
+    <section class="scene" id="s16">
       <div class="eyebrow fade-item">テナント管理者 — ダッシュボード(公開)</div>
       <div class="scene-title fade-item">ユーザー管理 ・ 公開ダッシュボード URL</div>
       <div class="scene-body grid2">
@@ -642,21 +707,80 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s13">
-      <div class="eyebrow fade-item">プラットフォーム管理者機能</div>
-      <div class="scene-title fade-item">テナントを支える5つの管理機能</div>
-      <div class="scene-body">
-        <div class="ov-grid" id="ov-pf" style="grid-template-columns:repeat(5,1fr)">
-          <div class="ov-card fade-item"><div class="ov-icon">🏢</div><div class="ov-name">テナント管理</div><div class="ov-desc">作成時にDB・InfluxDB・Grafana orgを自動構築</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">💰</div><div class="ov-name">料金テーブル設定</div><div class="ov-desc">テナント単位の単価マスタ、スナップショット設計</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🧾</div><div class="ov-name">請求・統計処理</div><div class="ov-desc">日次バッチで集計中→確定、確定後の再集計にも対応</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🔑</div><div class="ov-name">多要素認証(MFA)設定</div><div class="ov-desc">TOTP、プラットフォーム/テナント別にON/OFF</div></div>
-          <div class="ov-card fade-item"><div class="ov-icon">🤖</div><div class="ov-name">AIアシスタント設定</div><div class="ov-desc">ローカルLLM・ベクトル検索、確認フロー付き操作代行</div></div>
+    <section class="scene" id="s17">
+      <div class="eyebrow fade-item">テナント管理者 — Billing Management</div>
+      <div class="scene-title fade-item">コスト可視化 ・ 請求管理ダッシュボード</div>
+      <div class="scene-body grid2">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">データポイント</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">284,920</div>
+              </div>
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">デバイス数</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-t)">48</div>
+              </div>
+              <div style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:14px 16px">
+                <div style="font-size:.68rem;color:var(--ui-tm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">今月の請求額</div>
+                <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.6rem;font-weight:700;color:var(--ui-acc)">¥<span class="bill-total" data-target="128400">0</span></div>
+              </div>
+            </div>
+            <div class="fade-item" style="font-size:.78rem;font-weight:600;color:var(--ui-t);margin-bottom:8px">料金内訳(今月集計中)</div>
+            <table class="ui-tbl" style="margin-bottom:14px">
+              <thead><tr><th>項目</th><th>単価</th><th>使用量</th><th>金額</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>基本料金</td><td>¥5,000</td><td>—</td><td>¥5,000</td></tr>
+                <tr class="fade-item"><td>データポイント数</td><td>¥0.02/件</td><td>284,920件</td><td>¥5,698</td></tr>
+                <tr class="fade-item"><td>デバイス数・稼働中</td><td>¥300/台</td><td>48台</td><td>¥14,400</td></tr>
+                <tr class="fade-item"><td>アラート発報件数</td><td>¥10/件</td><td>12件</td><td>¥120</td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;background:#FFF7ED;border:1px solid #FED7AA;border-radius:8px;padding:10px 14px">
+              <div style="font-size:.74rem;color:#9A3412">⚠ 予算アラート: 月額 ¥150,000 を超えたら管理者にメール通知</div>
+              <span class="ui-badge active" style="font-size:.66rem">ON</span>
+            </div>
+          </div>
+        </div>
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+              <div class="fade-item" style="font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;color:var(--ui-t)">請求書履歴</div>
+              <div class="fade-item ui-btn secondary" style="padding:4px 10px;font-size:.72rem">⬇ PDFダウンロード</div>
+            </div>
+            <table class="ui-tbl">
+              <thead><tr><th>請求期間</th><th>金額</th><th>状態</th><th></th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>2026-10</td><td>¥128,400</td><td><span class="ui-badge warning">集計中（今月）</span></td><td style="color:var(--ui-tm);font-size:.7rem">—</td></tr>
+                <tr class="fade-item"><td>2026-09</td><td>¥119,850</td><td><span class="ui-badge active">確定</span></td><td><span class="ui-btn secondary" style="padding:3px 8px;font-size:.68rem">PDF</span></td></tr>
+                <tr class="fade-item"><td>2026-08</td><td>¥104,220</td><td><span class="ui-badge active">確定</span></td><td><span class="ui-btn secondary" style="padding:3px 8px;font-size:.68rem">PDF</span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="margin-top:12px;font-size:.7rem;color:var(--ui-tm);line-height:1.6">単価はスナップショットとして請求書に保存され、将来の単価変更が過去の確定請求に影響しません。経理・購買部門への提出にそのまま利用できる形式で出力します。</div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="scene" id="s14">
+    <section class="scene" id="s18">
+      <div class="chapter-wrap">
+        <div class="chapter-num fade-item">CHAPTER 06</div>
+        <div class="chapter-icon fade-item">🛠️</div>
+        <div class="chapter-title fade-item">プラットフォーム管理機能</div>
+        <div class="chapter-desc fade-item">テナント管理・課金設定・MFA・AIアシスタント設定(開発中)</div>
+      </div>
+    </section>
+
+    <section class="scene" id="s19">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
       <div class="scene-title fade-item">テナント一覧管理</div>
       <div class="scene-body">
@@ -684,7 +808,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s15">
+    <section class="scene" id="s20">
       <div class="eyebrow fade-item">プラットフォーム管理者 — 課金</div>
       <div class="scene-title fade-item">テナント単価マスタ & 請求状況</div>
       <div class="scene-body">
@@ -727,29 +851,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s16">
-      <div class="eyebrow fade-item">プラットフォーム管理者 — 課金バッチ</div>
-      <div class="scene-title fade-item">請求書ライフサイクル</div>
-      <div class="scene-body">
-        <div class="vcol" style="flex:1;justify-content:center">
-          <div style="display:flex;align-items:center;gap:0;justify-content:center">
-            <div class="group-card fade-item" style="width:200px">
-              <div class="g-name">集計中（今月）</div>
-              <div style="font-size:.72rem;color:var(--textm)">日次バッチが当月分を暫定算出</div>
-            </div>
-            <div style="width:50px;text-align:center;color:var(--textm);font-size:1.2rem" class="fade-item">→</div>
-            <div class="group-card fade-item" style="width:200px;border-color:var(--green)">
-              <div class="g-name" style="color:var(--green)">確定</div>
-              <div style="font-size:.72rem;color:var(--textm)">月末に確定、単価をスナップショット保存</div>
-            </div>
-          </div>
-          <div class="fade-item" style="text-align:center;margin-top:20px;font-size:.78rem;color:var(--textm)">確定後に誤りが見つかった場合も、ステータスは「確定」のまま再集計し差額を反映できます。</div>
-          <div class="fade-item" style="text-align:center;margin-top:6px;font-size:.78rem;color:var(--textm)">全テナントの統計処理をバッチで一括実行、PF管理者がいつでも全体を閲覧できます。</div>
-        </div>
-      </div>
-    </section>
-
-    <section class="scene" id="s17">
+    <section class="scene" id="s21">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
       <div class="scene-title fade-item">多要素認証(MFA)設定</div>
       <div class="scene-body">
@@ -776,9 +878,9 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s18">
+    <section class="scene" id="s22">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
-      <div class="scene-title fade-item">AIアシスタント設定</div>
+      <div class="scene-title fade-item">AIアシスタント設定 <span class="ui-badge warning" style="vertical-align:middle;font-size:.6rem">開発中</span></div>
       <div class="scene-body">
         <div class="screen fade-item">
           <div class="screen-hdr">
@@ -805,9 +907,9 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s19">
+    <section class="scene" id="s23">
       <div class="eyebrow fade-item">統合機能 — AIアシスタント</div>
-      <div class="scene-title fade-item">確認フロー付きのAI操作代行</div>
+      <div class="scene-title fade-item">確認フロー付きのAI操作代行 <span class="ui-badge warning" style="vertical-align:middle;font-size:.6rem">開発中</span></div>
       <div class="scene-body">
         <div class="vcol" style="flex:1;align-items:center">
           <div class="step-flow fade-item" id="rag-steps" style="width:560px">
@@ -833,42 +935,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s20">
-      <div class="eyebrow fade-item">テナント管理者 — 位置情報</div>
-      <div class="scene-title fade-item">デバイス位置情報(GPS)マップ表示</div>
-      <div class="scene-body">
-        <div class="screen fade-item">
-          <div class="screen-hdr">
-            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
-            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
-          </div>
-          <div class="screen-body" style="display:flex;gap:14px">
-            <div class="fade-item" style="flex:1.4;height:220px;border-radius:8px;position:relative;overflow:hidden;background:linear-gradient(135deg,#DCEFE3 0%,#CFE8F3 60%,#E7F0D8 100%)">
-              <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.05) 1px,transparent 1px);background-size:28px 28px"></div>
-              <div style="position:absolute;left:28%;top:34%;font-size:1.3rem" title="配送車両A">📍</div>
-              <div style="position:absolute;left:52%;top:58%;font-size:1.3rem" title="配送車両B">📍</div>
-              <div style="position:absolute;left:68%;top:30%;font-size:1.3rem;opacity:.35" title="位置不明">📍</div>
-              <div style="position:absolute;left:40%;top:46%;font-size:1.3rem" title="配送車両C">📍</div>
-              <div style="position:absolute;bottom:8px;right:10px;font-size:.6rem;color:#5b6b63;background:rgba(255,255,255,.7);padding:2px 6px;border-radius:4px">© OpenStreetMap contributors</div>
-            </div>
-            <div style="flex:1" class="fade-item">
-              <table class="ui-tbl">
-                <thead><tr><th>デバイス</th><th>位置情報</th></tr></thead>
-                <tbody>
-                  <tr class="fade-item"><td>配送車両A</td><td style="color:var(--ui-tm)">10:42更新</td></tr>
-                  <tr class="fade-item"><td>配送車両B</td><td style="color:var(--ui-tm)">10:41更新</td></tr>
-                  <tr class="fade-item"><td>配送車両C</td><td style="color:var(--ui-tm)">10:40更新</td></tr>
-                  <tr class="fade-item"><td>配送車両D</td><td><span class="ui-badge inactive">位置不明</span></td></tr>
-                </tbody>
-              </table>
-              <div class="fade-item" style="margin-top:10px;font-size:.68rem;color:var(--ui-tm);line-height:1.6">全体表示(ピン)・1台ごとの移動履歴(軌跡)の2画面。デバイスグループで絞り込み、テナントごとに初期表示位置を保存できます。</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="scene" id="s21">
+    <section class="scene" id="s24">
       <div class="eyebrow">まとめ</div>
       <div class="scene-title">IoTAir-X — 全機能一覧</div>
       <div class="scene-body">
@@ -891,7 +958,7 @@ canvas{display:block}
             <div class="feat-item"><div class="feat-icon">💳</div><div class="feat-text"><div class="name">利用量ベース課金</div><div class="desc">単価マスタ×実利用量で月次請求を自動生成</div></div></div>
             <div class="feat-item"><div class="feat-icon">🗂️</div><div class="feat-text"><div class="name">デバイスグループ管理</div><div class="desc">拠点・用途別にデバイスをグルーピング</div></div></div>
             <div class="feat-item"><div class="feat-icon">🔑</div><div class="feat-text"><div class="name">多要素認証(MFA)</div><div class="desc">TOTPによる2段階認証、プラットフォーム/テナント別設定</div></div></div>
-            <div class="feat-item"><div class="feat-icon">🤖</div><div class="feat-text"><div class="name">AIアシスタント</div><div class="desc">ローカルLLMによるQ&A・確認付き操作代行</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🤖</div><div class="feat-text"><div class="name">AIアシスタント(開発中)</div><div class="desc">ローカルLLMによるQ&A・確認付き操作代行</div></div></div>
             <div class="feat-item"><div class="feat-icon">📍</div><div class="feat-text"><div class="name">デバイス位置情報</div><div class="desc">GPSで全体表示・移動履歴を地図に可視化</div></div></div>
             <div class="feat-item"><div class="feat-icon">📝</div><div class="feat-text"><div class="name">セルフサインアップ</div><div class="desc">90日間トライアルを自分で申込み・即利用開始</div></div></div>
             <div class="feat-item"><div class="feat-icon">🔓</div><div class="feat-text"><div class="name">パスワード再設定</div><div class="desc">管理者連絡なしでセルフサービスに再設定</div></div></div>
@@ -927,7 +994,7 @@ canvas{display:block}
 </div>
 
 <script>
-const DURATIONS = [7000,9000,9000,8000,8000,8000,8000,9000,8000,8000,8000,9000,8000,9000,8000,9000,8000,8000,8000,9000,8000,9000];
+const DURATIONS = [7000,9000,4500,8000,8000,8000,8000,4500,9000,4500,8000,4500,8000,9000,8000,4500,8000,8000,4500,8000,9000,8000,8000,9000,9000];
 const N = DURATIONS.length;
 const scenes = Array.from(document.querySelectorAll('.scene'));
 const progress = document.getElementById('progress');
@@ -1011,15 +1078,17 @@ ANIMS[1]=()=>{
   // node definitions (relative coords 0-1)
   const W=canvas.clientWidth,H=canvas.clientHeight;
   const nodes=[
-    {id:'dev', x:.08,y:.5, w:90,h:64, label:'デバイス群', sub:'sensor × 12',col:'#1E3A6E',bc:'#2E7EF5'},
-    {id:'emqx',x:.32,y:.5, w:90,h:56, label:'EMQX Broker',sub:'mTLS :8883',col:'#1E3A6E',bc:'#00C6FF'},
-    {id:'ing', x:.56,y:.28,w:90,h:52, label:'Ingestion',sub:'データ書込',col:'#1E2E40',bc:'#6366F1'},
-    {id:'idb', x:.78,y:.18,w:90,h:52, label:'InfluxDB',sub:'時系列DB',col:'#1E2E40',bc:'#06B6D4'},
-    {id:'grf', x:.78,y:.42,w:90,h:52, label:'Grafana',sub:'可視化',col:'#1E2E40',bc:'#F59E0B'},
-    {id:'api', x:.56,y:.72,w:90,h:52, label:'Core API',sub:'FastAPI',col:'#1E2E40',bc:'#2E7EF5'},
-    {id:'pg',  x:.78,y:.62,w:90,h:52, label:'PostgreSQL',sub:'メタデータ',col:'#1E2E40',bc:'#3B82F6'},
-    {id:'alt', x:.78,y:.82,w:90,h:52, label:'Alert Svc',sub:'メール通知',col:'#1E2E40',bc:'#FF6B35'},
-    {id:'adm', x:.32,y:.82,w:90,h:52, label:'Admin UI',sub:'nginx',col:'#1E2E40',bc:'#22C55E'},
+    {id:'dev', x:.08,y:.42, w:90,h:64, label:'デバイス群', sub:'sensor × 12',col:'#1E3A6E',bc:'#2E7EF5'},
+    {id:'emqx',x:.32,y:.42, w:90,h:56, label:'EMQX Broker',sub:'mTLS :8883',col:'#1E3A6E',bc:'#00C6FF'},
+    {id:'ing', x:.56,y:.20,w:90,h:52, label:'Ingestion',sub:'データ書込',col:'#1E2E40',bc:'#6366F1'},
+    {id:'idb', x:.78,y:.10,w:90,h:52, label:'InfluxDB',sub:'時系列DB',col:'#1E2E40',bc:'#06B6D4'},
+    {id:'grf', x:.78,y:.34,w:90,h:52, label:'Grafana',sub:'可視化',col:'#1E2E40',bc:'#F59E0B'},
+    {id:'api', x:.56,y:.64,w:90,h:52, label:'Core API',sub:'FastAPI',col:'#1E2E40',bc:'#2E7EF5'},
+    {id:'pg',  x:.78,y:.54,w:90,h:52, label:'PostgreSQL',sub:'メタデータ',col:'#1E2E40',bc:'#3B82F6'},
+    {id:'alt', x:.78,y:.74,w:90,h:52, label:'Alert Svc',sub:'メール通知',col:'#1E2E40',bc:'#FF6B35'},
+    {id:'adm', x:.32,y:.74,w:90,h:52, label:'Admin UI',sub:'nginx',col:'#1E2E40',bc:'#22C55E'},
+    {id:'soracom', x:.70,y:.885,w:95,h:42, label:'SORACOM API',sub:'SIM管理(外部)',col:'#2E2210',bc:'#FF6B35',ext:true},
+    {id:'osm', x:.46,y:.885,w:95,h:42, label:'OpenStreetMap',sub:'地図タイル(外部)',col:'#152A18',bc:'#22C55E',ext:true},
   ];
   const edges=[
     {from:'dev',to:'emqx',label:'mTLS',col:'#00C6FF'},
@@ -1030,6 +1099,8 @@ ANIMS[1]=()=>{
     {from:'adm',to:'api',label:'REST',col:'#22C55E'},
     {from:'api',to:'pg',label:'SQL',col:'#3B82F6'},
     {from:'api',to:'alt',label:'trigger',col:'#FF6B35'},
+    {from:'api',to:'soracom',label:'HTTPS API',col:'#FF6B35'},
+    {from:'adm',to:'osm',label:'タイル取得',col:'#22C55E'},
   ];
 
   function nPos(n){return{x:n.x*W,y:n.y*H};}
@@ -1094,6 +1165,19 @@ ANIMS[1]=()=>{
       c.fillStyle=e.col+'33';c.fill();
     }
 
+    // 外部連携ゾーンの区切り線とラベル
+    const extFadeIn=Math.min(1,(elapsed2-1.6)/0.6);
+    if(extFadeIn>0){
+      c.save();c.globalAlpha=extFadeIn;
+      const divY=.815*H;
+      c.strokeStyle='#2C4A72';c.lineWidth=1;c.setLineDash([3,5]);
+      c.beginPath();c.moveTo(.30*W,divY);c.lineTo(.86*W,divY);c.stroke();
+      c.setLineDash([]);
+      c.font="600 9px 'IBM Plex Sans',sans-serif";c.fillStyle='#6B92C0';c.textAlign='center';
+      c.fillText('外部連携先 (External Services)',.58*W,divY-8);
+      c.restore();
+    }
+
     // nodes
     nodes.forEach((n,ni)=>{
       const fadeIn=Math.min(1,(elapsed2-ni*0.2)/0.6);
@@ -1102,7 +1186,9 @@ ANIMS[1]=()=>{
       const nx=n.x*W,ny=n.y*H-n.h/2;
       drawRoundRect(nx,ny,n.w,n.h,8);
       c.fillStyle=n.col;c.fill();
+      if(n.ext)c.setLineDash([5,4]);
       c.strokeStyle=n.bc+'99';c.lineWidth=1.5;c.stroke();
+      c.setLineDash([]);
       // accent bar
       c.fillStyle=n.bc;
       c.beginPath();c.moveTo(nx+8,ny+n.h-4);c.lineTo(nx+n.w-8,ny+n.h-4);
@@ -1154,7 +1240,7 @@ function countUpAll(sceneSel,delay=500,dur=1400){
   return ()=>timers.forEach(clearTimeout);
 }
 
-// グリッド概観(テナント/PF管理者機能)のカードを自動で順にハイライト
+// グリッド概観(テナント/PF管理者機能)のカードを自動で順にハイライト(現状未使用。将来の概観シーン復活用に残置)
 function autoHighlight(sceneSel,intervalMs=900){
   const cards=document.querySelectorAll(sceneSel+' .ov-card');
   if(!cards.length)return()=>{};
@@ -1170,13 +1256,20 @@ function autoHighlight(sceneSel,intervalMs=900){
   return ()=>{timers.forEach(clearTimeout);cards.forEach(c=>c.classList.remove('hl'));};
 }
 
-// Scene 2: テナント管理者機能 グリッド概観
-ANIMS[2]=()=>{const c1=staggerFadeIn('#s2',60);const c2=autoHighlight('#s2',900);return()=>{c1();c2();};};
+// Scene 2,7,9,11,15,18: チャプター見出し
+ANIMS[2]=()=>staggerFadeIn('#s2');
+ANIMS[7]=()=>staggerFadeIn('#s7');
+ANIMS[9]=()=>staggerFadeIn('#s9');
+ANIMS[11]=()=>staggerFadeIn('#s11');
+ANIMS[15]=()=>staggerFadeIn('#s15');
+ANIMS[18]=()=>staggerFadeIn('#s18');
 
-// Scene 3-5: ブートストラップトークン管理・デバイス証明書発行・OTA配信
+// Scene 3-5: ブートストラップトークン管理・デバイス証明書発行・登録デバイス一覧
 ANIMS[3]=()=>staggerFadeIn('#s3');
 ANIMS[4]=()=>staggerFadeIn('#s4');
 ANIMS[5]=()=>staggerFadeIn('#s5');
+
+// Scene 6: OTAファームウェア配信
 ANIMS[6]=()=>{
   const c1=staggerFadeIn('#s6');
   const bar=document.querySelector('#s6 .ota-live');
@@ -1185,10 +1278,10 @@ ANIMS[6]=()=>{
   return()=>{c1();timers.forEach(clearTimeout);};
 };
 
-// Scene 6: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
-ANIMS[7]=()=>{
-  const cleanup1=staggerFadeIn('#s7');
-  const rows=document.querySelectorAll('#s7 .sim-row-status');
+// Scene 8: SIM管理(SORACOM連携) — ステータスが切り替わる様子を見せる
+ANIMS[8]=()=>{
+  const cleanup1=staggerFadeIn('#s8');
+  const rows=document.querySelectorAll('#s8 .sim-row-status');
   const timers=[];
   rows.forEach(badge=>{
     const seq=(badge.dataset.seq||'').split(',').filter(Boolean);
@@ -1213,38 +1306,37 @@ ANIMS[7]=()=>{
   return ()=>{cleanup1();timers.forEach(clearTimeout);};
 };
 
-// Scene 7: デバイスグループ管理 — カードを順に表示
-ANIMS[8]=()=>staggerFadeIn('#s8',120);
+// Scene 10: デバイスグループ管理 — カードを順に表示
+ANIMS[10]=()=>staggerFadeIn('#s10',120);
 
-// Scene 8: 閾値アラートルール設定
-ANIMS[9]=()=>staggerFadeIn('#s9');
-
-// Scene 9: 利用量ベース課金 — 請求額のカウントアップ
-ANIMS[10]=()=>{const c1=staggerFadeIn('#s10');const c2=countUpAll('#s10');return()=>{c1();c2();};};
-
-// Scene 10: リアルタイムダッシュボード — 統計のカウントアップ
-ANIMS[11]=()=>{const c1=staggerFadeIn('#s11');const c2=countUpAll('#s11');return()=>{c1();c2();};};
-
-// Scene 11: ユーザー管理・公開ダッシュボードURL
+// Scene 12: 閾値アラートルール設定
 ANIMS[12]=()=>staggerFadeIn('#s12');
 
-// Scene 12: PF管理者機能 グリッド概観
-ANIMS[13]=()=>{const c1=staggerFadeIn('#s13',60);const c2=autoHighlight('#s13',900);return()=>{c1();c2();};};
+// Scene 13: Grafanaによるリアルタイム監視 — 統計のカウントアップ
+ANIMS[13]=()=>{const c1=staggerFadeIn('#s13');const c2=countUpAll('#s13');return()=>{c1();c2();};};
 
-// Scene 13-17: テナント一覧・単価マスタ・請求バッチ・MFA・RAG設定
+// Scene 14: デバイス位置情報(GPS)マップ表示
 ANIMS[14]=()=>staggerFadeIn('#s14');
-ANIMS[15]=()=>staggerFadeIn('#s15');
-ANIMS[16]=()=>staggerFadeIn('#s16');
-ANIMS[17]=()=>staggerFadeIn('#s17');
-ANIMS[18]=()=>staggerFadeIn('#s18');
 
-// Scene 18: AIアシスタント(RAG) — チャット→確認→実行をステップ送りで表示
-ANIMS[19]=()=>{
-  const cleanup1=staggerFadeIn('#s19');
-  const bot=document.querySelector('#s19 .chat-bubble.bot .typed');
-  const confirmBox=document.querySelector('#s19 .chat-confirm');
-  const doneMsg=document.querySelector('#s19 .done-msg');
-  const steps=document.querySelectorAll('#s19 .step');
+// Scene 16: ユーザー管理・公開ダッシュボードURL
+ANIMS[16]=()=>staggerFadeIn('#s16');
+
+// Scene 17: 利用量ベース課金 — 請求額のカウントアップ
+ANIMS[17]=()=>{const c1=staggerFadeIn('#s17');const c2=countUpAll('#s17');return()=>{c1();c2();};};
+
+// Scene 19-22: テナント一覧・単価マスタ・MFA・AIアシスタント設定
+ANIMS[19]=()=>staggerFadeIn('#s19');
+ANIMS[20]=()=>staggerFadeIn('#s20');
+ANIMS[21]=()=>staggerFadeIn('#s21');
+ANIMS[22]=()=>staggerFadeIn('#s22');
+
+// Scene 23: AIアシスタント(RAG) — チャット→確認→実行をステップ送りで表示
+ANIMS[23]=()=>{
+  const cleanup1=staggerFadeIn('#s23');
+  const bot=document.querySelector('#s23 .chat-bubble.bot .typed');
+  const confirmBox=document.querySelector('#s23 .chat-confirm');
+  const doneMsg=document.querySelector('#s23 .done-msg');
+  const steps=document.querySelectorAll('#s23 .step');
   const setStep=(n)=>{
     steps.forEach(s=>{
       const sn=parseInt(s.dataset.step,10);
@@ -1275,15 +1367,12 @@ ANIMS[19]=()=>{
   return ()=>{cleanup1();timers.forEach(clearTimeout);setStep(1);if(confirmBox)confirmBox.classList.remove('show');if(doneMsg)doneMsg.style.display='none';};
 };
 
-// Scene 20: デバイス位置情報(GPS)マップ表示
-ANIMS[20]=()=>staggerFadeIn('#s20');
-
-// Scene 21: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
-ANIMS[21]=()=>{
-  const items=document.querySelectorAll('#s21 .feat-item, #s21 .stack-badge');
+// Scene 24: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
+ANIMS[24]=()=>{
+  const items=document.querySelectorAll('#s24 .feat-item, #s24 .stack-badge');
   items.forEach(el=>{el.classList.add('fade-item');el.classList.remove('show');});
-  const c1=staggerFadeIn('#s21',60);
-  const c2=countUpAll('#s21');
+  const c1=staggerFadeIn('#s24',60);
+  const c2=countUpAll('#s24');
   return()=>{c1();c2();};
 };
 
