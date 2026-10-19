@@ -2,7 +2,10 @@ from datetime import date
 from typing import Literal
 from pydantic import BaseModel, Field
 
-ItemKey = Literal["base_fee", "data_points", "device_count", "provisionable_devices", "alert_events"]
+from app.services.billing import ITEM_KEYS
+
+# 課金項目の定義(ITEM_KEYS)と常に一致させる。ここを手書きすると新しい項目の単価が設定できなくなる
+ItemKey = Literal[ITEM_KEYS]
 
 
 class UnitPriceSet(BaseModel):

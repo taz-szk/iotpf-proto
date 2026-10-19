@@ -28,3 +28,11 @@ def test_realtime_access_fee_off_when_tenant_suspended():
         return q
     db.query.side_effect = query
     assert _realtime_access_usage_snapshot(db, "tenant-1") == {"realtime_access_fee": 0}
+
+
+def test_unit_price_schema_accepts_every_billing_item_key():
+    from datetime import date
+    from app.schemas.billing import UnitPriceSet
+    from app.services.billing import ITEM_KEYS
+    for key in ITEM_KEYS:
+        UnitPriceSet(item_key=key, unit_price="1", effective_from=date(2026, 11, 1))

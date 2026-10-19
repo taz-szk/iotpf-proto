@@ -3202,6 +3202,8 @@ function portalApp() {
         retained_data_points: '保持データポイント数(稼働中)', retired_data_points: '保持データポイント数(削除済み)',
         retired_device_count: 'デバイス数(削除済み)', device_count: 'デバイス数(稼働中)',
         provisionable_devices: 'プロビジョニング可能数', alert_events: 'アラートイベント',
+        export_base_fee: 'データエクスポート基本料金', export_retained_size_mb: 'エクスポートファイル保持容量(MB)',
+        realtime_access_fee: '準リアルタイムアクセス利用料',
       };
       return labels[key] || key;
     },
@@ -3215,6 +3217,9 @@ function portalApp() {
         device_count: '現在登録されている稼働中デバイスの台数',
         provisionable_devices: '追加でプロビジョニング可能なデバイス数(現在時点)',
         alert_events: '当月に発報されたアラートイベント数',
+        export_base_fee: '定期エクスポート設定が有効な間の固定料金',
+        export_retained_size_mb: '月末時点で保持しているエクスポートファイルの合計サイズ(MB単位で切り上げ)',
+        realtime_access_fee: '準リアルタイムアクセス用トークンが有効な間の固定料金(テナント停止中は対象外)',
       };
       return descriptions[key] || '';
     },
