@@ -375,7 +375,7 @@
               <div class="flex flex-wrap gap-4 items-end">
                 <div>
                   <label class="block text-xs font-medium text-gray-600 mb-1">頻度</label>
-                  <select x-show="canEdit" :value="exportSchedule.frequency || ''"
+                  <select x-show="isAdmin" :value="exportSchedule.frequency || ''"
                           @change="exportSchedule.frequency = $event.target.value || null"
                           class="border border-gray-300 rounded px-2 py-1.5 text-sm">
                     <option value="">未設定</option>
@@ -383,20 +383,22 @@
                     <option value="weekly">毎週</option>
                     <option value="monthly">毎月</option>
                   </select>
-                  <span x-show="!canEdit" class="text-sm text-gray-700"
+                  <span x-show="!isAdmin" class="text-sm text-gray-700"
                         x-text="{daily:'毎日', weekly:'毎週', monthly:'毎月'}[exportSchedule.frequency] || '未設定'"></span>
                 </div>
                 <label class="flex items-center gap-1.5 text-sm text-gray-600">
-                  <input type="checkbox" x-show="canEdit" x-model="exportSchedule.enabled">
-                  <span x-show="!canEdit" x-text="exportSchedule.enabled ? '有効' : '無効'"></span>
-                  <span x-show="canEdit">有効化</span>
+                  <input type="checkbox" x-show="isAdmin" x-model="exportSchedule.enabled">
+                  <span x-show="!isAdmin" x-text="exportSchedule.enabled ? '有効' : '無効'"></span>
+                  <span x-show="isAdmin">有効化</span>
                 </label>
-                <button x-show="canEdit" @click="saveExportSchedule()" :disabled="savingExportSchedule"
+                <button x-show="isAdmin" @click="saveExportSchedule()"
+                        :disabled="savingExportSchedule || !exportSchedule.frequency"
                         class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
                   <span x-show="!savingExportSchedule">保存</span>
                   <span x-show="savingExportSchedule">保存中...</span>
                 </button>
               </div>
+              <p x-show="!isAdmin" class="text-xs text-gray-400 mt-2">※ 定期エクスポート設定の変更には管理者権限が必要です。</p>
             </div>
 
             <div class="bg-white rounded shadow-sm border border-gray-200 mb-4">
@@ -423,7 +425,7 @@
                         <a x-show="exportJob(kind) && exportJob(kind).status === 'done'"
                            :href="`/api/tenant-portal/me/exports/${kind}/download`"
                            class="text-blue-600 hover:text-blue-800 text-xs mr-3">ダウンロード</a>
-                        <button x-show="canEdit && exportJob(kind)" @click="deleteExport(kind)"
+                        <button x-show="isAdmin && exportJob(kind)" @click="deleteExport(kind)"
                                 class="text-red-500 hover:text-red-700 text-xs">削除</button>
                       </td>
                     </tr>
@@ -432,7 +434,7 @@
               </table>
             </div>
 
-            <div x-show="canEdit" class="bg-white rounded shadow-sm border border-gray-200 p-4">
+            <div x-show="isAdmin" class="bg-white rounded shadow-sm border border-gray-200 p-4">
               <h3 class="font-medium text-gray-700 mb-3">アドホック実行</h3>
               <div x-show="exportRequestError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3"
                    x-text="exportRequestError"></div>
@@ -2401,8 +2403,11 @@ function portalApp() {
     async loadExports() {
       try {
         this.exportJobs = await portalFetch('GET', '/me/exports') || [];
-        this.exportSchedule = await portalFetch('GET', '/me/export-schedule')
-          || { frequency: null, device_ids: null, group_id: null, enabled: false };
+        // GET /me/export-schedule はadmin限定のため、admin以外では呼ばない(呼ぶと403でエラーバナーが出る)
+        if (this.isAdmin) {
+          this.exportSchedule = await portalFetch('GET', '/me/export-schedule')
+            || { frequency: null, device_ids: null, group_id: null, enabled: false };
+        }
       } catch(e) { this.error = e.message; }
     },
     exportJob(kind) {
