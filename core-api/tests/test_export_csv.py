@@ -22,6 +22,33 @@ def test_estimate_export_row_count_parses_influx_response():
                                        datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None)
     assert n == 42
 
+def test_estimate_export_row_count_parses_multi_device_multi_table_response():
+    """estimate_export_row_count自体はInfluxDB側で既に集計された単一のスカラー値を
+    受け取るだけだが、その値が2台のデバイス×2時刻=4件のdistinct(_time,device_id)組を
+    表す現実的なInfluxDB count()レスポンス(フルアノテーション付き)からも正しく
+    パースできることを確認する(単純な最小CSVだけでなく)。"""
+    resp = MagicMock(
+        status_code=200,
+        text=(
+            "#group,false,false,true,true,false,true,true,false,false\r\n"
+            "#datatype,string,long,dateTime:RFC3339,dateTime:RFC3339,dateTime:RFC3339,string,string,double\r\n"
+            "#default,_result,,,,,,,\r\n"
+            ",result,table,_value\r\n"
+            ",_result,0,4\r\n"
+        ),
+    )
+    with patch("app.services.export_csv.httpx.post", return_value=resp) as mock_post:
+        n = estimate_export_row_count(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                       datetime(2026,10,2,tzinfo=timezone.utc), device_ids=["dev-1", "dev-2"])
+    assert n == 4
+    # クエリが両デバイスをOR条件で含み、_timeとdevice_idの組をdistinctカウントしていること
+    # (単一列のdistinct()では(_time, device_id)の組を区別できないため、キー結合している)
+    query = mock_post.call_args.kwargs["json"]["query"]
+    assert 'r.device_id == "dev-1"' in query
+    assert 'r.device_id == "dev-2"' in query
+    assert "r._time" in query and "r.device_id" in query
+    assert "distinct(column:" in query
+
 def test_estimate_export_row_count_raises_on_influx_failure():
     resp = MagicMock(status_code=500, text="error")
     with patch("app.services.export_csv.httpx.post", return_value=resp):
@@ -49,3 +76,37 @@ def test_generate_export_csv_parses_pivoted_influx_csv():
     text = csv_bytes.decode("utf-8")
     assert text.splitlines()[0] == "device_name,datetime,latitude,longitude"
     assert "Sensor-1,2026-10-01T12:00:00Z,35.1,139.1" in text
+
+def test_generate_export_csv_parses_multi_device_multi_row_without_repeated_header():
+    """InfluxDBの実際のannotated CSVは、複数デバイス分の行が同じスキーマ(同じ列集合・型)
+    であれば単一のテーブル群としてヘッダー行を1回だけ出し、_table列の値だけが0,1,...と
+    増えて区別される(既存コードのapp.services.grafana.list_archived_devicesが
+    `_ARCHIVED_DEVICES_CSV`で検証している挙動と同じ: table=0とtable=1が同一ヘッダー配下に
+    並ぶ)。generate_export_csvのpivotは全行で同じ列集合(_time, device_id, device_name,
+    + 共通フィールド)を生成するため、通常は複数デバイス・複数時刻でもヘッダーは1回だけ
+    しか出ない。本テストはヘッダー非繰り返し・2テーブル(2デバイス)×2時刻=4行が
+    全て正しくCSV化されることを検証する。"""
+    influx_csv = (
+        "#group,false,false,true,true,false,false,true,true,false,false\r\n"
+        "#datatype,string,long,dateTime:RFC3339,dateTime:RFC3339,dateTime:RFC3339,string,string,string,double,double\r\n"
+        "#default,_result,,,,,,,,,\r\n"
+        ",result,table,_start,_stop,_time,device_id,device_name,latitude,longitude\r\n"
+        ",_result,0,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,2026-10-01T10:00:00Z,dev-1,Sensor-1,35.1,139.1\r\n"
+        ",_result,0,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,2026-10-01T11:00:00Z,dev-1,Sensor-1,35.2,139.2\r\n"
+        ",_result,1,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,2026-10-01T10:30:00Z,dev-2,Sensor-2,36.1,140.1\r\n"
+        ",_result,1,2026-10-01T00:00:00Z,2026-10-02T00:00:00Z,2026-10-01T11:30:00Z,dev-2,Sensor-2,36.2,140.2\r\n"
+    )
+    resp = MagicMock(status_code=200, text=influx_csv)
+    with patch("app.services.export_csv.httpx.post", return_value=resp):
+        csv_bytes = generate_export_csv(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                         datetime(2026,10,2,tzinfo=timezone.utc), device_ids=["dev-1", "dev-2"])
+    lines = csv_bytes.decode("utf-8").split("\r\n")
+    lines = [l for l in lines if l]
+    assert lines[0] == "device_name,datetime,latitude,longitude"
+    # ヘッダーは1回だけ(繰り返されない)で、データ行が4行すべて出力されていること
+    assert lines.count("device_name,datetime,latitude,longitude") == 1
+    assert len(lines) == 5
+    assert "Sensor-1,2026-10-01T10:00:00Z,35.1,139.1" in lines
+    assert "Sensor-1,2026-10-01T11:00:00Z,35.2,139.2" in lines
+    assert "Sensor-2,2026-10-01T10:30:00Z,36.1,140.1" in lines
+    assert "Sensor-2,2026-10-01T11:30:00Z,36.2,140.2" in lines
