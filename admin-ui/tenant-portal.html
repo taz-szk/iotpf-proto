@@ -366,6 +366,44 @@
               </table>
             </div>
             <p class="text-xs text-gray-400 mt-2">※ 削除済みデバイスも登録台数としてカウントされます。利用中＋削除済の合計がデバイス上限に達すると新規登録できなくなります。</p>
+
+            <!-- ===== 準リアルタイムアクセス用トークン ===== -->
+            <div class="bg-white rounded shadow-sm border border-gray-200 p-4 mt-4">
+              <div class="flex items-center justify-between mb-3">
+                <h3 class="font-medium text-gray-700">準リアルタイムアクセス用トークン（読み取り専用）</h3>
+                <button x-show="isAdmin" @click="issueRealtimeAccessToken()" :disabled="issuingRealtimeAccessToken"
+                        class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
+                  <span x-show="!issuingRealtimeAccessToken" x-text="realtimeAccessStatus.created_at && !realtimeAccessStatus.revoked_at ? '再発行' : '発行'"></span>
+                  <span x-show="issuingRealtimeAccessToken">発行中...</span>
+                </button>
+              </div>
+              <div x-show="newRealtimeAccessToken" class="bg-green-50 border border-green-200 rounded p-4 mb-3">
+                <p class="text-sm font-medium text-green-800 mb-1">新しいトークンが発行されました（この画面のみ表示）</p>
+                <code class="text-xs bg-white border border-green-200 rounded px-2 py-1 break-all" x-text="newRealtimeAccessToken"></code>
+              </div>
+              <div class="text-sm text-gray-600">
+                <template x-if="realtimeAccessStatus.created_at && !realtimeAccessStatus.revoked_at">
+                  <p>状態: <span class="text-green-600 font-medium">有効</span>
+                    （発行日時: <span x-text="new Date(realtimeAccessStatus.created_at).toLocaleString('ja-JP')"></span>）</p>
+                </template>
+                <template x-if="realtimeAccessStatus.revoked_at">
+                  <p>状態: <span class="text-red-500 font-medium">失効済</span>
+                    （失効日時: <span x-text="new Date(realtimeAccessStatus.revoked_at).toLocaleString('ja-JP')"></span>）</p>
+                </template>
+                <template x-if="!realtimeAccessStatus.created_at">
+                  <p>状態: <span class="text-gray-400">未発行</span></p>
+                </template>
+              </div>
+              <div class="mt-2">
+                <button x-show="isAdmin && realtimeAccessStatus.created_at && !realtimeAccessStatus.revoked_at"
+                        @click="revokeRealtimeAccessToken()" :disabled="revokingRealtimeAccessToken"
+                        class="text-red-500 hover:text-red-700 text-xs">
+                  <span x-show="!revokingRealtimeAccessToken">失効</span>
+                  <span x-show="revokingRealtimeAccessToken">失効中...</span>
+                </button>
+              </div>
+              <p class="text-xs text-gray-400 mt-2">※ InfluxDBへの読み取り専用アクセスに使用するトークンです。発行直後のみ平文が表示されます。</p>
+            </div>
           </div>
 
           <!-- ===== データエクスポート ===== -->
@@ -2174,6 +2212,8 @@ function portalApp() {
 
     // トークン
     tokens: [], newTokenValue: '', creatingToken: false,
+    realtimeAccessStatus: {created_at: null, revoked_at: null}, newRealtimeAccessToken: '',
+    issuingRealtimeAccessToken: false, revokingRealtimeAccessToken: false,
     showTokenForm: false,
     tokenForm: { preset: '365', custom: '', devicesPreset: 'limited', max_devices: 100 },
     expandedToken: null, tokenDevices: [], tokenDevicesLoading: false,
@@ -2361,15 +2401,17 @@ function portalApp() {
 
     async init() {
       try {
-        const [me, tokens, rules] = await Promise.all([
+        const [me, tokens, rules, realtimeAccessStatus] = await Promise.all([
           portalFetch('GET', '/me'),
           portalFetch('GET', '/me/tokens'),
           portalFetch('GET', '/me/alert-rules'),
+          portalFetch('GET', '/me/realtime-access-token'),
         ]);
         if (!me) return;
         this.me = me;
         this.tokens = tokens || [];
         this.alertRules = rules || [];
+        this.realtimeAccessStatus = realtimeAccessStatus || {created_at: null, revoked_at: null};
         document.title = `${me.tenant_name} - IoTAir-X`;
         if (me.grafana_url) this.grafanaUrl = me.grafana_url;
         await this.loadPanelConfigs();
@@ -2518,6 +2560,31 @@ function portalApp() {
       if (!confirm('このトークンを失効させますか？')) return;
       try { await portalFetch('DELETE', `/me/tokens/${id}`); this.tokens = await portalFetch('GET', '/me/tokens') || []; }
       catch(e) { this.error = e.message; }
+    },
+
+    // ----- 準リアルタイムアクセス用トークン -----
+    async loadRealtimeAccessStatus() {
+      try { this.realtimeAccessStatus = await portalFetch('GET', '/me/realtime-access-token') || {created_at: null, revoked_at: null}; }
+      catch(e) { this.error = e.message; }
+    },
+    async issueRealtimeAccessToken() {
+      this.issuingRealtimeAccessToken = true; this.newRealtimeAccessToken = '';
+      try {
+        const t = await portalFetch('POST', '/me/realtime-access-token');
+        if (t) {
+          this.newRealtimeAccessToken = t.token;
+          await this.loadRealtimeAccessStatus();
+        }
+      } catch(e) { this.error = e.message; } finally { this.issuingRealtimeAccessToken = false; }
+    },
+    async revokeRealtimeAccessToken() {
+      if (!confirm('この準リアルタイムアクセス用トークンを失効させますか？')) return;
+      this.revokingRealtimeAccessToken = true;
+      try {
+        await portalFetch('DELETE', '/me/realtime-access-token');
+        this.newRealtimeAccessToken = '';
+        await this.loadRealtimeAccessStatus();
+      } catch(e) { this.error = e.message; } finally { this.revokingRealtimeAccessToken = false; }
     },
 
     // ----- データエクスポート -----
