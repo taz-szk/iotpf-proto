@@ -55,7 +55,12 @@ from app.services.minio_client import (
     create_firmware_download_token,
     delete_firmware,
     upload_firmware,
+    stream_export_file,
+    delete_export_file,
 )
+from app.models.export import ExportJob
+from app.services.export_jobs import request_adhoc_export, JobAlreadyRunningError, ExportTooLargeError
+from fastapi.responses import StreamingResponse
 from app.config import settings
 
 router = APIRouter(prefix="/tenant-portal", tags=["tenant-portal"])
@@ -1627,3 +1632,106 @@ def get_device_location_history(device_id: str, start: datetime, end: datetime, 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     return _query_location_history(tenant, device_id, start, end)
+
+
+# ---------------------------------------------------------------------------
+# エクスポート
+# ---------------------------------------------------------------------------
+
+class ExportRequest(BaseModel):
+    start: datetime
+    end: datetime
+    device_ids: Optional[list[str]] = None
+    group_id: Optional[str] = None
+
+
+@router.post("/me/exports", status_code=status.HTTP_201_CREATED)
+def request_export_portal(body: ExportRequest, payload: dict = Depends(_require_admin)):
+    """自テナントのアドホックCSVエクスポートをリクエストする(admin限定)。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        try:
+            job = request_adhoc_export(db, tenant, body.start, body.end, body.device_ids, body.group_id)
+        except JobAlreadyRunningError:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="現在処理中です")
+        except ExportTooLargeError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="最大データサイズを超えています。期間やデバイスの絞り込みを実施してください",
+            )
+
+    log_audit("tenant", payload["sub"], payload["email"], "request_export",
+              tenant_id=tenant_id, resource_type="export_job", resource_id=str(job.id))
+
+    return {
+        "id": str(job.id),
+        "kind": job.kind,
+        "status": job.status,
+        "requested_at": job.requested_at.isoformat() if job.requested_at else None,
+    }
+
+
+@router.get("/me/exports")
+def list_exports_portal(payload: dict = Depends(_require_tenant)):
+    """自テナントのエクスポートジョブ一覧(定期・手動の最大2件)を返す。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        jobs = db.query(ExportJob).filter(ExportJob.tenant_id == tenant_id).all()
+    return [
+        {
+            "id": str(job.id),
+            "kind": job.kind,
+            "status": job.status,
+            "requested_at": job.requested_at.isoformat() if job.requested_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "file_size_bytes": job.file_size_bytes,
+            "error_message": job.error_message,
+        }
+        for job in jobs
+    ]
+
+
+@router.get("/me/exports/{kind}/download")
+def download_export_portal(kind: str, payload: dict = Depends(_require_tenant)):
+    """自テナントのエクスポートCSVをダウンロードする(全ロール可)。
+    他テナントのジョブIDやkindを推測してもダウンロードできないよう、
+    必ずtenant_idの一致を確認してからストリーミングする。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        job = db.query(ExportJob).filter(
+            ExportJob.tenant_id == tenant_id, ExportJob.kind == kind
+        ).first()
+
+    if job is None or job.status != "done" or str(job.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+
+    return StreamingResponse(
+        stream_export_file(job.minio_key),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="export_{kind}.csv"'},
+    )
+
+
+@router.delete("/me/exports/{kind}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_export_portal(kind: str, payload: dict = Depends(_require_admin)):
+    """自テナントのエクスポートジョブを削除する(admin限定)。
+    MinIO上のファイルを削除し、ジョブ行もリセット(削除)する。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        job = db.query(ExportJob).filter(
+            ExportJob.tenant_id == tenant_id, ExportJob.kind == kind
+        ).first()
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+        minio_key = job.minio_key
+        db.delete(job)
+        db.commit()
+
+    if minio_key:
+        delete_export_file(minio_key)
+
+    log_audit("tenant", payload["sub"], payload["email"], "delete_export",
+              tenant_id=tenant_id, resource_type="export_job", resource_id=kind)
