@@ -151,7 +151,9 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
          patch("app.services.billing_usage._count_registered_devices", return_value=5), \
          patch("app.services.billing_usage._count_alert_events_for_month", return_value=2), \
          patch("app.services.billing_usage._calc_provisionable_devices", return_value=(40, False)), \
-         patch("app.services.billing_usage.get_effective_retention_days", return_value=365):
+         patch("app.services.billing_usage.get_effective_retention_days", return_value=365), \
+         patch("app.services.billing_usage._export_usage_snapshot",
+               return_value={"export_base_fee": 1, "export_retained_size_mb": 3}):
         usage = aggregate_monthly_usage(mock_db, "tenant-1", "tenant_x", "org-1", "tok", 2026, 9)
     assert usage == {
         "base_fee": 1,
@@ -162,6 +164,8 @@ def test_aggregate_monthly_usage_returns_all_item_keys():
         "device_count": 5,
         "provisionable_devices": 40,
         "alert_events": 2,
+        "export_base_fee": 1,
+        "export_retained_size_mb": 3,
     }
 
 

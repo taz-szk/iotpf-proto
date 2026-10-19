@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
+import math
 import httpx
 
 from app.config import settings
+from app.models.export import ExportJob, ExportSchedule
 from app.models.public import Tenant
 from app.routers.stats import _parse_influx_csv_scalar, _calc_provisionable_devices
 from app.services.billing import get_effective_retention_days
@@ -142,6 +144,18 @@ def _count_alert_events_for_month(db, schema: str, year: int, month: int) -> int
     return result or 0
 
 
+def _export_usage_snapshot(db, tenant_id: str) -> dict[str, int]:
+    """データエクスポート機能の課金用スナップショット(現在時点)。
+    export_base_fee: エクスポートスケジュールが有効なら1、なければ0。
+    export_retained_size_mb: 完了済み(status=done)エクスポートファイルの合計サイズをMB切り上げしたもの。"""
+    schedule = db.query(ExportSchedule).filter(ExportSchedule.tenant_id == tenant_id).first()
+    export_base_fee = 1 if schedule is not None and schedule.enabled is True else 0
+    done_jobs = db.query(ExportJob).filter(ExportJob.tenant_id == tenant_id, ExportJob.status == "done").all()
+    total_bytes = sum(job.file_size_bytes or 0 for job in done_jobs)
+    export_retained_size_mb = math.ceil(total_bytes / (1024 * 1024))
+    return {"export_base_fee": export_base_fee, "export_retained_size_mb": export_retained_size_mb}
+
+
 def aggregate_monthly_usage(
     db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
     year: int, month: int,
@@ -177,4 +191,5 @@ def aggregate_monthly_usage(
         "device_count": _count_registered_devices(db, schema),
         "provisionable_devices": provisionable_devices,
         "alert_events": _count_alert_events_for_month(db, schema, year, month),
+        **_export_usage_snapshot(db, tenant_id),
     }
