@@ -19,7 +19,7 @@
 
       <form @submit.prevent="login" class="space-y-4">
         <div>
-          <label class="block text-xs font-medium text-gray-600 mb-1">テナントスラッグ</label>
+          <label class="block text-xs font-medium text-gray-600 mb-1">テナントID</label>
           <input type="text" x-model="form.tenant_slug" required placeholder="your-company"
                  class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
         </div>
@@ -41,7 +41,7 @@
       </form>
       <p class="text-center text-sm text-gray-500 mt-4">
         アカウントをお持ちでない方は
-        <a href="/signup/" class="text-blue-600 hover:underline">試用登録はこちらで</a>
+        <a href="/signup/" class="text-blue-600 hover:underline">試用登録はこちらから</a>
       </p>
       <p class="text-center text-sm text-gray-500 mt-2">
         <a href="/admin/forgot-password.html" class="text-blue-600 hover:underline">パスワードを忘れた方はこちら</a>

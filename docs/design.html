@@ -1070,7 +1070,7 @@ td code { font-size: 12px; }
         <table>
           <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
           <tbody>
-            <tr><td><code>POST</code></td><td><code>/tenant-auth/forgot-password</code></td><td>テナントスラッグ・メールアドレスを指定して再設定メールを要求（reCAPTCHA v3）</td><td>なし（レート制限）</td></tr>
+            <tr><td><code>POST</code></td><td><code>/tenant-auth/forgot-password</code></td><td>テナントID・メールアドレスを指定して再設定メールを要求（reCAPTCHA v3）</td><td>なし（レート制限）</td></tr>
             <tr><td><code>POST</code></td><td><code>/tenant-auth/reset-password</code></td><td>トークン検証後、新しいパスワードを設定（有効期限1時間）</td><td>再設定トークン</td></tr>
           </tbody>
         </table>
@@ -1177,7 +1177,7 @@ td code { font-size: 12px; }
             <tr><td><code>id</code></td><td>UUID PK</td><td>仮登録ID</td></tr>
             <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>申込みメールアドレス</td></tr>
             <tr><td><code>tenant_name</code></td><td>VARCHAR(255)</td><td>テナント名（確定前）</td></tr>
-            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>自動生成されたテナントスラッグ（重複時は連番付与）</td></tr>
+            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>自動生成されたテナントID（重複時は連番付与）</td></tr>
             <tr><td><code>password_hash</code></td><td>TEXT</td><td>初期管理者ユーザーのbcryptハッシュ</td></tr>
             <tr><td><code>verification_token</code></td><td>VARCHAR(64) UNIQUE</td><td>確認メールのトークン</td></tr>
             <tr><td><code>expires_at</code></td><td>TIMESTAMPTZ</td><td>確認期限（24時間）。期限切れ・確認済みの行は日次バッチで削除</td></tr>

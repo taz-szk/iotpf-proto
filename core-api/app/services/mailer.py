@@ -89,7 +89,7 @@ def send_signup_verification_email(to_email: str, tenant_name: str, verification
     ユーザーに失敗として返す(送信できていないのに成功扱いにしない)。
     本文は既存のsend_bill_shock_email等と同じく英語にする(日本語を混在させると
     Content-Transfer-Encodingがbase64になり、URLが生テキストから読み取れなくなるため)。
-    slugはログインに必須(ログインフォームがテナントスラッグを要求する)なのでここにも明記する
+    slugはログインに必須(ログインフォームがテナントIDを要求する)なのでここにも明記する
     (確認ページでも表示するが、メールを読み返す時のためにここにも残す)。"""
     tenant_name_clean = str(tenant_name).replace("\r", "").replace("\n", "")
     msg = MIMEMultipart()
@@ -98,8 +98,8 @@ def send_signup_verification_email(to_email: str, tenant_name: str, verification
     msg["Subject"] = f"[IoT Platform] Confirm your signup for {tenant_name_clean}"
     msg.attach(MIMEText(
         f"Click the link below to complete your signup (within 24 hours).\n\n{verification_url}\n\n"
-        f"Your tenant login ID (slug) will be: {slug}\n"
-        "You will need this slug, together with your email and password, to log in.\n",
+        f"Your tenant ID will be: {slug}\n"
+        "You will need this tenant ID, together with your email and password, to log in.\n",
         "plain",
     ))
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as server:
