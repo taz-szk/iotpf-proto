@@ -26,10 +26,10 @@ def issue_readonly_token(org_id: str) -> tuple[str, str]:
         )
         if resp.status_code != 201:
             resp.raise_for_status()
+        body = resp.json()
+        return body["id"], body["token"]
     except Exception as e:
         raise InfluxAuthorizationError(str(e)) from e
-    body = resp.json()
-    return body["id"], body["token"]
 
 
 def revoke_readonly_token(influx_authorization_id: str) -> None:
@@ -40,7 +40,8 @@ def revoke_readonly_token(influx_authorization_id: str) -> None:
             headers={"Authorization": f"Token {settings.influxdb_admin_token}"},
             timeout=10.0,
         )
-        if resp.status_code != 204:
+        # 404 = 既に存在しない(目的の状態に達している)ので成功扱いにする
+        if resp.status_code not in (204, 404):
             resp.raise_for_status()
     except Exception as e:
         raise InfluxAuthorizationError(str(e)) from e

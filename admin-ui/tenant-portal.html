@@ -402,6 +402,10 @@
                   <span x-show="revokingRealtimeAccessToken">失効中...</span>
                 </button>
               </div>
+              <div x-show="realtimeAccessStatus.created_at && !realtimeAccessStatus.revoked_at" class="mt-3 text-xs text-gray-600 space-y-1">
+                <p>エンドポイント: <code x-text="location.origin + '/influx'"></code>（<code>/api/v2/query</code> など）</p>
+                <p>org ID: <code x-text="realtimeAccessStatus.org_id"></code> ／ bucket: <code x-text="realtimeAccessStatus.bucket"></code></p>
+              </div>
               <p class="text-xs text-gray-400 mt-2">※ InfluxDBへの読み取り専用アクセスに使用するトークンです。発行直後のみ平文が表示されます。</p>
             </div>
           </div>
@@ -2212,7 +2216,7 @@ function portalApp() {
 
     // トークン
     tokens: [], newTokenValue: '', creatingToken: false,
-    realtimeAccessStatus: {created_at: null, revoked_at: null}, newRealtimeAccessToken: '',
+    realtimeAccessStatus: {created_at: null, revoked_at: null, org_id: null, bucket: null}, newRealtimeAccessToken: '',
     issuingRealtimeAccessToken: false, revokingRealtimeAccessToken: false,
     showTokenForm: false,
     tokenForm: { preset: '365', custom: '', devicesPreset: 'limited', max_devices: 100 },

@@ -25,3 +25,9 @@ def test_revoke_readonly_token_calls_delete():
     with patch("app.services.realtime_access.httpx.delete", return_value=resp) as mock_delete:
         revoke_readonly_token("auth-123")
     assert "auth-123" in mock_delete.call_args.args[0]
+
+
+def test_revoke_readonly_token_treats_404_as_success():
+    resp = MagicMock(status_code=404)
+    with patch("app.services.realtime_access.httpx.delete", return_value=resp):
+        revoke_readonly_token("auth-gone")

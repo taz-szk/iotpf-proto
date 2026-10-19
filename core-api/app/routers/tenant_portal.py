@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from enum import Enum
 from typing import Optional, Literal
 
-from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Cookie, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 from sqlalchemy import text, bindparam, ARRAY, String as SaString
 
@@ -65,6 +65,8 @@ from app.services.export_jobs import (
 )
 from app.services.export_csv import InfluxUnavailableError
 from fastapi.responses import StreamingResponse
+import logging
+logger = logging.getLogger(__name__)
 from app.config import settings
 from app.models.realtime_access import RealtimeAccessToken
 from app.services.realtime_access import issue_readonly_token, revoke_readonly_token, InfluxAuthorizationError
@@ -1867,14 +1869,15 @@ def update_export_schedule_portal(body: ExportScheduleBody, payload: dict = Depe
 # ---------------------------------------------------------------------------
 
 @router.post("/me/realtime-access-token", status_code=status.HTTP_201_CREATED)
-def issue_realtime_access_token_portal(payload: dict = Depends(_require_admin)):
+def issue_realtime_access_token_portal(response: Response, payload: dict = Depends(_require_admin)):
     """読み取り専用のInfluxDBアクセストークンを発行する(admin限定)。
     既存のトークンがある場合は再発行として失効済みのものも含めて先にInfluxDB側を失効させる
     (古い権限を残したままDB上の記録だけを捨てることはしない)。"""
     tenant_id = payload["tenant_id"]
     tenant_uuid = uuid_lib.UUID(tenant_id)
+    response.headers["Cache-Control"] = "no-store"
     with SessionLocal() as db:
-        tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).with_for_update().first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
@@ -1889,6 +1892,10 @@ def issue_realtime_access_token_portal(payload: dict = Depends(_require_admin)):
                                      detail="Failed to revoke existing InfluxDB authorization")
             # InfluxDB側は失効済みなので、新規発行が失敗しても記録が残らないよう即座に確定する
             db.delete(existing)
+            write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                            "revoke_realtime_access_token", tenant_id=tenant_id,
+                            resource_type="realtime_access_token", resource_id=tenant_id,
+                            detail={"reason": "reissue"})
             db.commit()
 
         try:
@@ -1897,34 +1904,49 @@ def issue_realtime_access_token_portal(payload: dict = Depends(_require_admin)):
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                                  detail="Failed to issue InfluxDB authorization")
 
-        row = RealtimeAccessToken(
-            tenant_id=tenant_uuid,
-            influx_authorization_id=auth_id,
-            encrypted_token=encrypt_secret(token),
-        )
-        db.add(row)
-        write_audit_log(db, "tenant", payload["sub"], payload["email"],
-                        "issue_realtime_access_token", tenant_id=tenant_id,
-                        resource_type="realtime_access_token", resource_id=tenant_id)
-        db.commit()
+        try:
+            row = RealtimeAccessToken(
+                tenant_id=tenant_uuid,
+                influx_authorization_id=auth_id,
+                encrypted_token=encrypt_secret(token),
+            )
+            db.add(row)
+            write_audit_log(db, "tenant", payload["sub"], payload["email"],
+                            "issue_realtime_access_token", tenant_id=tenant_id,
+                            resource_type="realtime_access_token", resource_id=tenant_id,
+                            detail={"reissue": existing is not None})
+            db.commit()
+        except Exception:
+            # DBに記録できなかった場合、誰も失効できない有効トークンがInfluxDBに残らないよう取り消す
+            db.rollback()
+            try:
+                revoke_readonly_token(auth_id)
+            except InfluxAuthorizationError:
+                logger.exception("failed to roll back InfluxDB authorization %s", auth_id)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                                 detail="Failed to record realtime access token")
         db.refresh(row)
-        return {"token": token, "created_at": row.created_at.isoformat() if row.created_at else None}
+        return {"token": token, "created_at": row.created_at.isoformat() if row.created_at else None,
+                "org_id": tenant.influxdb_org_id, "bucket": "telemetry"}
 
 
 @router.get("/me/realtime-access-token")
 def get_realtime_access_token_portal(payload: dict = Depends(_require_tenant)):
-    """自テナントの準リアルタイムアクセストークンの発行状況を返す。平文/暗号化トークンは一切含めない。"""
+    """自テナントの準リアルタイムアクセストークンの発行状況を返す。平文/暗号化トークンは一切含めない。
+    org_id/bucketは外部ツールからクエリする際に必要な接続情報で、秘密ではない。"""
     tenant_id = payload["tenant_id"]
     tenant_uuid = uuid_lib.UUID(tenant_id)
     with SessionLocal() as db:
         row = db.query(RealtimeAccessToken).filter(
             RealtimeAccessToken.tenant_id == tenant_uuid,
         ).first()
-    if not row:
-        return {"created_at": None, "revoked_at": None}
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
+        org_id = tenant.influxdb_org_id if tenant else None
     return {
-        "created_at": row.created_at.isoformat() if row.created_at else None,
-        "revoked_at": row.revoked_at.isoformat() if row.revoked_at else None,
+        "created_at": row.created_at.isoformat() if row and row.created_at else None,
+        "revoked_at": row.revoked_at.isoformat() if row and row.revoked_at else None,
+        "org_id": org_id,
+        "bucket": "telemetry",
     }
 
 
