@@ -1880,6 +1880,9 @@ def issue_realtime_access_token_portal(response: Response, payload: dict = Depen
         tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).with_for_update().first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        if tenant.status != "active":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                                 detail="Tenant is not active; realtime access token cannot be issued")
 
         existing = db.query(RealtimeAccessToken).filter(
             RealtimeAccessToken.tenant_id == tenant_uuid,
@@ -1942,11 +1945,13 @@ def get_realtime_access_token_portal(payload: dict = Depends(_require_tenant)):
         ).first()
         tenant = db.query(Tenant).filter(Tenant.id == tenant_uuid).first()
         org_id = tenant.influxdb_org_id if tenant else None
+        suspended = bool(tenant and tenant.status == "suspended")
     return {
         "created_at": row.created_at.isoformat() if row and row.created_at else None,
         "revoked_at": row.revoked_at.isoformat() if row and row.revoked_at else None,
         "org_id": org_id,
         "bucket": "telemetry",
+        "suspended": suspended,
     }
 
 

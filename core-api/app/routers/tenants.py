@@ -19,6 +19,8 @@ from app.services.grafana import get_or_create_platform_org, sync_all_tenants_to
 from app.services.device_groups import list_groups_with_devices
 from app.services.panel_configs import get_default_panel_configs
 from app.services.audit import write_audit_log
+from app.models.realtime_access import RealtimeAccessToken
+from app.services.realtime_access import set_readonly_token_active, InfluxAuthorizationError
 from datetime import datetime, timedelta, timezone
 import time
 import uuid
@@ -123,6 +125,17 @@ def update_tenant_status(tenant_id: str, body: TenantStatusUpdate, payload: dict
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        # 外部クエリ経路はアプリを通らずInfluxDBがトークンを直接評価するため、停止/再開はトークンの
+        # 有効/無効で反映する。失敗したらステータスも変更しない(停止したのに読める状態を作らない)。
+        rt_token = db.query(RealtimeAccessToken).filter(
+            RealtimeAccessToken.tenant_id == tenant.id,
+        ).first()
+        if rt_token is not None:
+            try:
+                set_readonly_token_active(rt_token.influx_authorization_id, body.status == "active")
+            except InfluxAuthorizationError:
+                raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                                     detail="Failed to update InfluxDB realtime access authorization")
         tenant.status = body.status
         action = "suspend_tenant" if body.status == "suspended" else "activate_tenant"
         write_audit_log(db, "platform", payload["sub"], payload["email"],

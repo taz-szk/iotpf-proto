@@ -45,3 +45,18 @@ def revoke_readonly_token(influx_authorization_id: str) -> None:
             resp.raise_for_status()
     except Exception as e:
         raise InfluxAuthorizationError(str(e)) from e
+
+
+def set_readonly_token_active(influx_authorization_id: str, active: bool) -> None:
+    """InfluxDB Authorizationを有効化/無効化する(テナント停止・再開時に使用)。
+    無効化されたトークンはInfluxDB側でリクエストを拒否される。"""
+    try:
+        resp = httpx.patch(
+            f"{settings.influxdb_url}/api/v2/authorizations/{influx_authorization_id}",
+            headers={"Authorization": f"Token {settings.influxdb_admin_token}", "Content-Type": "application/json"},
+            json={"status": "active" if active else "inactive"},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        raise InfluxAuthorizationError(str(e)) from e

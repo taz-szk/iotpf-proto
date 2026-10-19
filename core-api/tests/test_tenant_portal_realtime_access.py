@@ -25,7 +25,7 @@ def test_issue_token_rejects_non_admin():
     assert resp.status_code == 403
 
 def test_issue_token_returns_plaintext_once():
-    tenant = MagicMock(influxdb_org_id="org-1")
+    tenant = MagicMock(influxdb_org_id="org-1", status="active")
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
          patch("app.routers.tenant_portal.issue_readonly_token", return_value=("auth-1", "plain-token")):
         db = _session_ctx()
@@ -51,7 +51,7 @@ def test_get_token_status_never_includes_token_value():
 
 def test_reissue_commits_old_row_deletion_even_if_new_issue_fails():
     from app.services.realtime_access import InfluxAuthorizationError
-    tenant = MagicMock(influxdb_org_id="org-1")
+    tenant = MagicMock(influxdb_org_id="org-1", status="active")
     existing = MagicMock(influx_authorization_id="old-auth")
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
          patch("app.routers.tenant_portal.revoke_readonly_token") as mock_revoke, \
@@ -74,7 +74,7 @@ def test_issue_token_rejects_operator():
 
 
 def test_reissue_happy_path_revokes_old_and_adds_new_with_no_store():
-    tenant = MagicMock(influxdb_org_id="org-1")
+    tenant = MagicMock(influxdb_org_id="org-1", status="active")
     existing = MagicMock(influx_authorization_id="old-auth")
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
          patch("app.routers.tenant_portal.revoke_readonly_token") as mock_revoke, \
@@ -132,7 +132,7 @@ def test_delete_success_deletes_row_and_audits():
 
 
 def test_issue_rolls_back_influx_authorization_if_db_commit_fails():
-    tenant = MagicMock(influxdb_org_id="org-1")
+    tenant = MagicMock(influxdb_org_id="org-1", status="active")
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
          patch("app.routers.tenant_portal.revoke_readonly_token") as mock_revoke, \
          patch("app.routers.tenant_portal.issue_readonly_token", return_value=("auth-9", "tok")):
@@ -144,3 +144,15 @@ def test_issue_rolls_back_influx_authorization_if_db_commit_fails():
         resp = client.post("/tenant-portal/me/realtime-access-token", cookies={"iot_token": _token("admin")})
     assert resp.status_code == 500
     mock_revoke.assert_called_once_with("auth-9")
+
+
+def test_issue_token_rejects_suspended_tenant():
+    tenant = MagicMock(influxdb_org_id="org-1", status="suspended")
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
+         patch("app.routers.tenant_portal.issue_readonly_token") as mock_issue:
+        db = _session_ctx()
+        db.query.return_value.filter.return_value.with_for_update.return_value.first.return_value = tenant
+        mock_session.return_value = db
+        resp = client.post("/tenant-portal/me/realtime-access-token", cookies={"iot_token": _token("admin")})
+    assert resp.status_code == 409
+    mock_issue.assert_not_called()

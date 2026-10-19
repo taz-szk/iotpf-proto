@@ -161,10 +161,14 @@ def _export_usage_snapshot(db, tenant_id: str) -> dict[str, int]:
 
 def _realtime_access_usage_snapshot(db, tenant_id: str) -> dict[str, int]:
     """準リアルタイムアクセス機能の課金用スナップショット(現在時点)。
-    realtime_access_fee: トークンが発行済みかつ失効していない(revoked_atがNone)なら1、
-    なければ0。"""
+    realtime_access_fee: トークンが発行済みかつ失効していない(revoked_atがNone)で、
+    テナントが停止中でなければ1、それ以外は0(停止中はトークンが無効化されるため課金しない)。"""
     token = db.query(RealtimeAccessToken).filter(RealtimeAccessToken.tenant_id == tenant_id).first()
-    realtime_access_fee = 1 if token is not None and token.revoked_at is None else 0
+    realtime_access_fee = 0
+    if token is not None and token.revoked_at is None:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if tenant is None or tenant.status != "suspended":
+            realtime_access_fee = 1
     return {"realtime_access_fee": realtime_access_fee}
 
 

@@ -2764,7 +2764,7 @@ sequenceDiagram
         </tbody>
       </table>
     </div>
-    <p style="font-size:13px;color:var(--text-3)">既知の制約: テナント停止（suspend）はトークンを失効させないため、停止中も外部からの読み取りと課金が継続する。プラットフォーム管理画面の単価編集欄・請求書ラベルには<code>realtime_access_fee</code>（および<code>export_base_fee</code>）の表示名が未追加。</p>
+    <p style="font-size:13px;color:var(--text-3)">テナント停止（suspend）・再開時は、プラットフォーム管理のステータス変更APIがInfluxDB Authorizationを無効化（<code>status: inactive</code>）/有効化する。外部クエリ経路はアプリを通らずInfluxDBがトークンを直接評価するため、トークン自体を無効化して接続を遮断する。トークン値は変わらないので再開後は外部ツール側の差し替え不要。InfluxDB側の更新が失敗した場合はテナントのステータスも変更せず502を返す（停止したのに読める状態を作らない）。停止中は<code>realtime_access_fee</code>を課金せず、停止中のトークン新規発行は409。既知の制約: プラットフォーム管理画面の単価編集欄・請求書ラベルには<code>realtime_access_fee</code>（および<code>export_base_fee</code>）の表示名が未追加。</p>
   </div>
 </section>
 
