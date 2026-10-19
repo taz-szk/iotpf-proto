@@ -675,6 +675,21 @@ def migrate_create_password_reset_tokens() -> None:
         conn.commit()
 
 
+def migrate_create_realtime_access_tokens() -> None:
+    """realtime_access_tokens テーブル(準リアルタイムアクセス用のInfluxDB読み取りトークン)を作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS realtime_access_tokens (
+                tenant_id               UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+                influx_authorization_id VARCHAR(64) NOT NULL,
+                encrypted_token         TEXT NOT NULL,
+                created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+                revoked_at              TIMESTAMPTZ
+            )
+        """))
+        conn.commit()
+
+
 def migrate_add_map_default_view() -> None:
     """tenants テーブルに位置情報タブの地図デフォルト表示カラムを追加する（べき等）。"""
     with engine.connect() as conn:
