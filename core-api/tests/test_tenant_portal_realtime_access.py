@@ -59,7 +59,7 @@ def test_reissue_commits_old_row_deletion_even_if_new_issue_fails():
         db.query.return_value.filter.return_value.first.side_effect = [tenant, existing]
         mock_session.return_value = db
         resp = client.post("/tenant-portal/me/realtime-access-token",
-                            headers={"Authorization": f"Bearer {_token('admin')}"})
+                            cookies={"iot_token": _token("admin")})
     assert resp.status_code == 502
     mock_revoke.assert_called_once_with("old-auth")
     db.delete.assert_called_once_with(existing)
