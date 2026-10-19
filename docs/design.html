@@ -492,6 +492,9 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(11)">
       <span class="sb-label">EXPORT</span>データエクスポート
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(12)">
+      <span class="sb-label">REALTIME</span>準リアルタイムアクセス
+    </button>
   </nav>
 </aside>
 
@@ -2691,6 +2694,77 @@ sequenceDiagram
       </table>
     </div>
     <p style="font-size:13px;color:var(--text-3)">単価が未設定の<code>item_key</code>は0円として扱われる既存の仕様（<code>calculate_invoice()</code>）に従うため、課金を発生させるには<code>billing_unit_prices</code>への単価設定がプラットフォーム管理者操作として別途必要。</p>
+  </div>
+</section>
+
+<section class="doc-section" id="tab-12">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">準リアルタイムアクセス（InfluxDB読み取り専用トークン）機能 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>参照: docs/superpowers/specs/2026-10-19-data-export-design.md（②節）, docs/superpowers/plans/2026-10-19-realtime-access-token.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>テナント管理者が、自テナントのInfluxDBデータに対する<strong>読み取り専用トークン</strong>を発行し、外部のBIツール・分析基盤から直接クエリできるようにする機能。CSVエクスポート（タブ11）が「ファイルを渡す」機能であるのに対し、本機能は「準リアルタイムにクエリさせる」機能で、実装は独立している。</p>
+    <div class="callout">
+      <strong>テナント分離はInfluxDBのトークンスコープ機能のみで保証する。</strong>アプリケーション側・nginx側にtenant_idを比較・識別する独自ロジックは置かない。トークンは当該テナント専用org（<code>orgID</code>）の<code>buckets</code>に対する<code>read</code>権限のみを持ち、書き込み権限は付与しない。
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>APIエンドポイント</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST</code></td><td><code>/me/realtime-access-token</code></td><td>トークンを発行（既存があれば再発行。旧トークンはInfluxDB側で即時失効）。レスポンスに平文トークンを含む唯一のエンドポイントで、<code>Cache-Control: no-store</code>。InfluxDB側の失敗は502</td><td>admin</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/realtime-access-token</code></td><td>発行状況（<code>created_at</code>/<code>revoked_at</code>）と接続情報（<code>org_id</code>、<code>bucket</code>）。トークン値は一切含めない</td><td>viewer 以上</td></tr>
+          <tr><td><code>DELETE</code></td><td><code>/me/realtime-access-token</code></td><td>トークンを失効。InfluxDB側の<code>DELETE</code>が成功した場合のみDB行を削除（失敗時は502で行を残す）</td><td>admin</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">発行・再発行・失効は<code>audit_logs</code>に記録する（再発行時は旧トークンの失効が<code>reason: reissue</code>で記録され、発行ログには<code>reissue</code>フラグが付く）。UIはテナントポータルの「ブートストラップトークン」タブ内のカードで、Bootstrap Tokenと同じ「発行時に一度だけ平文を表示」パターン。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>データモデル</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>テーブル</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>public.realtime_access_tokens</code></td><td><code>tenant_id</code>がPK（1テナント1トークン）。<code>influx_authorization_id</code>（失効時にInfluxDBの<code>DELETE</code>に使う）、<code>encrypted_token</code>（<code>encrypt_secret</code>で暗号化）、<code>created_at</code>、<code>revoked_at</code>。現在の実装では失効・再発行時に行を削除するため、有効なトークンがある間のみ行が存在する</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>外部クエリ経路（nginx）</h2></div>
+    <p><code>/influx/</code>配下のクエリ系エンドポイント（<code>/api/v2/query</code>、<code>/api/v2/buckets</code>、<code>/query</code>、<code>/health</code>、<code>/ping</code>）のみをInfluxDBへそのまま転送する。<code>Authorization: Token ...</code>ヘッダーは変更せず、評価はInfluxDBだけが行う。<code>signin</code>・<code>setup</code>・<code>write</code>・認可管理・<code>metrics</code>・<code>debug</code>等は許可リストに含めず外部に出さない（パスの許可リストであり、認可・テナント識別ではない）。IP単位のレート制限（300リクエスト/分、burst 50、超過は429）をかける。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>DBとInfluxDBの整合性</h2></div>
+    <ul class="checklist">
+      <li>発行・失効のいずれかでInfluxDB管理APIが失敗した場合は502とし、DBだけが更新された状態を作らない。</li>
+      <li>InfluxDB側で新規発行した後にDB記録（暗号化・監査ログ・コミット）が失敗した場合は、InfluxDB側のAuthorizationを取り消してから500を返す（誰も失効できない有効トークンを残さない）。</li>
+      <li>再発行では旧Authorizationの失効後に旧行の削除を即コミットする。新規発行が失敗しても「トークン無し」で整合する。同一テナントの並行発行は<code>Tenant</code>行の<code>FOR UPDATE</code>で直列化する。</li>
+      <li>失効時にInfluxDBが404（既に存在しない）を返した場合は成功扱いとし、失効・再発行が恒久的に詰まらないようにする。</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>Billing連携</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>item_key</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>realtime_access_fee</code></td><td>トークンが発行され失効していない間、月額固定費として<code>quantity: 1</code>（無い・失効済みは0）。<code>billing_unit_prices</code>に単価が未設定なら0円として扱われる既存仕様に従う</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">既知の制約: テナント停止（suspend）はトークンを失効させないため、停止中も外部からの読み取りと課金が継続する。プラットフォーム管理画面の単価編集欄・請求書ラベルには<code>realtime_access_fee</code>（および<code>export_base_fee</code>）の表示名が未追加。</p>
   </div>
 </section>
 
