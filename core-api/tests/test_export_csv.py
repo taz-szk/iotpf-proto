@@ -110,3 +110,125 @@ def test_generate_export_csv_parses_multi_device_multi_row_without_repeated_head
     assert "Sensor-1,2026-10-01T11:00:00Z,35.2,139.2" in lines
     assert "Sensor-2,2026-10-01T10:30:00Z,36.1,140.1" in lines
     assert "Sensor-2,2026-10-01T11:30:00Z,36.2,140.2" in lines
+
+
+# ---------------------------------------------------------------------------
+# 最終レビュー指摘への回帰テスト
+# ---------------------------------------------------------------------------
+
+# InfluxDB 2.x(influxdb:2-alpine)でバケット未作成のorgへクエリした際の実際の応答(実機で採取)
+_BUCKET_NOT_FOUND_BODY = '{"code":"not found","message":"failed to initialize execute state: could not find bucket \\"telemetry\\""}'
+
+
+def test_estimate_returns_zero_when_bucket_not_found():
+    """セルフサインアップのテナントは最初のデータ点がingestされるまでバケットが無い。
+    その場合はエラーではなく0件として扱う。"""
+    resp = MagicMock(status_code=404, text=_BUCKET_NOT_FOUND_BODY)
+    with patch("app.services.export_csv.httpx.post", return_value=resp):
+        n = estimate_export_row_count(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                       datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None)
+    assert n == 0
+
+
+def test_generate_returns_header_only_when_bucket_not_found():
+    resp = MagicMock(status_code=404, text=_BUCKET_NOT_FOUND_BODY)
+    with patch("app.services.export_csv.httpx.post", return_value=resp):
+        csv_bytes = generate_export_csv(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                         datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None)
+    assert csv_bytes == b"device_name,datetime,latitude,longitude\r\n"
+
+
+def test_estimate_returns_zero_when_influx_org_not_provisioned():
+    t = Tenant(); t.influxdb_org_id = None; t.influxdb_token = None
+    with patch("app.services.export_csv.httpx.post") as mock_post:
+        n = estimate_export_row_count(t, datetime(2026,10,1,tzinfo=timezone.utc),
+                                       datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None)
+    assert n == 0
+    mock_post.assert_not_called()
+
+
+def test_estimate_still_raises_on_other_404_or_400():
+    for resp in (MagicMock(status_code=404, text='{"code":"not found","message":"organization not found"}'),
+                 MagicMock(status_code=400, text='{"code":"invalid","message":"compilation failed"}')):
+        with patch("app.services.export_csv.httpx.post", return_value=resp):
+            with pytest.raises(InfluxUnavailableError):
+                estimate_export_row_count(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                           datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None)
+
+
+def test_query_uses_utc_offset_datetime_literals():
+    """Fluxのdatetimeリテラルはオフセット必須。aware(JST)はUTCへ変換し、naiveはUTCとみなして
+    いずれもZ付きで埋め込む(オフセット無しだとInfluxDBは400 compilation failedを返す)。"""
+    from datetime import timedelta
+    jst = timezone(timedelta(hours=9))
+    resp = MagicMock(status_code=200, text=",result,table,_value\r\n,_result,0,1\r\n")
+    with patch("app.services.export_csv.httpx.post", return_value=resp) as mock_post:
+        estimate_export_row_count(_tenant(), datetime(2026,10,1,9,0,tzinfo=jst),
+                                   datetime(2026,10,1,10,0), device_ids=None)
+    query = mock_post.call_args.kwargs["json"]["query"]
+    assert "range(start: 2026-10-01T00:00:00Z, stop: 2026-10-01T10:00:00Z)" in query
+
+
+def test_device_id_values_are_escaped_in_flux():
+    resp = MagicMock(status_code=200, text=",result,table,_value\r\n,_result,0,1\r\n")
+    with patch("app.services.export_csv.httpx.post", return_value=resp) as mock_post:
+        estimate_export_row_count(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                   datetime(2026,10,2,tzinfo=timezone.utc),
+                                   device_ids=['x") |> to(bucket: "telemetry") //'])
+    query = mock_post.call_args.kwargs["json"]["query"]
+    assert 'r.device_id == "x\\") |> to(bucket: \\"telemetry\\") //"' in query
+
+
+# 実機(influxdb:2-alpine)で、フィールド集合が異なる2デバイス(片方は名前にカンマ)をpivotした
+# 際の実際の応答。テーブルごとにヘッダ行が出て空行で区切られ、_measurement列が残る。
+_REAL_MULTI_SCHEMA_CSV = (
+    ",result,table,_start,_stop,_time,_measurement,device_id,device_name,latitude,longitude,temperature\r\n"
+    ',_result,0,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T10:00:00Z,telemetry,dev-1,"Tokyo, Bldg A",35.1,139.1,21.5\r\n'
+    ',_result,0,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T11:00:00Z,telemetry,dev-1,"Tokyo, Bldg A",35.2,139.2,22\r\n'
+    "\r\n"
+    ",result,table,_start,_stop,_time,_measurement,device_id,device_name,humidity,latitude,longitude\r\n"
+    ",_result,1,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T10:30:00Z,telemetry,dev-2,Osaka,60,34.6,135.5\r\n"
+    "\r\n"
+)
+
+# 同じ内容をannotation付き(#group/#datatype/#default)で返した場合
+_REAL_MULTI_SCHEMA_ANNOTATED_CSV = (
+    "#group,false,false,true,true,false,true,true,true,false,false,false\r\n"
+    "#datatype,string,long,dateTime:RFC3339,dateTime:RFC3339,dateTime:RFC3339,string,string,string,double,double,double\r\n"
+    "#default,_result,,,,,,,,,,\r\n"
+    ",result,table,_start,_stop,_time,_measurement,device_id,device_name,latitude,longitude,temperature\r\n"
+    ',,0,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T10:00:00Z,telemetry,dev-1,"Tokyo, Bldg A",35.1,139.1,21.5\r\n'
+    ',,0,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T11:00:00Z,telemetry,dev-1,"Tokyo, Bldg A",35.2,139.2,22\r\n'
+    "\r\n"
+    "#group,false,false,true,true,false,true,true,true,false,false,false\r\n"
+    "#datatype,string,long,dateTime:RFC3339,dateTime:RFC3339,dateTime:RFC3339,string,string,string,long,double,double\r\n"
+    "#default,_result,,,,,,,,,,\r\n"
+    ",result,table,_start,_stop,_time,_measurement,device_id,device_name,humidity,latitude,longitude\r\n"
+    ",,1,2026-10-01T00:00:00Z,2026-10-03T00:00:00Z,2026-10-01T10:30:00Z,telemetry,dev-2,Osaka,60,34.6,135.5\r\n"
+    "\r\n"
+)
+
+
+@pytest.mark.parametrize("influx_csv", [_REAL_MULTI_SCHEMA_CSV, _REAL_MULTI_SCHEMA_ANNOTATED_CSV],
+                         ids=["plain", "annotated"])
+def test_generate_export_csv_handles_multi_schema_tables_quoted_commas_and_measurement(influx_csv):
+    import csv as _csv, io as _io
+    resp = MagicMock(status_code=200, text=influx_csv)
+    with patch("app.services.export_csv.httpx.post", return_value=resp):
+        csv_bytes = generate_export_csv(_tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                         datetime(2026,10,3,tzinfo=timezone.utc), device_ids=None)
+    rows = list(_csv.reader(_io.StringIO(csv_bytes.decode("utf-8"), newline="")))
+    header, data = rows[0], rows[1:]
+    # 列は全テーブルの和集合。_measurement等のシステム列は含まない
+    assert header == ["device_name", "datetime", "latitude", "longitude", "temperature", "humidity"]
+    # 2つ目のヘッダ行がデータ行として出力されていないこと
+    assert len(data) == 3
+    by_key = {(r[0], r[1]): dict(zip(header, r)) for r in data}
+    tokyo = by_key[("Tokyo, Bldg A", "2026-10-01T10:00:00Z")]
+    assert tokyo["latitude"] == "35.1" and tokyo["temperature"] == "21.5" and tokyo["humidity"] == ""
+    osaka = by_key[("Osaka", "2026-10-01T10:30:00Z")]
+    # 2つ目のテーブルの値は2つ目のヘッダに従って対応付けられる(位置ずれしない)
+    assert osaka["humidity"] == "60" and osaka["latitude"] == "34.6" and osaka["longitude"] == "135.5"
+    assert osaka["temperature"] == ""
+    # カンマを含む名前はRFC 4180に従いクォートされて出力される
+    assert b'"Tokyo, Bldg A",2026-10-01T10:00:00Z' in csv_bytes
