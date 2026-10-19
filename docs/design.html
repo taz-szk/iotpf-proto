@@ -2330,7 +2330,7 @@ sequenceDiagram
     <ul class="checklist">
       <li>アラートルールの対象をグループ単位で指定可能（デバイス個別指定・全デバイス指定と並ぶ第三の選択肢）</li>
       <li>OTA配信画面でグループによる絞り込み</li>
-      <li>ダッシュボード設定（パネル構成）をグループ単位で上書き可能</li>
+      <li>可視化パネル設定（パネル構成）をグループ単位で上書き可能</li>
       <li>プロビジョニング時にグループを指定してデバイスを登録可能</li>
       <li>Grafanaダッシュボードでグループ単位のデバイス絞り込み表示</li>
     </ul>
@@ -2371,7 +2371,7 @@ sequenceDiagram
       <ul class="checklist">
         <li>グループの作成・更新・削除時</li>
         <li>デバイスのグループ割当変更時</li>
-        <li>ダッシュボードパネル設定の変更時・PF管理者の「全ダッシュボード再同期」実行時（既存の同期経路にグループ変数の再生成を統合）</li>
+        <li>可視化パネル設定の変更時・PF管理者の「全ダッシュボード再同期」実行時（既存の同期経路にグループ変数の再生成を統合）</li>
       </ul>
       <p style="font-size:13px;color:var(--text-3)">Grafana未連携（org未作成）のテナントに対しては何もしない。DB接続失敗等はベストエフォートとして握り込み、グループ操作自体は失敗させない。</p>
     </div>
@@ -2523,7 +2523,7 @@ sequenceDiagram
         <thead><tr><th>ドメイン</th><th>ツール名</th><th>read_only</th><th>内容</th></tr></thead>
         <tbody>
           <tr><td>プロビジョニングトークン発行</td><td><code>provisioning_token_issue</code></td><td>いいえ（確認必須）</td><td>デバイス登録用トークンを発行する。引数省略時は既定値（100台 / 365日）を使う</td></tr>
-          <tr><td>ダッシュボード設定</td><td><code>dashboard_panel_config_set</code></td><td>いいえ（確認必須）</td><td>センサーごとのパネル種別を設定する</td></tr>
+          <tr><td>可視化パネル設定</td><td><code>dashboard_panel_config_set</code></td><td>いいえ（確認必須）</td><td>センサーごとのパネル種別を設定する</td></tr>
           <tr><td>アラートルール作成</td><td><code>alert_rule_create</code></td><td>いいえ（確認必須）</td><td>閾値条件付きのアラートルールを作成する</td></tr>
           <tr><td>（参照系）</td><td><code>tenant_list</code> / <code>tenant_stats_get</code> / <code>tenant_invoice_get</code> / <code>provisioning_token_list</code> / <code>dashboard_panel_config_list</code> / <code>alert_rule_list</code></td><td>はい（即時実行）</td><td>回答の根拠となる現在の状態を取得する</td></tr>
         </tbody>
