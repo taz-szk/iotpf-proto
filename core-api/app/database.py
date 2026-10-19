@@ -685,3 +685,38 @@ def migrate_add_map_default_view() -> None:
             ADD COLUMN IF NOT EXISTS map_default_zoom INTEGER
         """))
         conn.commit()
+
+
+def migrate_create_export_tables() -> None:
+    """export_jobs / export_schedules テーブル(CSVエクスポート用)を作成する（べき等）。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS export_jobs (
+                id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+                kind            VARCHAR(10) NOT NULL,
+                status          VARCHAR(20) NOT NULL,
+                period_start    TIMESTAMPTZ NOT NULL,
+                period_end      TIMESTAMPTZ NOT NULL,
+                device_ids      JSONB,
+                group_id        UUID,
+                minio_key       VARCHAR(255),
+                file_size_bytes INTEGER,
+                error_message   VARCHAR(500),
+                requested_at    TIMESTAMPTZ DEFAULT now(),
+                started_at      TIMESTAMPTZ,
+                completed_at    TIMESTAMPTZ,
+                CONSTRAINT uq_export_jobs_tenant_kind UNIQUE (tenant_id, kind)
+            )
+        """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS export_schedules (
+                tenant_id   UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
+                frequency   VARCHAR(10) NOT NULL,
+                device_ids  JSONB,
+                group_id    UUID,
+                enabled     BOOLEAN NOT NULL DEFAULT TRUE,
+                last_run_at TIMESTAMPTZ
+            )
+        """))
+        conn.commit()

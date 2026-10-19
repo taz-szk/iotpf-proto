@@ -8,6 +8,7 @@ from app.models.billing import BillingDefaultUnitPrice, BillingInvoice, BillingL
 ITEM_KEYS = (
     "base_fee", "data_points", "retained_data_points", "retired_data_points",
     "retired_device_count", "device_count", "provisionable_devices", "alert_events",
+    "export_base_fee", "export_retained_size_mb",
 )
 
 DEFAULT_TAX_RATE = Decimal("0.10")
