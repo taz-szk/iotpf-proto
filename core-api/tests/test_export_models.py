@@ -10,9 +10,6 @@ def test_export_job_table_name_and_unique_constraint_columns():
     )
     assert row.kind == "adhoc"
     assert row.status == "queued"
-    constraint_cols = {c.name for c in ExportJob.__table__.constraints
-                       if c.name == "uq_export_jobs_tenant_kind"
-                       for c in [next(iter(ExportJob.__table__.constraints))]}
     names = {uc.name for uc in ExportJob.__table__.constraints}
     assert "uq_export_jobs_tenant_kind" in names
 
