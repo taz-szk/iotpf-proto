@@ -26,6 +26,12 @@ def _ensure_bucket() -> None:
         client.make_bucket(settings.minio_firmware_bucket)
 
 
+def _ensure_export_bucket() -> None:
+    client = _get_client()
+    if not client.bucket_exists(settings.minio_export_bucket):
+        client.make_bucket(settings.minio_export_bucket)
+
+
 def upload_firmware(tenant_id: str, firmware_id: str, data: bytes | BinaryIO, content_type: str,
                     length: int | None = None) -> str:
     """dataにはbytesかファイルオブジェクトを渡せる。ファイルオブジェクトの場合はlength(バイト数)が必須で、
@@ -61,6 +67,36 @@ def stream_firmware(minio_key: str) -> Iterator[bytes]:
 def delete_firmware(minio_key: str) -> None:
     client = _get_client()
     client.remove_object(settings.minio_firmware_bucket, minio_key)
+
+
+def upload_export_file(tenant_id: str, job_id: str, data: bytes) -> str:
+    _ensure_export_bucket()
+    client = _get_client()
+    key = f"{tenant_id}/{job_id}"
+    client.put_object(
+        settings.minio_export_bucket,
+        key,
+        io.BytesIO(data),
+        length=len(data),
+        content_type="text/csv",
+    )
+    return key
+
+
+def stream_export_file(minio_key: str) -> Iterator[bytes]:
+    client = _get_client()
+    obj = client.get_object(settings.minio_export_bucket, minio_key)
+    try:
+        for chunk in obj.stream(amt=65536):
+            yield chunk
+    finally:
+        obj.close()
+        obj.release_conn()
+
+
+def delete_export_file(minio_key: str) -> None:
+    client = _get_client()
+    client.remove_object(settings.minio_export_bucket, minio_key)
 
 
 def delete_all_tenant_firmware(tenant_id: str) -> None:
