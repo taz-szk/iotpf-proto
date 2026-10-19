@@ -55,7 +55,16 @@ from app.services.minio_client import (
     create_firmware_download_token,
     delete_firmware,
     upload_firmware,
+    stream_export_file,
+    delete_export_file,
 )
+from app.models.export import ExportJob, ExportSchedule
+from app.services.export_jobs import (
+    request_adhoc_export, JobAlreadyRunningError, ExportTooLargeError, UnknownDeviceError,
+    validate_export_device_ids,
+)
+from app.services.export_csv import InfluxUnavailableError
+from fastapi.responses import StreamingResponse
 from app.config import settings
 
 router = APIRouter(prefix="/tenant-portal", tags=["tenant-portal"])
@@ -1627,3 +1636,224 @@ def get_device_location_history(device_id: str, start: datetime, end: datetime, 
     with SessionLocal() as db:
         tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     return _query_location_history(tenant, device_id, start, end)
+
+
+# ---------------------------------------------------------------------------
+# エクスポート
+# ---------------------------------------------------------------------------
+
+def _validate_export_group_id(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return v
+    try:
+        return str(uuid_lib.UUID(v))
+    except ValueError:
+        raise ValueError("group_id must be a UUID")
+
+
+class ExportRequest(BaseModel):
+    start: datetime
+    end: datetime
+    device_ids: Optional[list[str]] = None
+    group_id: Optional[str] = None
+
+    @field_validator("start", "end")
+    @classmethod
+    def _require_timezone(cls, v: datetime) -> datetime:
+        # タイムゾーン無しの日時はUTCかJSTか判別できないため拒否する
+        # (UIはnew Date(x).toISOString()でZ付きのUTCに変換して送る)。
+        if v.tzinfo is None or v.utcoffset() is None:
+            raise ValueError("datetime must include a timezone offset (e.g. 2026-10-01T01:00:00Z)")
+        return v
+
+    @field_validator("group_id")
+    @classmethod
+    def _group_id_uuid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_export_group_id(v)
+
+    @model_validator(mode="after")
+    def _start_before_end(self):
+        if self.start >= self.end:
+            raise ValueError("start must be earlier than end")
+        return self
+
+
+def _unknown_device_http_error(e: UnknownDeviceError) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        detail=f"存在しないデバイスが指定されています: {', '.join(e.missing)}",
+    )
+
+
+_EXPORT_GROUP_NOT_FOUND_DETAIL = "指定されたグループが見つかりません"
+
+
+@router.post("/me/exports", status_code=status.HTTP_201_CREATED)
+def request_export_portal(body: ExportRequest, payload: dict = Depends(_require_admin)):
+    """自テナントのアドホックCSVエクスポートをリクエストする(admin限定)。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not tenant:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        try:
+            job = request_adhoc_export(db, tenant, body.start, body.end, body.device_ids, body.group_id)
+        except JobAlreadyRunningError:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="現在処理中です")
+        except ExportTooLargeError:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="最大データサイズを超えています。期間やデバイスの絞り込みを実施してください",
+            )
+        except UnknownDeviceError as e:
+            raise _unknown_device_http_error(e)
+        except GroupNotFoundError:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                                detail=_EXPORT_GROUP_NOT_FOUND_DETAIL)
+        except InfluxUnavailableError:
+            # 外部依存(InfluxDB)の失敗はtenant_users.pyのGrafana同期失敗と同様に502で返す
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail="データ量を見積もれませんでした。時間をおいて再試行するか、期間を絞り込んでください",
+            )
+
+    log_audit("tenant", payload["sub"], payload["email"], "request_export",
+              tenant_id=tenant_id, resource_type="export_job", resource_id=str(job.id))
+
+    return {
+        "id": str(job.id),
+        "kind": job.kind,
+        "status": job.status,
+        "requested_at": job.requested_at.isoformat() if job.requested_at else None,
+    }
+
+
+@router.get("/me/exports")
+def list_exports_portal(payload: dict = Depends(_require_tenant)):
+    """自テナントのエクスポートジョブ一覧(定期・手動の最大2件)を返す。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        jobs = db.query(ExportJob).filter(ExportJob.tenant_id == tenant_id).all()
+    return [
+        {
+            "id": str(job.id),
+            "kind": job.kind,
+            "status": job.status,
+            "requested_at": job.requested_at.isoformat() if job.requested_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "file_size_bytes": job.file_size_bytes if job.minio_key else None,
+            "has_file": bool(job.minio_key),
+            "error_message": job.error_message,
+        }
+        for job in jobs
+    ]
+
+
+@router.get("/me/exports/{kind}/download")
+def download_export_portal(kind: str, payload: dict = Depends(_require_tenant)):
+    """自テナントのエクスポートCSVをダウンロードする(全ロール可)。
+    他テナントのジョブIDやkindを推測してもダウンロードできないよう、
+    必ずtenant_idの一致を確認してからストリーミングする。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        job = db.query(ExportJob).filter(
+            ExportJob.tenant_id == tenant_id, ExportJob.kind == kind
+        ).first()
+
+    # 再生成中(queued/processing)や直近の再生成失敗時も、前回の正常なファイルが残っていれば
+    # ダウンロード可能(ファイルは新しい生成が成功した時点で置き換えられる)。
+    if job is None or not job.minio_key or str(job.tenant_id) != str(tenant_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+
+    return StreamingResponse(
+        stream_export_file(job.minio_key),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="export_{kind}.csv"'},
+    )
+
+
+@router.delete("/me/exports/{kind}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_export_portal(kind: str, payload: dict = Depends(_require_admin)):
+    """自テナントのエクスポートジョブを削除する(admin限定)。
+    MinIO上のファイルを削除し、ジョブ行もリセット(削除)する。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        job = db.query(ExportJob).filter(
+            ExportJob.tenant_id == tenant_id, ExportJob.kind == kind
+        ).first()
+        if job is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Export not found")
+        minio_key = job.minio_key
+        db.delete(job)
+        db.commit()
+
+    if minio_key:
+        delete_export_file(minio_key)
+
+    log_audit("tenant", payload["sub"], payload["email"], "delete_export",
+              tenant_id=tenant_id, resource_type="export_job", resource_id=kind)
+
+
+class ExportScheduleBody(BaseModel):
+    frequency: Literal["daily", "weekly", "monthly"]
+    device_ids: Optional[list[str]] = None
+    group_id: Optional[str] = None
+    enabled: bool
+
+    @field_validator("group_id")
+    @classmethod
+    def _group_id_uuid(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_export_group_id(v)
+
+
+def _export_schedule_out(schedule) -> dict:
+    return {
+        "frequency": schedule.frequency,
+        "device_ids": schedule.device_ids,
+        "group_id": str(schedule.group_id) if schedule.group_id else None,
+        "enabled": schedule.enabled,
+    }
+
+
+@router.get("/me/export-schedule")
+def get_export_schedule_portal(payload: dict = Depends(_require_admin)):
+    """自テナントの定期エクスポート設定を返す(admin限定)。未設定の場合はデフォルト値。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        schedule = db.query(ExportSchedule).filter(ExportSchedule.tenant_id == tenant_id).first()
+
+    if schedule is None:
+        return {"frequency": None, "device_ids": None, "group_id": None, "enabled": False}
+    return _export_schedule_out(schedule)
+
+
+@router.put("/me/export-schedule")
+def update_export_schedule_portal(body: ExportScheduleBody, payload: dict = Depends(_require_admin)):
+    """自テナントの定期エクスポート設定をupsertする(admin限定)。"""
+    tenant_id = payload["tenant_id"]
+    try:
+        validate_export_device_ids(tenant_id, body.device_ids)
+    except UnknownDeviceError as e:
+        raise _unknown_device_http_error(e)
+    if body.group_id is not None and not group_exists(_schema(tenant_id), body.group_id):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                            detail=_EXPORT_GROUP_NOT_FOUND_DETAIL)
+    with SessionLocal() as db:
+        schedule = db.query(ExportSchedule).filter(ExportSchedule.tenant_id == tenant_id).first()
+        if schedule is None:
+            schedule = ExportSchedule(tenant_id=tenant_id)
+
+        schedule.frequency = body.frequency
+        schedule.device_ids = body.device_ids
+        schedule.group_id = body.group_id
+        schedule.enabled = body.enabled
+
+        db.add(schedule)
+        db.commit()
+        db.refresh(schedule)
+        result = _export_schedule_out(schedule)
+
+    log_audit("tenant", payload["sub"], payload["email"], "update_export_schedule",
+              tenant_id=tenant_id, resource_type="export_schedule", resource_id=tenant_id)
+
+    return result

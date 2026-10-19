@@ -26,6 +26,9 @@ class Settings(BaseSettings):
     minio_access_key: str = "minioadmin"
     minio_secret_key: str
     minio_firmware_bucket: str = "firmware"
+    minio_export_bucket: str = "exports"
+    # CSVエクスポートの概算サイズが超えてはならない上限(バイト)。環境変数 EXPORT_MAX_SIZE_BYTES で上書き可。
+    export_max_size_bytes: int = 20 * 1024 * 1024
     emqx_api_url: str = "http://emqx:18083"
     emqx_api_user: str = "admin"
     emqx_api_password: str

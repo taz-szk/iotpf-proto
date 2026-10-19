@@ -489,6 +489,9 @@ td code { font-size: 12px; }
     <button class="sidebar-tab-btn" onclick="switchTab(10)">
       <span class="sb-label">GEO</span>デバイス位置情報
     </button>
+    <button class="sidebar-tab-btn" onclick="switchTab(11)">
+      <span class="sb-label">EXPORT</span>データエクスポート
+    </button>
   </nav>
 </aside>
 
@@ -2604,6 +2607,90 @@ sequenceDiagram
   <div class="section">
     <div class="section-title"><span class="section-num">06</span><h2>動作確認（シミュレータ）</h2></div>
     <p>IoT_Simulator（Windows向けexe）のGUIに「GPS移動シミュレーション」セクションを追加し、基準緯度・経度を入力すると各デバイス（ワーカー）が基準点から自動的に少しずらした位置を起点に、送信間隔ごとに小さくランダムに移動する（ランダムウォーク）。複数デバイスを同時に動かしても同じ座標に重ならないよう、各ワーカーが起動時に一度だけ基準点からのオフセットを割り当てる。</p>
+  </div>
+</section>
+
+<!-- ==================== TAB 11: データエクスポート ==================== -->
+<section class="doc-section" id="tab-11">
+  <div class="doc-header">
+    <div class="doc-eyebrow">Feature Design</div>
+    <h1 class="doc-title">データエクスポート（CSVダウンロード）機能 設計書</h1>
+    <div class="doc-meta"><span>版: 1.0</span><span>参照: docs/superpowers/specs/2026-10-19-data-export-design.md, docs/superpowers/plans/2026-10-19-data-export-csv.md</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">01</span><h2>概要・目的</h2></div>
+    <p>テナントのテレメトリ（位置情報含む）を、期間・デバイス・グループで絞り込んでCSVでダウンロードできる機能。<strong>定期エクスポート</strong>（日次/週次/月次、自動実行）と<strong>アドホックエクスポート</strong>（都度リクエスト）の2系統を持ち、いずれも1テナントにつき専用の保管枠を1つずつ（計最大2ファイル）持つ。新しい生成は同じ枠を上書きする。外部の分析基盤・BIツールへの連携の第一歩として、「データを外へ渡すこと」に限定した機能（外部からの書き込み・制御は対象外）。</p>
+    <div class="callout">
+      <strong>準リアルタイムアクセス機能（InfluxDB読み取り専用トークン）は本機能とは別の設計・別の実装として分離している。</strong>設計スペック上は同じドキュメントに記載されているが、実装プラン（<code>docs/superpowers/plans/2026-10-19-realtime-access-token.md</code>）は本タブの機能とは独立。
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">02</span><h2>APIエンドポイント</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>メソッド</th><th>パス</th><th>説明</th><th>認証</th></tr></thead>
+        <tbody>
+          <tr><td><code>POST</code></td><td><code>/me/exports</code></td><td>アドホックエクスポートをリクエスト（期間・デバイス・グループを指定）。処理中なら409、サイズ概算が上限超過なら422、InfluxDB側が一時利用不可なら502</td><td>admin</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/exports</code></td><td>定期・アドホック両枠の状態一覧（最大2件）</td><td>viewer 以上</td></tr>
+          <tr><td><code>GET</code></td><td><code>/me/exports/{kind}/download</code></td><td>生成済みCSVのダウンロード。ファイルが存在しない・他テナントのジョブの場合は404</td><td>viewer 以上</td></tr>
+          <tr><td><code>DELETE</code></td><td><code>/me/exports/{kind}</code></td><td>保持中のファイルを明示的に削除</td><td>admin</td></tr>
+          <tr><td><code>GET</code> / <code>PUT</code></td><td><code>/me/export-schedule</code></td><td>定期エクスポートの設定（頻度: daily/weekly/monthly、対象デバイス/グループ、有効フラグ）</td><td>admin のみ（厳格。viewer/operatorは403）</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">定期エクスポートはバックグラウンドワーカー（既存の<code>billing_batch.py</code>と同じデーモンスレッド+ポーリングのパターン）が1時間ごとに期限到来を確認し、到来していれば<code>request_adhoc_export</code>のロック・サイズ上限チェックを経由せず直接生成する（定期実行は人手の承認を介さないため）。ウィンドウの開始は<code>last_run_at</code>から継続する（毎回「現在時刻 − 周期」ではない。ギャップが生じないようにするため）。</p>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">03</span><h2>データモデル</h2></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>テーブル</th><th>説明</th></tr></thead>
+        <tbody>
+          <tr><td><code>public.export_jobs</code></td><td><code>UNIQUE(tenant_id, kind)</code>（<code>kind</code>は<code>"periodic"</code>/<code>"adhoc"</code>）で1テナント1枠を強制。<code>status</code>（queued/processing/done/failed）、対象期間・デバイス・グループ、<code>minio_key</code>・<code>file_size_bytes</code>、<code>error_message</code>を保持。新しい生成は同じ行を上書きする（履行テーブルではなく「現在のスロット」テーブル）</td></tr>
+          <tr><td><code>public.export_schedules</code></td><td>1テナント1行（<code>tenant_id</code>がPK）。頻度・対象デバイス/グループ・有効フラグ・<code>last_run_at</code></td></tr>
+          <tr><td>MinIO（エクスポート専用バケット）</td><td>キーは<code>{tenant_id}/{job_id}/{生成ごとの一意な値}</code>。生成ごとに新しいキーを発行し、新ファイルのアップロードが成功した後に旧ファイルを削除する（生成失敗時は旧ファイルがダウンロード可能なまま残る）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">04</span><h2>保持・削除ポリシーとロック復旧</h2></div>
+    <ul class="checklist">
+      <li><strong>生成済みファイルの自動期限切れ（TTL）は無い。</strong>削除は「ユーザーの明示的な削除操作」と「同じ枠への上書き」の2パターンのみ（設計方針として明確に決定）。</li>
+      <li><strong>「処理中」ロックのタイムアウト復旧は、ファイルのTTL非採用とは別の話。</strong>アドホックリクエストの「処理中」状態は、<code>started_at</code>（無ければ<code>requested_at</code>）から10分（<code>_LOCK_TIMEOUT_SECONDS</code>）を超えて経過していれば異常終了とみなし、新規リクエストを受け付ける。これはジョブの実行状態の話であり、保持ファイルの削除ポリシーには影響しない。</li>
+      <li><strong>サイズ上限は生成前の概算チェックで強制する。</strong>概算が<code>settings.export_max_size_bytes</code>（既定20MB）を超える場合、ジョブを作成せずリクエストを拒否する（アドホック）。定期エクスポートも同様に概算チェックを行うが、拒否ではなく「その回だけ生成をスキップしてfailed状態を記録、次回の周期まで待つ」という形で、無人実行である点を踏まえた挙動にしている。</li>
+      <li>グループ指定時はグループに属するデバイスのみを対象にサイズ概算・生成を行う（グループ外のデータ量で誤って拒否されないようにする）。</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">05</span><h2>セキュリティ考慮事項</h2></div>
+    <ul class="checklist">
+      <li><strong>テナント分離:</strong> ダウンロード・一覧・削除は全てJWTの<code>tenant_id</code>でフィルタし、ダウンロードはさらに取得したジョブの<code>tenant_id</code>を再検証する（MinIOキーに<code>tenant_id</code>を含めているが、キー推測だけに依存しない）。InfluxDBクエリは常にテナント専用org・トークンで実行する。</li>
+      <li><strong>device_ids検証:</strong> リクエストの<code>device_ids</code>は自テナントの<code>devices</code>テーブルに存在するものかを事前に検証する（422で拒否）。これにより、Fluxクエリへの不正な値の混入（インジェクション）を防ぐと同時に、他テナントのデバイスIDを指定しても何も漏れないことを保証する。文字列値はFluxの特殊文字（<code>\</code>・<code>"</code>・<code>${</code>）もエスケープする。</li>
+      <li><strong>日時入力:</strong> タイムゾーン無し（naive）の日時指定は422で拒否する（UIは<code>toISOString()</code>でUTCの明示的な日時を送る）。<code>start &gt;= end</code>も422。</li>
+      <li><strong>InfluxDB未接続時の挙動:</strong> バケットが未作成（自己サインアップ直後でまだテレメトリが1件も来ていないテナント）の場合はエラーにせず、ヘッダのみの空CSV・概算0件として扱う。それ以外のInfluxDB側の不調は502（ユーザーには「時間をおいて再試行するか期間を絞り込んでください」と案内）。</li>
+      <li><strong>テナント削除時のクリーンアップ:</strong> <code>teardown_tenant</code>で、ファームウェアと同様にエクスポートCSV（位置情報を含みうる）もMinIOから削除する。</li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <div class="section-title"><span class="section-num">06</span><h2>Billing連携</h2></div>
+    <p>既存の<code>billing_unit_prices</code> / 月次バッチ集計の仕組みに2つの<code>item_key</code>を追加する。</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>item_key</th><th>内容</th></tr></thead>
+        <tbody>
+          <tr><td><code>export_base_fee</code></td><td>定期エクスポート設定が有効な間、常に<code>quantity: 1</code>（準リアルタイムアクセス機能の<code>realtime_access_fee</code>と同じ「有効/無効の状態がある間課金」という考え方）</td></tr>
+          <tr><td><code>export_retained_size_mb</code></td><td>月末時点で<strong>実際にファイルが存在する</strong>（<code>minio_key</code>が設定されている）行のサイズ合計をMB単位で切り上げたもの。<code>status</code>そのものではなく「ファイルの有無」で判定する（生成失敗後も旧ファイルを保持し続ける設計のため）。狙いは売上そのものではなく「溜め込み抑制のインセンティブ」。こまめに削除してくれれば追加課金は実質ゼロになる</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:13px;color:var(--text-3)">単価が未設定の<code>item_key</code>は0円として扱われる既存の仕様（<code>calculate_invoice()</code>）に従うため、課金を発生させるには<code>billing_unit_prices</code>への単価設定がプラットフォーム管理者操作として別途必要。</p>
   </div>
 </section>
 
