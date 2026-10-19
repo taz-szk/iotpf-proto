@@ -2401,22 +2401,21 @@ function portalApp() {
 
     async init() {
       try {
-        const [me, tokens, rules, realtimeAccessStatus] = await Promise.all([
+        const [me, tokens, rules] = await Promise.all([
           portalFetch('GET', '/me'),
           portalFetch('GET', '/me/tokens'),
           portalFetch('GET', '/me/alert-rules'),
-          portalFetch('GET', '/me/realtime-access-token'),
         ]);
         if (!me) return;
         this.me = me;
         this.tokens = tokens || [];
         this.alertRules = rules || [];
-        this.realtimeAccessStatus = realtimeAccessStatus || {created_at: null, revoked_at: null};
         document.title = `${me.tenant_name} - IoTAir-X`;
         if (me.grafana_url) this.grafanaUrl = me.grafana_url;
         await this.loadPanelConfigs();
         this.loadSensorKeys();
         this.loadGroups();
+        this.loadRealtimeAccessStatus();
       } catch(e) {
         this.error = e.message;
       } finally {
@@ -2427,6 +2426,8 @@ function portalApp() {
     async switchTab(tab) {
       this.activeTab = tab;
       this.error = '';
+      this.newRealtimeAccessToken = '';
+      if (tab === 'tokens') await this.loadRealtimeAccessStatus();
       if (tab === 'firmware') await this.loadFirmware();
       if (tab === 'users')    await this.loadUsers();
       if (tab === 'audit')    await this.loadAuditLogs();
@@ -2568,6 +2569,8 @@ function portalApp() {
       catch(e) { this.error = e.message; }
     },
     async issueRealtimeAccessToken() {
+      if (this.realtimeAccessStatus.created_at && !this.realtimeAccessStatus.revoked_at
+          && !confirm('再発行すると既存のトークンは直ちに無効になります。続行しますか？')) return;
       this.issuingRealtimeAccessToken = true; this.newRealtimeAccessToken = '';
       try {
         const t = await portalFetch('POST', '/me/realtime-access-token');

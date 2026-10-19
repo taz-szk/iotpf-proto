@@ -1887,8 +1887,9 @@ def issue_realtime_access_token_portal(payload: dict = Depends(_require_admin)):
             except InfluxAuthorizationError:
                 raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                                      detail="Failed to revoke existing InfluxDB authorization")
+            # InfluxDB側は失効済みなので、新規発行が失敗しても記録が残らないよう即座に確定する
             db.delete(existing)
-            db.flush()
+            db.commit()
 
         try:
             auth_id, token = issue_readonly_token(tenant.influxdb_org_id)

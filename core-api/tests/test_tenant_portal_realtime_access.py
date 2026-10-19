@@ -46,3 +46,21 @@ def test_get_token_status_never_includes_token_value():
                            cookies={"iot_token": _token("viewer")})
     assert resp.status_code == 200
     assert "token" not in resp.json()
+
+
+def test_reissue_commits_old_row_deletion_even_if_new_issue_fails():
+    from app.services.realtime_access import InfluxAuthorizationError
+    tenant = MagicMock(influxdb_org_id="org-1")
+    existing = MagicMock(influx_authorization_id="old-auth")
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
+         patch("app.routers.tenant_portal.revoke_readonly_token") as mock_revoke, \
+         patch("app.routers.tenant_portal.issue_readonly_token", side_effect=InfluxAuthorizationError("boom")):
+        db = _session_ctx()
+        db.query.return_value.filter.return_value.first.side_effect = [tenant, existing]
+        mock_session.return_value = db
+        resp = client.post("/tenant-portal/me/realtime-access-token",
+                            headers={"Authorization": f"Bearer {_token('admin')}"})
+    assert resp.status_code == 502
+    mock_revoke.assert_called_once_with("old-auth")
+    db.delete.assert_called_once_with(existing)
+    db.commit.assert_called()
