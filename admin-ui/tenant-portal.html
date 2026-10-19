@@ -392,12 +392,68 @@
                   <span x-show="isAdmin">有効化</span>
                 </label>
                 <button x-show="isAdmin" @click="saveExportSchedule()"
-                        :disabled="savingExportSchedule || !exportSchedule.frequency"
+                        :disabled="savingExportSchedule || !exportSchedule.frequency || exportFilterIncomplete('schedule')"
                         class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
                   <span x-show="!savingExportSchedule">保存</span>
                   <span x-show="savingExportSchedule">保存中...</span>
                 </button>
               </div>
+              <template x-if="isAdmin">
+                <div class="mt-3" x-data="{ fkey: 'schedule' }">
+                  <!-- 対象の絞り込み(定期) -->
+                  <div class="text-xs font-medium text-gray-600 mb-1">対象</div>
+                  <div class="flex flex-wrap gap-4 mb-2">
+                    <label class="flex items-center gap-1.5 text-sm">
+                      <input type="radio" :checked="exportFilter[fkey].mode === 'all'" @change="setExportFilterMode(fkey, 'all')"> 全デバイス
+                    </label>
+                    <label class="flex items-center gap-1.5 text-sm">
+                      <input type="radio" :checked="exportFilter[fkey].mode === 'devices'" @change="setExportFilterMode(fkey, 'devices')"> デバイスを選択
+                    </label>
+                    <label class="flex items-center gap-1.5 text-sm">
+                      <input type="radio" :checked="exportFilter[fkey].mode === 'group'" @change="setExportFilterMode(fkey, 'group')"> グループ
+                    </label>
+                  </div>
+                  <div x-show="exportFilter[fkey].mode === 'devices'" class="max-w-md">
+                    <div class="flex flex-wrap gap-1 mb-1">
+                      <template x-for="id in (exportFilterForm(fkey).device_ids || [])" :key="id">
+                        <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded px-2 py-0.5">
+                          <span x-text="exportDeviceLabel(id)"></span>
+                          <button type="button" @click="removeExportDevice(fkey, id)" class="text-blue-400 hover:text-blue-700">✕</button>
+                        </span>
+                      </template>
+                    </div>
+                    <div class="relative">
+                      <input type="text" x-model="exportFilter[fkey].search" autocomplete="off"
+                             @focus="exportFilter[fkey].open = true" @blur="exportFilter[fkey].open = false"
+                             placeholder="デバイス名/IDで検索して追加"
+                             class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                      <div x-show="exportFilter[fkey].open"
+                           class="absolute z-20 w-full bg-white border border-gray-200 rounded shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+                        <template x-for="d in exportFilteredDevices(fkey)" :key="d.device_id">
+                          <button type="button" @mousedown.prevent @click="addExportDevice(fkey, d)"
+                                  class="w-full text-left px-3 py-2 text-sm hover:bg-blue-50">
+                            <span class="font-medium" x-text="d.device_name || d.device_id"></span>
+                            <span x-show="d.device_name" class="text-xs text-gray-400 ml-1" x-text="d.device_id"></span>
+                          </button>
+                        </template>
+                        <div x-show="exportFilteredDevices(fkey).length === 0"
+                             class="px-3 py-2 text-sm text-gray-400 text-center">一致するデバイスがありません</div>
+                      </div>
+                    </div>
+                  </div>
+                  <select x-show="exportFilter[fkey].mode === 'group'"
+                          :value="exportFilterForm(fkey).group_id || ''"
+                          @change="exportFilterForm(fkey).group_id = $event.target.value || ''"
+                          class="border border-gray-300 rounded px-2 py-1.5 text-sm max-w-md w-full">
+                    <option value="">-- 選択してください --</option>
+                    <template x-for="g in groups" :key="g.id">
+                      <option :value="g.id" x-text="g.name" :selected="g.id === exportFilterForm(fkey).group_id"></option>
+                    </template>
+                  </select>
+                </div>
+              </template>
+              <div x-show="exportScheduleError" class="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mt-3"
+                   x-text="exportScheduleError"></div>
               <p x-show="!isAdmin" class="text-xs text-gray-400 mt-2">※ 定期エクスポート設定の変更には管理者権限が必要です。</p>
             </div>
 
@@ -416,13 +472,18 @@
                   <template x-for="kind in ['periodic', 'adhoc']" :key="kind">
                     <tr class="border-t border-gray-100">
                       <td class="px-4 py-3 text-sm text-gray-700" x-text="kind === 'periodic' ? '定期' : 'アドホック'"></td>
-                      <td class="px-4 py-3 text-sm text-gray-500" x-text="exportJob(kind) ? exportJob(kind).status : '-'"></td>
+                      <td class="px-4 py-3 text-sm text-gray-500">
+                        <span x-text="exportStatusLabel(exportJob(kind))"></span>
+                        <div x-show="exportJob(kind) && exportJob(kind).error_message"
+                             class="text-xs text-red-600 mt-0.5 break-all"
+                             x-text="exportJob(kind) ? exportJob(kind).error_message : ''"></div>
+                      </td>
                       <td class="px-4 py-3 text-sm text-gray-500"
                           x-text="exportJob(kind) && exportJob(kind).file_size_bytes ? Math.round(exportJob(kind).file_size_bytes / 1024) + ' KB' : '-'"></td>
                       <td class="px-4 py-3 text-sm text-gray-500"
                           x-text="exportJob(kind) && exportJob(kind).completed_at ? new Date(exportJob(kind).completed_at).toLocaleString('ja-JP') : '-'"></td>
                       <td class="px-4 py-3 text-right whitespace-nowrap">
-                        <a x-show="exportJob(kind) && exportJob(kind).status === 'done'"
+                        <a x-show="exportJob(kind) && exportJob(kind).has_file"
                            :href="`/api/tenant-portal/me/exports/${kind}/download`"
                            class="text-blue-600 hover:text-blue-800 text-xs mr-3">ダウンロード</a>
                         <button x-show="isAdmin && exportJob(kind)" @click="deleteExport(kind)"
@@ -449,12 +510,65 @@
                   <input type="datetime-local" x-model="exportRequestForm.end"
                          class="border border-gray-300 rounded px-2 py-1.5 text-sm">
                 </div>
-                <button @click="requestExport()" :disabled="requestingExport || !exportRequestForm.start || !exportRequestForm.end"
+                <button @click="requestExport()" :disabled="requestingExport || !exportRequestForm.start || !exportRequestForm.end || exportFilterIncomplete('adhoc')"
                         class="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-white px-3 py-1.5 rounded text-sm">
                   <span x-show="!requestingExport">実行</span>
                   <span x-show="requestingExport">実行中...</span>
                 </button>
               </div>
+              <div class="mt-3" x-data="{ fkey: 'adhoc' }">
+                <!-- 対象の絞り込み(アドホック) -->
+                <div class="text-xs font-medium text-gray-600 mb-1">対象</div>
+                <div class="flex flex-wrap gap-4 mb-2">
+                  <label class="flex items-center gap-1.5 text-sm">
+                    <input type="radio" :checked="exportFilter[fkey].mode === 'all'" @change="setExportFilterMode(fkey, 'all')"> 全デバイス
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm">
+                    <input type="radio" :checked="exportFilter[fkey].mode === 'devices'" @change="setExportFilterMode(fkey, 'devices')"> デバイスを選択
+                  </label>
+                  <label class="flex items-center gap-1.5 text-sm">
+                    <input type="radio" :checked="exportFilter[fkey].mode === 'group'" @change="setExportFilterMode(fkey, 'group')"> グループ
+                  </label>
+                </div>
+                <div x-show="exportFilter[fkey].mode === 'devices'" class="max-w-md">
+                  <div class="flex flex-wrap gap-1 mb-1">
+                    <template x-for="id in (exportFilterForm(fkey).device_ids || [])" :key="id">
+                      <span class="inline-flex items-center gap-1 bg-blue-50 text-blue-700 text-xs rounded px-2 py-0.5">
+                        <span x-text="exportDeviceLabel(id)"></span>
+                        <button type="button" @click="removeExportDevice(fkey, id)" class="text-blue-400 hover:text-blue-700">✕</button>
+                      </span>
+                    </template>
+                  </div>
+                  <div class="relative">
+                    <input type="text" x-model="exportFilter[fkey].search" autocomplete="off"
+                           @focus="exportFilter[fkey].open = true" @blur="exportFilter[fkey].open = false"
+                           placeholder="デバイス名/IDで検索して追加"
+                           class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm">
+                    <div x-show="exportFilter[fkey].open"
+                         class="absolute z-20 w-full bg-white border border-gray-200 rounded shadow-lg mt-0.5 max-h-48 overflow-y-auto">
+                      <template x-for="d in exportFilteredDevices(fkey)" :key="d.device_id">
+                        <button type="button" @mousedown.prevent @click="addExportDevice(fkey, d)"
+                                class="w-full text-left px-3 py-2 text-sm hover:bg-blue-50">
+                          <span class="font-medium" x-text="d.device_name || d.device_id"></span>
+                          <span x-show="d.device_name" class="text-xs text-gray-400 ml-1" x-text="d.device_id"></span>
+                        </button>
+                      </template>
+                      <div x-show="exportFilteredDevices(fkey).length === 0"
+                           class="px-3 py-2 text-sm text-gray-400 text-center">一致するデバイスがありません</div>
+                    </div>
+                  </div>
+                </div>
+                <select x-show="exportFilter[fkey].mode === 'group'"
+                        :value="exportFilterForm(fkey).group_id || ''"
+                        @change="exportFilterForm(fkey).group_id = $event.target.value || ''"
+                        class="border border-gray-300 rounded px-2 py-1.5 text-sm max-w-md w-full">
+                  <option value="">-- 選択してください --</option>
+                  <template x-for="g in groups" :key="g.id">
+                    <option :value="g.id" x-text="g.name" :selected="g.id === exportFilterForm(fkey).group_id"></option>
+                  </template>
+                </select>
+              </div>
+              <p class="text-xs text-gray-400 mt-2">※ 日時はブラウザのローカル時刻として解釈されます。新しいファイルの生成に成功するまで、前回のファイルは引き続きダウンロードできます。</p>
             </div>
           </div>
 
@@ -2068,8 +2182,15 @@ function portalApp() {
     exportSchedule: { frequency: null, device_ids: null, group_id: null, enabled: false },
     exportRequestForm: { start: '', end: '', device_ids: null, group_id: null },
     exportRequestError: '',
+    exportScheduleError: '',
     requestingExport: false,
     savingExportSchedule: false,
+    exportDevices: [],
+    // 対象の絞り込み(フォームごと): mode = 'all' | 'devices' | 'group'
+    exportFilter: {
+      schedule: { mode: 'all', search: '', open: false },
+      adhoc:    { mode: 'all', search: '', open: false },
+    },
     // アラート
     alertRules: [], sensorKeys: [], sensorKeySelect: '',
     alertDevices: [], deviceSearch: '', showDeviceDropdown: false,
@@ -2405,28 +2526,100 @@ function portalApp() {
         this.exportJobs = await portalFetch('GET', '/me/exports') || [];
         // GET /me/export-schedule はadmin限定のため、admin以外では呼ばない(呼ぶと403でエラーバナーが出る)
         if (this.isAdmin) {
-          this.exportSchedule = await portalFetch('GET', '/me/export-schedule')
-            || { frequency: null, device_ids: null, group_id: null, enabled: false };
+          const [schedule, devs] = await Promise.all([
+            portalFetch('GET', '/me/export-schedule'),
+            portalFetch('GET', '/me/devices'),
+            this.loadGroups(),
+          ]);
+          this.exportSchedule = schedule || { frequency: null, device_ids: null, group_id: null, enabled: false };
+          this.exportDevices = devs || [];
+          this.exportFilter.schedule.mode = this.exportSchedule.group_id ? 'group'
+            : (Array.isArray(this.exportSchedule.device_ids) ? 'devices' : 'all');
         }
       } catch(e) { this.error = e.message; }
     },
     exportJob(kind) {
       return this.exportJobs.find(j => j.kind === kind) || null;
     },
+    exportStatusLabel(job) {
+      if (!job) return '-';
+      return { queued: '待機中', processing: '処理中', done: '完了', failed: '失敗' }[job.status] || job.status;
+    },
+    // ----- エクスポート対象の絞り込み(key: 'schedule' | 'adhoc') -----
+    exportFilterForm(key) {
+      return key === 'schedule' ? this.exportSchedule : this.exportRequestForm;
+    },
+    setExportFilterMode(key, mode) {
+      const form = this.exportFilterForm(key);
+      this.exportFilter[key].mode = mode;
+      this.exportFilter[key].search = '';
+      form.device_ids = mode === 'devices' ? (Array.isArray(form.device_ids) ? form.device_ids : []) : null;
+      form.group_id = mode === 'group' ? (form.group_id || '') : null;
+    },
+    exportFilteredDevices(key) {
+      const selected = this.exportFilterForm(key).device_ids || [];
+      const q = (this.exportFilter[key].search || '').toLowerCase();
+      return this.exportDevices.filter(d => !selected.includes(d.device_id) && (!q ||
+        (d.device_id || '').toLowerCase().includes(q) ||
+        (d.device_name || '').toLowerCase().includes(q)));
+    },
+    addExportDevice(key, device) {
+      const form = this.exportFilterForm(key);
+      form.device_ids = [...(form.device_ids || []), device.device_id];
+      this.exportFilter[key].search = '';
+    },
+    removeExportDevice(key, deviceId) {
+      const form = this.exportFilterForm(key);
+      form.device_ids = (form.device_ids || []).filter(id => id !== deviceId);
+    },
+    exportDeviceLabel(deviceId) {
+      const d = this.exportDevices.find(d => d.device_id === deviceId);
+      return d && d.device_name ? d.device_name : deviceId;
+    },
+    exportFilterIncomplete(key) {
+      const mode = this.exportFilter[key].mode;
+      const form = this.exportFilterForm(key);
+      if (mode === 'devices') return !(form.device_ids && form.device_ids.length);
+      if (mode === 'group') return !form.group_id;
+      return false;
+    },
+    exportFilterPayload(key) {
+      const mode = this.exportFilter[key].mode;
+      const form = this.exportFilterForm(key);
+      return {
+        device_ids: mode === 'devices' ? [...(form.device_ids || [])] : null,
+        group_id: mode === 'group' ? (form.group_id || null) : null,
+      };
+    },
     async requestExport() {
       this.requestingExport = true;
       this.exportRequestError = '';
       try {
-        await portalFetch('POST', '/me/exports', { ...this.exportRequestForm });
+        // datetime-localの値はタイムゾーン無し(ブラウザのローカル時刻)なので、
+        // Dateで解釈してからZ付きのUTC ISO-8601に変換して送る(位置履歴と同じ方式)。
+        const start = new Date(this.exportRequestForm.start);
+        const end = new Date(this.exportRequestForm.end);
+        if (isNaN(start) || isNaN(end)) throw new Error('日時の形式が正しくありません');
+        if (start >= end) throw new Error('終了日時は開始日時より後にしてください');
+        await portalFetch('POST', '/me/exports', {
+          start: start.toISOString(),
+          end: end.toISOString(),
+          ...this.exportFilterPayload('adhoc'),
+        });
         this.exportJobs = await portalFetch('GET', '/me/exports') || [];
       } catch(e) { this.exportRequestError = e.message; }
       finally { this.requestingExport = false; }
     },
     async saveExportSchedule() {
       this.savingExportSchedule = true;
+      this.exportScheduleError = '';
       try {
-        this.exportSchedule = await portalFetch('PUT', '/me/export-schedule', { ...this.exportSchedule });
-      } catch(e) { this.error = e.message; }
+        this.exportSchedule = await portalFetch('PUT', '/me/export-schedule', {
+          frequency: this.exportSchedule.frequency,
+          enabled: this.exportSchedule.enabled,
+          ...this.exportFilterPayload('schedule'),
+        });
+      } catch(e) { this.exportScheduleError = e.message; }
       finally { this.savingExportSchedule = false; }
     },
     async deleteExport(kind) {
