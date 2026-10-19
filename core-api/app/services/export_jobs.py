@@ -40,14 +40,17 @@ def request_adhoc_export(db, tenant: Tenant, start: datetime, end: datetime,
 
     if existing is not None and existing.status in ("queued", "processing"):
         now = datetime.now(timezone.utc)
-        if existing.started_at is not None and (now - existing.started_at) > timedelta(seconds=_LOCK_TIMEOUT_SECONDS):
-            # クラッシュしたジョブとみなして復旧し、以降の新規リクエスト処理へフォールスルーする。
-            existing.status = "failed"
-            existing.error_message = "timed out"
-        else:
+        is_stale = (
+            existing.started_at is not None
+            and (now - existing.started_at) > timedelta(seconds=_LOCK_TIMEOUT_SECONDS)
+        )
+        if not is_stale:
             raise JobAlreadyRunningError()
+        # else: クラッシュしたジョブとみなして復旧し、新規リクエスト処理へフォールスルーする
+        # (既存行への書き込みは、サイズゲート通過後にまとめて行う。ここでは何も変更しない)。
 
     # サイズゲート: InfluxUnavailableErrorはここで伝播させる(フェイルセーフのため黙殺しない)。
+    # 既存行はここまで一切変更していないため、ここで拒否すれば既存行は無変更のまま残る。
     estimated_rows = estimate_export_row_count(tenant, start, end, device_ids)
     estimated_bytes = estimated_rows * BYTES_PER_ROW_ESTIMATE
     if estimated_bytes > settings.export_max_size_bytes:
@@ -75,41 +78,49 @@ def request_adhoc_export(db, tenant: Tenant, start: datetime, end: datetime,
 
 
 def run_export_job(job_id: str) -> None:
+    """バックグラウンドスレッドから呼ばれるワーカー本体。呼び出し元が無いため、
+    どのような例外が起きても外へ伝播させてはならない(全経路をtry/exceptで囲む)。"""
     from app.database import SessionLocal
 
-    with SessionLocal() as db:
-        job = db.query(ExportJob).filter(ExportJob.id == job_id).first()
-        if job is None:
-            return
+    try:
+        with SessionLocal() as db:
+            job = db.query(ExportJob).filter(ExportJob.id == job_id).first()
+            if job is None:
+                return
 
-        job.status = "processing"
-        job.started_at = datetime.now(timezone.utc)
-        db.commit()
+            try:
+                job.status = "processing"
+                job.started_at = datetime.now(timezone.utc)
+                db.commit()
 
-        try:
-            tenant = db.query(Tenant).filter(Tenant.id == job.tenant_id).first()
+                tenant = db.query(Tenant).filter(Tenant.id == job.tenant_id).first()
 
-            resolved_device_ids = job.device_ids
-            if job.group_id is not None and resolved_device_ids is None:
-                from app.services.device_groups import list_group_device_ids
-                schema = f"tenant_{str(job.tenant_id).replace('-', '_')}"
-                resolved_device_ids = list_group_device_ids(schema, str(job.group_id))
+                resolved_device_ids = job.device_ids
+                if job.group_id is not None and resolved_device_ids is None:
+                    from app.services.device_groups import list_group_device_ids
+                    schema = f"tenant_{str(job.tenant_id).replace('-', '_')}"
+                    resolved_device_ids = list_group_device_ids(schema, str(job.group_id))
 
-            csv_bytes = generate_export_csv(tenant, job.period_start, job.period_end, resolved_device_ids)
+                csv_bytes = generate_export_csv(tenant, job.period_start, job.period_end, resolved_device_ids)
 
-            old_minio_key = job.minio_key
-            if old_minio_key:
-                delete_export_file(old_minio_key)
+                # 上書き対象スロットの既存ファイルを先に削除してから新しいファイルをアップロードする。
+                old_minio_key = job.minio_key
+                if old_minio_key:
+                    delete_export_file(old_minio_key)
 
-            minio_key = upload_export_file(str(job.tenant_id), str(job.id), csv_bytes)
+                minio_key = upload_export_file(str(job.tenant_id), str(job.id), csv_bytes)
 
-            job.status = "done"
-            job.minio_key = minio_key
-            job.file_size_bytes = len(csv_bytes)
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
-        except Exception as exc:
-            job.status = "failed"
-            job.error_message = str(exc)[:500]
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
+                job.status = "done"
+                job.minio_key = minio_key
+                job.file_size_bytes = len(csv_bytes)
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+            except Exception as exc:
+                job.status = "failed"
+                job.error_message = str(exc)[:500]
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+    except Exception as exc:
+        # SessionLocal()自体が失敗するなど、ジョブ行の更新すら不可能な想定外の事態。
+        # スレッドの呼び出し元が存在しないため、ここで握りつぶすしかない。
+        print(f"[export_jobs] run_export_job({job_id}) failed outside recoverable path: {exc}")
