@@ -53,6 +53,40 @@ def test_put_export_schedule_creates_schedule():
     db.add.assert_called_once()
 
 
+def test_put_export_schedule_rejects_device_not_belonging_to_tenant():
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
+         patch("app.services.export_jobs._fetch_existing_device_ids", return_value={"dev-1"}):
+        db = _session_ctx()
+        mock_session.return_value = db
+        resp = client.put("/tenant-portal/me/export-schedule",
+                           json={"frequency": "daily", "device_ids": ["dev-1", "other-tenant-dev"],
+                                 "group_id": None, "enabled": True},
+                           cookies={"iot_token": _admin_token()})
+    assert resp.status_code == 422
+    assert "other-tenant-dev" in resp.json()["detail"]
+    db.add.assert_not_called()
+
+
+def test_put_export_schedule_rejects_unknown_group():
+    with patch("app.routers.tenant_portal.SessionLocal") as mock_session, \
+         patch("app.routers.tenant_portal.group_exists", return_value=False):
+        db = _session_ctx()
+        mock_session.return_value = db
+        resp = client.put("/tenant-portal/me/export-schedule",
+                           json={"frequency": "daily", "device_ids": None,
+                                 "group_id": "33333333-3333-3333-3333-333333333333", "enabled": True},
+                           cookies={"iot_token": _admin_token()})
+    assert resp.status_code == 422
+    db.add.assert_not_called()
+
+
+def test_put_export_schedule_rejects_non_uuid_group_id():
+    resp = client.put("/tenant-portal/me/export-schedule",
+                       json={"frequency": "daily", "device_ids": None, "group_id": "not-a-uuid", "enabled": True},
+                       cookies={"iot_token": _admin_token()})
+    assert resp.status_code == 422
+
+
 def test_get_export_schedule_returns_default_when_none_exists():
     with patch("app.routers.tenant_portal.SessionLocal") as mock_session:
         db = _session_ctx()

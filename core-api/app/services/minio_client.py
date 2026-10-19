@@ -1,5 +1,6 @@
 import io
 import re
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import BinaryIO, Iterator
 
@@ -70,9 +71,11 @@ def delete_firmware(minio_key: str) -> None:
 
 
 def upload_export_file(tenant_id: str, job_id: str, data: bytes) -> str:
+    """生成ごとに一意なキー({tenant_id}/{job_id}/{uuid})でアップロードする。同じジョブ行の
+    再生成でも前回のファイルを上書きせず、新ファイルの登録成功後に呼び出し側が旧キーを消す。"""
     _ensure_export_bucket()
     client = _get_client()
-    key = f"{tenant_id}/{job_id}"
+    key = f"{tenant_id}/{job_id}/{uuid.uuid4().hex}"
     client.put_object(
         settings.minio_export_bucket,
         key,
@@ -106,6 +109,15 @@ def delete_all_tenant_firmware(tenant_id: str) -> None:
     objects = client.list_objects(settings.minio_firmware_bucket, prefix=f"{tenant_id}/", recursive=True)
     for obj in objects:
         client.remove_object(settings.minio_firmware_bucket, obj.object_name)
+
+
+def delete_all_tenant_exports(tenant_id: str) -> None:
+    client = _get_client()
+    if not client.bucket_exists(settings.minio_export_bucket):
+        return
+    objects = client.list_objects(settings.minio_export_bucket, prefix=f"{tenant_id}/", recursive=True)
+    for obj in objects:
+        client.remove_object(settings.minio_export_bucket, obj.object_name)
 
 
 def create_firmware_download_token(firmware_id: str, tenant_id: str, minio_key: str) -> str:

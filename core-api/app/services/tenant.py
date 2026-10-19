@@ -58,6 +58,14 @@ def teardown_tenant(tenant_id: str, influxdb_org_id: str | None, grafana_org_id:
     except Exception as e:
         print(f"[teardown] MinIO cleanup failed: {e}")
 
+    # 1b. MinIO: テナントのエクスポートCSV削除(位置情報を含み得るため確実に消す)
+    try:
+        from app.services.minio_client import delete_all_tenant_exports
+        delete_all_tenant_exports(tenant_id)
+        print(f"[teardown] MinIO export objects deleted: tenant={tenant_id}")
+    except Exception as e:
+        print(f"[teardown] MinIO export cleanup failed: {e}")
+
     # 2. PostgreSQL: テナントスキーマを DROP (テーブル・データをすべて削除)
     try:
         schema = f"tenant_{tenant_id.replace('-', '_')}"
