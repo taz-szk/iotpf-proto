@@ -77,13 +77,19 @@
 
     <!-- ナビゲーション -->
     <nav class="flex-1 py-2 overflow-y-auto">
-      <template x-for="tab in tabs" :key="tab.id">
-        <button @click="switchTab(tab.id)"
-                :class="activeTab === tab.id ? 'nav-active' : 'nav-inactive'"
-                class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors">
-          <span x-text="tab.icon" class="w-4 text-center text-base leading-none"></span>
-          <span x-text="tab.label"></span>
-        </button>
+      <template x-for="(tab, idx) in tabs" :key="tab.id">
+        <div>
+          <div x-show="idx === 0 || tabs[idx - 1].group !== tab.group"
+               x-text="tab.group"
+               class="px-4 pt-3 pb-1 text-[10px] font-semibold tracking-wider uppercase"
+               style="color: rgba(255,255,255,0.35)"></div>
+          <button @click="switchTab(tab.id)"
+                  :class="activeTab === tab.id ? 'nav-active' : 'nav-inactive'"
+                  class="w-full flex items-center gap-2.5 px-4 py-2.5 text-sm text-left transition-colors">
+            <span x-text="tab.icon" class="w-4 text-center text-base leading-none"></span>
+            <span x-text="tab.label"></span>
+          </button>
+        </div>
       </template>
     </nav>
 
@@ -1995,23 +2001,26 @@ function portalApp() {
 
     get tabs() {
       const base = [
-        { id: 'dashboard',        label: 'ダッシュボード',           icon: '▦' },
-        { id: 'dashboard-config', label: 'ダッシュボード設定',       icon: '⚙' },
-        { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑' },
-        { id: 'groups',           label: 'グループ管理',             icon: '📁' },
-        { id: 'devices',          label: 'デバイス',                 icon: '📡' },
-        { id: 'location',         label: '位置情報',                 icon: '📍' },
-        { id: 'firmware',         label: 'ファームウェア',           icon: '💾' },
-        { id: 'alerts',           label: 'アラートルール',           icon: '🔔' },
-        { id: 'sim',              label: 'SIM管理',                 icon: '📶' },
-        { id: 'users',            label: 'ユーザー管理',             icon: '👤' },
-        { id: 'stats-billing',    label: '統計・ビリング',           icon: '📊' },
-        { id: 'exports',          label: 'データエクスポート',       icon: '📤' },
+        { id: 'dashboard',        label: 'テレメトリ可視化',         icon: '▦', group: 'モニタリング' },
+        { id: 'location',         label: '位置情報',                 icon: '📍', group: 'モニタリング' },
+        { id: 'alerts',           label: 'アラートルール',           icon: '🔔', group: 'モニタリング' },
+
+        { id: 'devices',          label: 'デバイス',                 icon: '📡', group: 'デバイス管理' },
+        { id: 'groups',           label: 'グループ管理',             icon: '📁', group: 'デバイス管理' },
+        { id: 'firmware',         label: 'ファームウェア',           icon: '💾', group: 'デバイス管理' },
+        { id: 'sim',              label: 'SIM管理',                 icon: '📶', group: 'デバイス管理' },
+        { id: 'tokens',           label: 'プロビジョニングトークン', icon: '🔑', group: 'デバイス管理' },
+
+        { id: 'exports',          label: 'データエクスポート',       icon: '📤', group: 'データ' },
+        { id: 'stats-billing',    label: '統計・ビリング',           icon: '📊', group: 'データ' },
+
+        { id: 'dashboard-config', label: '可視化パネル設定',         icon: '⚙', group: '設定' },
+        { id: 'users',            label: 'ユーザー管理',             icon: '👤', group: '設定' },
       ];
       if (this.isAdmin) {
-        base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐' });
-        base.push({ id: 'audit', label: '監査ログ', icon: '📋' });
-        base.push({ id: 'danger', label: 'テナント削除', icon: '⚠' });
+        base.push({ id: 'public', label: '公開ダッシュボード', icon: '🌐', group: '管理者のみ' });
+        base.push({ id: 'audit', label: '監査ログ', icon: '📋', group: '管理者のみ' });
+        base.push({ id: 'danger', label: 'テナント削除', icon: '⚠', group: '管理者のみ' });
       }
       return base;
     },
