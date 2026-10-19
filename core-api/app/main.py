@@ -7,6 +7,7 @@ from app.database import migrate_add_grafana_org_id, migrate_add_device_name, mi
 from app.services.audit import start_audit_purge_worker
 from app.services.billing_batch import start_billing_batch_worker
 from app.services.data_retention import start_data_retention_sync_worker
+from app.services.export_scheduler import start_export_scheduler_worker
 from app.services.emqx_setup import ensure_emqx_rules
 from app.config import settings
 
@@ -36,6 +37,7 @@ def on_startup():
     start_audit_purge_worker()
     start_billing_batch_worker()
     start_data_retention_sync_worker()
+    start_export_scheduler_worker()
 
 app.include_router(health.router)
 app.include_router(auth.router)

@@ -58,7 +58,7 @@ from app.services.minio_client import (
     stream_export_file,
     delete_export_file,
 )
-from app.models.export import ExportJob
+from app.models.export import ExportJob, ExportSchedule
 from app.services.export_jobs import request_adhoc_export, JobAlreadyRunningError, ExportTooLargeError
 from fastapi.responses import StreamingResponse
 from app.config import settings
@@ -1735,3 +1735,56 @@ def delete_export_portal(kind: str, payload: dict = Depends(_require_admin)):
 
     log_audit("tenant", payload["sub"], payload["email"], "delete_export",
               tenant_id=tenant_id, resource_type="export_job", resource_id=kind)
+
+
+class ExportScheduleBody(BaseModel):
+    frequency: Literal["daily", "weekly", "monthly"]
+    device_ids: Optional[list[str]] = None
+    group_id: Optional[str] = None
+    enabled: bool
+
+
+def _export_schedule_out(schedule) -> dict:
+    return {
+        "frequency": schedule.frequency,
+        "device_ids": schedule.device_ids,
+        "group_id": str(schedule.group_id) if schedule.group_id else None,
+        "enabled": schedule.enabled,
+    }
+
+
+@router.get("/me/export-schedule")
+def get_export_schedule_portal(payload: dict = Depends(_require_admin)):
+    """自テナントの定期エクスポート設定を返す(admin限定)。未設定の場合はデフォルト値。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        schedule = db.query(ExportSchedule).filter(ExportSchedule.tenant_id == tenant_id).first()
+
+    if schedule is None:
+        return {"frequency": None, "device_ids": None, "group_id": None, "enabled": False}
+    return _export_schedule_out(schedule)
+
+
+@router.put("/me/export-schedule")
+def update_export_schedule_portal(body: ExportScheduleBody, payload: dict = Depends(_require_admin)):
+    """自テナントの定期エクスポート設定をupsertする(admin限定)。"""
+    tenant_id = payload["tenant_id"]
+    with SessionLocal() as db:
+        schedule = db.query(ExportSchedule).filter(ExportSchedule.tenant_id == tenant_id).first()
+        if schedule is None:
+            schedule = ExportSchedule(tenant_id=tenant_id)
+
+        schedule.frequency = body.frequency
+        schedule.device_ids = body.device_ids
+        schedule.group_id = body.group_id
+        schedule.enabled = body.enabled
+
+        db.add(schedule)
+        db.commit()
+        db.refresh(schedule)
+        result = _export_schedule_out(schedule)
+
+    log_audit("tenant", payload["sub"], payload["email"], "update_export_schedule",
+              tenant_id=tenant_id, resource_type="export_schedule", resource_id=tenant_id)
+
+    return result
