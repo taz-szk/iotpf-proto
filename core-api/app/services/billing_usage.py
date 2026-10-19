@@ -5,6 +5,7 @@ import httpx
 from app.config import settings
 from app.models.export import ExportJob, ExportSchedule
 from app.models.public import Tenant
+from app.models.realtime_access import RealtimeAccessToken
 from app.routers.stats import _parse_influx_csv_scalar, _calc_provisionable_devices
 from app.services.billing import get_effective_retention_days
 
@@ -158,6 +159,15 @@ def _export_usage_snapshot(db, tenant_id: str) -> dict[str, int]:
     return {"export_base_fee": export_base_fee, "export_retained_size_mb": export_retained_size_mb}
 
 
+def _realtime_access_usage_snapshot(db, tenant_id: str) -> dict[str, int]:
+    """準リアルタイムアクセス機能の課金用スナップショット(現在時点)。
+    realtime_access_fee: トークンが発行済みかつ失効していない(revoked_atがNone)なら1、
+    なければ0。"""
+    token = db.query(RealtimeAccessToken).filter(RealtimeAccessToken.tenant_id == tenant_id).first()
+    realtime_access_fee = 1 if token is not None and token.revoked_at is None else 0
+    return {"realtime_access_fee": realtime_access_fee}
+
+
 def aggregate_monthly_usage(
     db, tenant_id: str, schema: str, influxdb_org_id: str, influxdb_token: str,
     year: int, month: int,
@@ -194,4 +204,5 @@ def aggregate_monthly_usage(
         "provisionable_devices": provisionable_devices,
         "alert_events": _count_alert_events_for_month(db, schema, year, month),
         **_export_usage_snapshot(db, tenant_id),
+        **_realtime_access_usage_snapshot(db, tenant_id),
     }
