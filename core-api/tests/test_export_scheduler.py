@@ -33,12 +33,19 @@ def test_run_due_periodic_exports_runs_when_due():
 
 def test_run_due_periodic_exports_does_not_use_adhoc_lock_or_size_gate():
     """回帰テスト: 将来誰かが「DRYだから」とrequest_adhoc_exportやそのサイズ推定関数を
-    呼ぶように変更しても、このテストが失敗して検知できるようにする。
-    - app.services.export_scheduler.request_adhoc_export: scheduler内でfrom-importして
-      ローカル名として呼ぶパターンを検知(現状は存在しない名前なのでcreate=Trueで仮に生やす)。
+    呼ぶように変更しても、このテストが失敗して検知できるようにする。想定される呼び方を
+    3パターンとも網羅する:
+    - app.services.export_scheduler.request_adhoc_export /
+      app.services.export_scheduler.estimate_export_row_count:
+      scheduler内で`from app.services.export_jobs import request_adhoc_export`や
+      `from app.services.export_csv import estimate_export_row_count`のようにbare-name
+      importしてローカル名として呼ぶパターンを検知(現状は存在しない名前なのでcreate=True
+      で仮に生やす)。
     - app.services.export_jobs.request_adhoc_export / estimate_export_row_count:
       `export_jobs.request_adhoc_export(...)`のようにモジュール参照で呼ぶパターンを検知。
-    - app.services.export_csv.estimate_export_row_count: サイズ推定を直接呼ぶパターンを検知。
+    - app.services.export_csv.estimate_export_row_count: サイズ推定を
+      `export_csv.estimate_export_row_count(...)`のようにモジュール参照で直接呼ぶパターンを
+      検知。
     """
     old = datetime.now(timezone.utc) - timedelta(days=2)
     db = MagicMock()
@@ -47,11 +54,13 @@ def test_run_due_periodic_exports_does_not_use_adhoc_lock_or_size_gate():
     with patch("app.services.export_scheduler.SessionLocal", return_value=db), \
          patch("app.services.export_scheduler.run_export_job"), \
          patch("app.services.export_scheduler.request_adhoc_export", create=True) as mock_adhoc_local, \
+         patch("app.services.export_scheduler.estimate_export_row_count", create=True) as mock_estimate_local, \
          patch("app.services.export_jobs.request_adhoc_export") as mock_adhoc_source, \
          patch("app.services.export_jobs.estimate_export_row_count") as mock_estimate_via_jobs, \
          patch("app.services.export_csv.estimate_export_row_count") as mock_estimate_source:
         run_due_periodic_exports()
     mock_adhoc_local.assert_not_called()
+    mock_estimate_local.assert_not_called()
     mock_adhoc_source.assert_not_called()
     mock_estimate_via_jobs.assert_not_called()
     mock_estimate_source.assert_not_called()
