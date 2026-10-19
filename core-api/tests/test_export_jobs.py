@@ -44,3 +44,18 @@ def test_request_adhoc_export_rejects_when_estimate_exceeds_limit():
             request_adhoc_export(db, _tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
                                   datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None, group_id=None)
     assert existing.status == "done"  # 既存行は変更されない
+
+def test_request_adhoc_export_rejects_too_large_even_when_lock_is_stale():
+    """stale lock(タイムアウト超過で復旧可能)とサイズ超過が同時に発生した場合でも、
+    サイズ超過が優先して拒否され、既存行は一切変更されないことを確認する。"""
+    stale_start = datetime.now(timezone.utc) - timedelta(seconds=700)
+    db, existing = _db_with_existing_job("processing", stale_start)
+    with patch("app.services.export_jobs.estimate_export_row_count",
+               return_value=1_000_000) as mock_estimate:
+        with pytest.raises(ExportTooLargeError):
+            request_adhoc_export(db, _tenant(), datetime(2026,10,1,tzinfo=timezone.utc),
+                                  datetime(2026,10,2,tzinfo=timezone.utc), device_ids=None, group_id=None)
+    assert existing.status == "processing"  # 既存行は変更されない
+    assert existing.started_at == stale_start
+    assert existing.error_message is None
+    db.commit.assert_not_called()
