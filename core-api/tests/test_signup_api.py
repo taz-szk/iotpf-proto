@@ -103,6 +103,21 @@ def test_signup_fails_when_email_send_fails_and_rolls_back():
     assert db.rollback.called
 
 
+def test_signup_logs_email_send_failure_for_diagnosis(capsys):
+    # send_signup_verification_emailの失敗は握り潰さず、原因調査できるようログに残す
+    # (SESサンドボックス等、運用側でしか気づけない障害の切り分けに必要なため)
+    clear_failures("signup:testclient")
+    with patch("app.routers.signup.verify_recaptcha", return_value=True), \
+         patch("app.routers.signup.SessionLocal") as mock_session, \
+         patch("app.routers.signup.send_signup_verification_email",
+               side_effect=ConnectionError("smtp down")):
+        db = _session_ctx(query_results=None)
+        mock_session.return_value = db
+        client.post("/signup", json=_signup_body())
+    captured = capsys.readouterr()
+    assert "smtp down" in captured.out
+
+
 def test_verify_rejects_unknown_token():
     with patch("app.routers.signup.SessionLocal") as mock_session:
         db = _session_ctx(query_results=None)

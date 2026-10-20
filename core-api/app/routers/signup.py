@@ -87,7 +87,8 @@ def signup(body: SignupRequest, request: Request):
         verification_url = f"https://{settings.platform_domain}/signup/verify.html?token={token}"
         try:
             send_signup_verification_email(body.email, body.tenant_name, verification_url, slug)
-        except Exception:
+        except Exception as e:
+            print(f"[signup] verification email send failed: {e}")
             db.rollback()
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                                 detail="Failed to send verification email")
