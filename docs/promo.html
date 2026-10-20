@@ -772,6 +772,99 @@ canvas{display:block}
     </section>
 
     <section class="scene" id="s18">
+      <div class="eyebrow fade-item">テナント管理者 — データエクスポート</div>
+      <div class="scene-title fade-item">CSVエクスポート ・ 定期出力設定</div>
+      <div class="scene-body grid2">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div class="fade-item" style="font-size:.78rem;font-weight:600;color:var(--ui-t);margin-bottom:8px">随時エクスポート</div>
+            <div class="fade-item" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+              <span class="ui-badge" style="font-size:.66rem">グループ: 本社フロア</span>
+              <span class="ui-badge" style="font-size:.66rem">デバイス: 全48台</span>
+              <span class="ui-badge" style="font-size:.66rem">期間: 2026-09-01〜09-30</span>
+            </div>
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px">
+              <div style="font-size:.76rem;color:var(--ui-t)">推定行数: 約312,000行 (上限20MB以内)</div>
+              <div class="ui-btn" style="padding:5px 14px;font-size:.72rem">CSV生成</div>
+            </div>
+            <div class="fade-item" style="font-size:.78rem;font-weight:600;color:var(--ui-t);margin:16px 0 8px">定期エクスポート設定</div>
+            <table class="ui-tbl">
+              <thead><tr><th>頻度</th><th>対象</th><th>保持</th><th>状態</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>毎月1日</td><td>全デバイス</td><td>直近12ヶ月</td><td><span class="ui-badge active">有効</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div class="fade-item" style="font-size:.78rem;font-weight:600;color:var(--ui-t);margin-bottom:10px">生成済みファイル</div>
+            <table class="ui-tbl">
+              <thead><tr><th>生成日時</th><th>件数</th><th>サイズ</th><th></th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>2026-10-01 03:00</td><td>298,120件</td><td>14.2MB</td><td><span class="ui-btn secondary" style="padding:3px 8px;font-size:.68rem">⬇ DL</span></td></tr>
+                <tr class="fade-item"><td>2026-09-01 03:00</td><td>276,440件</td><td>13.1MB</td><td><span class="ui-btn secondary" style="padding:3px 8px;font-size:.68rem">⬇ DL</span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="margin-top:14px;font-size:.7rem;color:var(--ui-tm);line-height:1.6">ファイルはテナントごとに隔離されたストレージに保存。生成中に失敗しても直前の正常なファイルはそのままダウンロード可能です。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s19">
+      <div class="eyebrow fade-item">テナント管理者 — 準リアルタイムアクセス</div>
+      <div class="scene-title fade-item">外部BIツール向け読み取り専用トークン</div>
+      <div class="scene-body grid2">
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">https://iot.suzuki-net.org/admin/tenant-portal.html</div>
+          </div>
+          <div class="screen-body">
+            <div class="fade-item" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+              <div style="font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;color:var(--ui-t)">準リアルタイムアクセス用トークン(読み取り専用)</div>
+              <div class="ui-btn secondary" style="padding:4px 12px;font-size:.72rem">再発行</div>
+            </div>
+            <div class="fade-item" style="font-size:.78rem;color:var(--ui-t);margin-bottom:10px">状態: <span style="color:var(--ui-acc);font-weight:600">有効</span>(発行日時: 2026-10-20 12:14)</div>
+            <div class="fade-item" style="background:#F8FAFC;border:1px solid var(--ui-b);border-radius:8px;padding:12px 14px;font-size:.74rem;color:var(--ui-tm);line-height:1.8">
+              エンドポイント: https://iot.suzuki-net.org/influx (/api/v2/query など)<br>
+              org ID: 0971af939eeb303c ・ bucket: telemetry
+            </div>
+            <div class="fade-item" style="margin-top:12px;font-size:.7rem;color:var(--ui-tm);line-height:1.6">InfluxDBへの読み取り専用アクセス専用。平文は発行直後のみ表示され、以降は再発行でのみ再取得できます。</div>
+          </div>
+        </div>
+        <div class="screen fade-item">
+          <div class="screen-hdr">
+            <div class="dots-chrome"><div class="dot-ch"></div><div class="dot-ch"></div><div class="dot-ch"></div></div>
+            <div class="url">BIツール / Grafana(外部) など</div>
+          </div>
+          <div class="screen-body">
+            <div class="fade-item" style="font-size:.78rem;font-weight:600;color:var(--ui-t);margin-bottom:10px">アクセス制御</div>
+            <table class="ui-tbl">
+              <thead><tr><th>操作</th><th>結果</th></tr></thead>
+              <tbody>
+                <tr class="fade-item"><td>自テナントのデータを読み取り</td><td><span class="ui-badge active">200 OK</span></td></tr>
+                <tr class="fade-item"><td>書き込みリクエスト</td><td><span class="ui-badge warning">403 Forbidden</span></td></tr>
+                <tr class="fade-item"><td>他テナントのOrg IDを指定</td><td><span class="ui-badge warning">404 Not Found</span></td></tr>
+                <tr class="fade-item"><td>テナント停止中のアクセス</td><td><span class="ui-badge warning">遮断</span></td></tr>
+              </tbody>
+            </table>
+            <div class="fade-item" style="margin-top:14px;font-size:.7rem;color:var(--ui-tm);line-height:1.6">InfluxDB組織(Org)単位のスコープがテナント分離の根拠。nginxは経路の許可リストのみを管理し、認可判断はInfluxDB自身に委ねる構成です。</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="scene" id="s20">
       <div class="chapter-wrap">
         <div class="chapter-num fade-item">CHAPTER 06</div>
         <div class="chapter-icon fade-item">🛠️</div>
@@ -780,7 +873,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s19">
+    <section class="scene" id="s21">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
       <div class="scene-title fade-item">テナント一覧管理</div>
       <div class="scene-body">
@@ -808,7 +901,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s20">
+    <section class="scene" id="s22">
       <div class="eyebrow fade-item">プラットフォーム管理者 — 課金</div>
       <div class="scene-title fade-item">テナント単価マスタ & 請求状況</div>
       <div class="scene-body">
@@ -851,7 +944,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s21">
+    <section class="scene" id="s23">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
       <div class="scene-title fade-item">多要素認証(MFA)設定</div>
       <div class="scene-body">
@@ -878,7 +971,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s22">
+    <section class="scene" id="s24">
       <div class="eyebrow fade-item">プラットフォーム管理者</div>
       <div class="scene-title fade-item">AIアシスタント設定 <span class="ui-badge warning" style="vertical-align:middle;font-size:.6rem">開発中</span></div>
       <div class="scene-body">
@@ -907,7 +1000,7 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s23">
+    <section class="scene" id="s25">
       <div class="eyebrow fade-item">統合機能 — AIアシスタント</div>
       <div class="scene-title fade-item">確認フロー付きのAI操作代行 <span class="ui-badge warning" style="vertical-align:middle;font-size:.6rem">開発中</span></div>
       <div class="scene-body">
@@ -935,13 +1028,13 @@ canvas{display:block}
       </div>
     </section>
 
-    <section class="scene" id="s24">
+    <section class="scene" id="s26">
       <div class="eyebrow">まとめ</div>
       <div class="scene-title">IoTAir-X — 全機能一覧</div>
       <div class="scene-body">
         <div style="flex:1;display:flex;flex-direction:column;gap:12px">
           <div class="fade-item" style="display:flex;gap:24px;justify-content:center">
-            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--accent)"><span class="count-up" data-target="16">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">対応機能(FR)数</div></div>
+            <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--accent)"><span class="count-up" data-target="20">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">対応機能(FR)数</div></div>
             <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--cyan)"><span class="count-up" data-target="10">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">構成コンポーネント数</div></div>
             <div style="text-align:center"><div style="font-family:'Barlow Condensed',sans-serif;font-size:2rem;font-weight:700;color:var(--green)"><span class="count-up" data-target="2">0</span></div><div style="font-size:.68rem;color:var(--textm);text-transform:uppercase;letter-spacing:.05em">利用者ロール区分</div></div>
           </div>
@@ -962,6 +1055,8 @@ canvas{display:block}
             <div class="feat-item"><div class="feat-icon">📍</div><div class="feat-text"><div class="name">デバイス位置情報</div><div class="desc">GPSで全体表示・移動履歴を地図に可視化</div></div></div>
             <div class="feat-item"><div class="feat-icon">📝</div><div class="feat-text"><div class="name">セルフサインアップ</div><div class="desc">90日間トライアルを自分で申込み・即利用開始</div></div></div>
             <div class="feat-item"><div class="feat-icon">🔓</div><div class="feat-text"><div class="name">パスワード再設定</div><div class="desc">管理者連絡なしでセルフサービスに再設定</div></div></div>
+            <div class="feat-item"><div class="feat-icon">📤</div><div class="feat-text"><div class="name">データエクスポート</div><div class="desc">CSVを定期・随時生成、デバイス/グループで絞り込み</div></div></div>
+            <div class="feat-item"><div class="feat-icon">🔌</div><div class="feat-text"><div class="name">準リアルタイムアクセス</div><div class="desc">読み取り専用トークンでBIツール等と直接連携</div></div></div>
           </div>
           <div>
             <div style="font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--textm);font-weight:600;margin-bottom:8px">Tech Stack</div>
@@ -994,7 +1089,7 @@ canvas{display:block}
 </div>
 
 <script>
-const DURATIONS = [7000,9000,4500,8000,8000,8000,8000,4500,9000,4500,8000,4500,8000,9000,8000,4500,8000,8000,4500,8000,9000,8000,8000,9000,9000];
+const DURATIONS = [7000,9000,4500,8000,8000,8000,8000,4500,9000,4500,8000,4500,8000,9000,8000,4500,8000,8000,8000,8000,4500,8000,9000,8000,8000,9000,9000];
 const N = DURATIONS.length;
 const scenes = Array.from(document.querySelectorAll('.scene'));
 const progress = document.getElementById('progress');
@@ -1262,7 +1357,11 @@ ANIMS[7]=()=>staggerFadeIn('#s7');
 ANIMS[9]=()=>staggerFadeIn('#s9');
 ANIMS[11]=()=>staggerFadeIn('#s11');
 ANIMS[15]=()=>staggerFadeIn('#s15');
+ANIMS[20]=()=>staggerFadeIn('#s20');
+
+// Scene 18-19: データエクスポート・準リアルタイムアクセス
 ANIMS[18]=()=>staggerFadeIn('#s18');
+ANIMS[19]=()=>staggerFadeIn('#s19');
 
 // Scene 3-5: ブートストラップトークン管理・デバイス証明書発行・登録デバイス一覧
 ANIMS[3]=()=>staggerFadeIn('#s3');
@@ -1325,18 +1424,18 @@ ANIMS[16]=()=>staggerFadeIn('#s16');
 ANIMS[17]=()=>{const c1=staggerFadeIn('#s17');const c2=countUpAll('#s17');return()=>{c1();c2();};};
 
 // Scene 19-22: テナント一覧・単価マスタ・MFA・AIアシスタント設定
-ANIMS[19]=()=>staggerFadeIn('#s19');
-ANIMS[20]=()=>staggerFadeIn('#s20');
 ANIMS[21]=()=>staggerFadeIn('#s21');
 ANIMS[22]=()=>staggerFadeIn('#s22');
+ANIMS[23]=()=>staggerFadeIn('#s23');
+ANIMS[24]=()=>staggerFadeIn('#s24');
 
 // Scene 23: AIアシスタント(RAG) — チャット→確認→実行をステップ送りで表示
-ANIMS[23]=()=>{
-  const cleanup1=staggerFadeIn('#s23');
-  const bot=document.querySelector('#s23 .chat-bubble.bot .typed');
-  const confirmBox=document.querySelector('#s23 .chat-confirm');
-  const doneMsg=document.querySelector('#s23 .done-msg');
-  const steps=document.querySelectorAll('#s23 .step');
+ANIMS[25]=()=>{
+  const cleanup1=staggerFadeIn('#s25');
+  const bot=document.querySelector('#s25 .chat-bubble.bot .typed');
+  const confirmBox=document.querySelector('#s25 .chat-confirm');
+  const doneMsg=document.querySelector('#s25 .done-msg');
+  const steps=document.querySelectorAll('#s25 .step');
   const setStep=(n)=>{
     steps.forEach(s=>{
       const sn=parseInt(s.dataset.step,10);
@@ -1368,11 +1467,11 @@ ANIMS[23]=()=>{
 };
 
 // Scene 24: まとめ — 件数カウントアップ + 機能一覧・技術スタックの段階的フェードイン
-ANIMS[24]=()=>{
-  const items=document.querySelectorAll('#s24 .feat-item, #s24 .stack-badge');
+ANIMS[26]=()=>{
+  const items=document.querySelectorAll('#s26 .feat-item, #s26 .stack-badge');
   items.forEach(el=>{el.classList.add('fade-item');el.classList.remove('show');});
-  const c1=staggerFadeIn('#s24',60);
-  const c2=countUpAll('#s24');
+  const c1=staggerFadeIn('#s26',60);
+  const c2=countUpAll('#s26');
   return()=>{c1();c2();};
 };
 
