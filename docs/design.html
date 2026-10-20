@@ -626,6 +626,16 @@ td code { font-size: 12px; }
         <div class="req-card-title">GPSによる地図表示（全体・履歴）</div>
         <div class="req-card-body">テナント内デバイスの最新位置を地図上にピン表示する全体表示と、1台の移動履歴を表示する履歴画面。デバイスグループによる絞り込み、テナントごとの地図デフォルト表示保存に対応。</div>
       </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-19 データエクスポート</div>
+        <div class="req-card-title">テレメトリのCSVダウンロード（定期／アドホック）</div>
+        <div class="req-card-body">期間・デバイス・グループで絞り込んだテレメトリをCSVで出力。日次/週次/月次の定期エクスポートとアドホックエクスポートの2系統（1テナントにつき計最大2ファイル）。サイズ上限・保持ポリシーあり（詳細はタブ11）。</div>
+      </div>
+      <div class="req-card">
+        <div class="req-card-id">FR-20 準リアルタイムアクセス</div>
+        <div class="req-card-title">InfluxDB読み取り専用トークンによる外部BI連携</div>
+        <div class="req-card-body">テナント管理者が読み取り専用トークンを発行し、外部のBIツール・分析基盤から直接クエリできる。nginxは純粋パススルーで、テナント分離はInfluxDBのトークンスコープのみで保証する（詳細はタブ12）。</div>
+      </div>
     </div>
   </div>
 
@@ -2724,7 +2734,7 @@ sequenceDiagram
         </tbody>
       </table>
     </div>
-    <p style="font-size:13px;color:var(--text-3)">発行・再発行・失効は<code>audit_logs</code>に記録する（再発行時は旧トークンの失効が<code>reason: reissue</code>で記録され、発行ログには<code>reissue</code>フラグが付く）。UIはテナントポータルの「ブートストラップトークン」タブ内のカードで、Bootstrap Tokenと同じ「発行時に一度だけ平文を表示」パターン。</p>
+    <p style="font-size:13px;color:var(--text-3)">発行・再発行・失効は<code>audit_logs</code>に記録する（再発行時は旧トークンの失効が<code>reason: reissue</code>で記録され、発行ログには<code>reissue</code>フラグが付く）。UIはテナントポータルの「プロビジョニングトークン」タブ内、ブートストラップトークン表の下に並ぶカードで、Bootstrap Tokenと同じ「発行時に一度だけ平文を表示」パターン。</p>
   </div>
 
   <div class="section">
@@ -2764,7 +2774,7 @@ sequenceDiagram
         </tbody>
       </table>
     </div>
-    <p style="font-size:13px;color:var(--text-3)">テナント停止（suspend）・再開時は、プラットフォーム管理のステータス変更APIがInfluxDB Authorizationを無効化（<code>status: inactive</code>）/有効化する。外部クエリ経路はアプリを通らずInfluxDBがトークンを直接評価するため、トークン自体を無効化して接続を遮断する。トークン値は変わらないので再開後は外部ツール側の差し替え不要。InfluxDB側の更新が失敗した場合はテナントのステータスも変更せず502を返す（停止したのに読める状態を作らない）。停止中は<code>realtime_access_fee</code>を課金せず、停止中のトークン新規発行は409。既知の制約: プラットフォーム管理画面の単価編集欄・請求書ラベルには<code>realtime_access_fee</code>（および<code>export_base_fee</code>）の表示名が未追加。</p>
+    <p style="font-size:13px;color:var(--text-3)">テナント停止（suspend）・再開時は、プラットフォーム管理のステータス変更APIがInfluxDB Authorizationを無効化（<code>status: inactive</code>）/有効化する。外部クエリ経路はアプリを通らずInfluxDBがトークンを直接評価するため、トークン自体を無効化して接続を遮断する。トークン値は変わらないので再開後は外部ツール側の差し替え不要。InfluxDB側の更新が失敗した場合はテナントのステータスも変更せず502を返す（停止したのに読める状態を作らない）。停止中は<code>realtime_access_fee</code>を課金せず、停止中のトークン新規発行は409。プラットフォーム管理画面の単価編集欄・請求書ラベルには<code>realtime_access_fee</code>・<code>export_base_fee</code>・<code>export_retained_size_mb</code>の表示名を追加済み。</p>
   </div>
 </section>
 

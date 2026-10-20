@@ -467,6 +467,10 @@ pip install -r requirements.txt</pre>
       <span class="callout-icon">⚠️</span>
       <span class="callout-body">削除したデバイスを再度追加すると Bootstrap Token で再プロビジョニングし、新しい証明書が発行されます。</span>
     </div>
+    <div class="callout callout-info">
+      <span class="callout-icon">ℹ️</span>
+      <span class="callout-body">テナント管理者メールに TOTP（二要素認証）が設定されている場合、削除処理の途中で 6 桁の認証コード入力を求めるダイアログが表示されます。</span>
+    </div>
 
     <h3>複数デバイスの一括操作</h3>
     <p>「▶ 全開始」「■ 全停止」ボタンで全デバイスへのテレメトリ送信を一括制御できます。</p>
@@ -503,7 +507,7 @@ pip install -r requirements.txt</pre>
           <div class="step-title">ビルドスクリプトを実行する</div>
           <div class="code-block">
             <div class="code-hdr"><span class="code-lang">powershell</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
-            <pre>./build</pre>
+            <pre>.\build.ps1</pre>
           </div>
           <div class="step-desc">依存パッケージのインストール（pip）と PyInstaller によるバンドルが自動で実行されます。初回は数分かかります。</div>
         </div>
