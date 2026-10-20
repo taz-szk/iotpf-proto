@@ -1183,7 +1183,7 @@ td code { font-size: 12px; }
             <tr><td><code>id</code></td><td>UUID PK</td><td>仮登録ID</td></tr>
             <tr><td><code>email</code></td><td>VARCHAR(255)</td><td>申込みメールアドレス</td></tr>
             <tr><td><code>tenant_name</code></td><td>VARCHAR(255)</td><td>テナント名（確定前）</td></tr>
-            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>自動生成されたテナントID（重複時は連番付与）</td></tr>
+            <tr><td><code>slug</code></td><td>VARCHAR(100) UNIQUE</td><td>申込者が入力したテナントID（半角英数小文字・ハイフンのみ、3〜30文字。重複時は409）</td></tr>
             <tr><td><code>password_hash</code></td><td>TEXT</td><td>初期管理者ユーザーのbcryptハッシュ</td></tr>
             <tr><td><code>verification_token</code></td><td>VARCHAR(64) UNIQUE</td><td>確認メールのトークン</td></tr>
             <tr><td><code>expires_at</code></td><td>TIMESTAMPTZ</td><td>確認期限（24時間）。期限切れ・確認済みの行は日次バッチで削除</td></tr>

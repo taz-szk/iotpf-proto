@@ -1,20 +1,19 @@
 import re
-from typing import Callable
 
-_NON_ALNUM = re.compile(r"[^a-z0-9]+")
+_SLUG_PATTERN = re.compile(r"^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$")
 
 
-def slugify(name: str, is_taken: Callable[[str], bool]) -> str:
-    """表示名からURL/DB向けのslugを作る。英数字以外は捨てるため、全て非ASCII文字の
-    名前は空になりうる — その場合は"tenant"にフォールバックする。
-    is_takenでTrueが返るたびに連番を付けて再試行する。"""
-    base = _NON_ALNUM.sub("-", name.lower()).strip("-")
-    if not base:
-        base = "tenant"
+class InvalidSlugError(ValueError):
+    pass
 
-    candidate = base
-    suffix = 1
-    while is_taken(candidate):
-        suffix += 1
-        candidate = f"{base}-{suffix}"
-    return candidate
+
+def validate_tenant_slug(value: str) -> str:
+    """利用者が入力したテナントIDを検証する。半角英数字小文字とハイフンのみ、
+    3〜30文字、先頭と末尾はハイフン不可とすることで、記号のエスケープを
+    考慮する必要がないようにする(URL・ログ・外部連携への流用も安全にするため)。"""
+    if not _SLUG_PATTERN.fullmatch(value):
+        raise InvalidSlugError(
+            "テナントIDは半角英数字(小文字)とハイフンのみ、3〜30文字で指定してください"
+            "(先頭・末尾にハイフンは使えません)"
+        )
+    return value

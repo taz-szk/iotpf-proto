@@ -16,9 +16,10 @@ def _session_ctx(query_results=None):
     return mock_db
 
 
-def _signup_body(email="user@example.com"):
+def _signup_body(email="user@example.com", tenant_slug="acme-corp"):
     return {
         "tenant_name": "Acme Corp",
+        "tenant_slug": tenant_slug,
         "email": email,
         "password": "correct-horse-battery-staple",
         "recaptcha_token": "good-token",
@@ -59,6 +60,23 @@ def test_signup_email_links_to_verify_landing_page_not_raw_api():
     verification_url = mock_mail.call_args[0][2]
     assert "/signup/verify.html?token=" in verification_url
     assert "/api/signup/verify" not in verification_url
+
+
+def test_signup_rejects_invalid_tenant_slug_format():
+    clear_failures("signup:testclient")
+    with patch("app.routers.signup.verify_recaptcha", return_value=True):
+        resp = client.post("/signup", json=_signup_body(tenant_slug="Acme_Corp!"))
+    assert resp.status_code == 422
+
+
+def test_signup_returns_409_when_tenant_slug_already_taken():
+    clear_failures("signup:testclient")
+    with patch("app.routers.signup.verify_recaptcha", return_value=True), \
+         patch("app.routers.signup.SessionLocal") as mock_session:
+        db = _session_ctx(query_results=MagicMock())  # 既存のTenant/TenantSignupRequestでslugが見つかる
+        mock_session.return_value = db
+        resp = client.post("/signup", json=_signup_body())
+    assert resp.status_code == 409
 
 
 def test_signup_returns_409_on_concurrent_duplicate_slug():

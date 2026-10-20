@@ -15,7 +15,7 @@ from app.services.mailer import send_signup_verification_email
 from app.services.password_policy import validate_password
 from app.services.rate_limiter import is_rate_limited, record_failure
 from app.services.recaptcha import verify_recaptcha
-from app.services.slug import slugify
+from app.services.slug import validate_tenant_slug, InvalidSlugError
 from app.services.tenant import setup_tenant, teardown_tenant
 from app.services.tenant_users import create_tenant_user_record
 
@@ -27,6 +27,7 @@ _TRIAL_PERIOD = timedelta(days=90)
 
 class SignupRequest(BaseModel):
     tenant_name: str
+    tenant_slug: str
     email: EmailStr
     password: str
     recaptcha_token: str
@@ -43,6 +44,11 @@ def signup(body: SignupRequest, request: Request):
         record_failure(rate_key)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="reCAPTCHA verification failed")
 
+    try:
+        slug = validate_tenant_slug(body.tenant_slug)
+    except InvalidSlugError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(e))
+
     validate_password(body.password, body.email)
 
     with SessionLocal() as db:
@@ -53,13 +59,13 @@ def signup(body: SignupRequest, request: Request):
             db.delete(existing_pending)
             db.flush()
 
-        def _slug_taken(candidate: str) -> bool:
-            return (
-                db.query(Tenant).filter(Tenant.slug == candidate).first() is not None
-                or db.query(TenantSignupRequest).filter(TenantSignupRequest.slug == candidate).first() is not None
-            )
+        slug_taken = (
+            db.query(Tenant).filter(Tenant.slug == slug).first() is not None
+            or db.query(TenantSignupRequest).filter(TenantSignupRequest.slug == slug).first() is not None
+        )
+        if slug_taken:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This tenant ID is already taken")
 
-        slug = slugify(body.tenant_name, _slug_taken)
         token = secrets.token_urlsafe(32)
         now = datetime.now(timezone.utc)
         signup_req = TenantSignupRequest(

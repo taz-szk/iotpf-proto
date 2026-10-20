@@ -1,22 +1,45 @@
-from app.services.slug import slugify
+import pytest
+from app.services.slug import validate_tenant_slug, InvalidSlugError
 
 
-def test_slugify_lowercases_and_hyphenates():
-    assert slugify("Acme  Corp!!", is_taken=lambda s: False) == "acme-corp"
+def test_validate_tenant_slug_accepts_lowercase_alnum_hyphen():
+    assert validate_tenant_slug("acme-corp") == "acme-corp"
 
 
-def test_slugify_strips_non_alnum_and_leading_trailing_hyphens():
-    assert slugify("  -- 日本語Test株式会社 --  ", is_taken=lambda s: False) == "test"
+def test_validate_tenant_slug_rejects_uppercase():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("Acme-Corp")
 
 
-def test_slugify_empty_after_cleanup_falls_back_to_tenant():
-    assert slugify("日本語のみ", is_taken=lambda s: False) == "tenant"
+def test_validate_tenant_slug_rejects_too_short():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("ab")
 
 
-def test_slugify_appends_suffix_on_collision():
-    taken = {"acme-corp", "acme-corp-2"}
-    assert slugify("Acme Corp", is_taken=lambda s: s in taken) == "acme-corp-3"
+def test_validate_tenant_slug_rejects_leading_hyphen():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("-acme-corp")
 
 
-def test_slugify_no_collision_no_suffix():
-    assert slugify("Acme Corp", is_taken=lambda s: False) == "acme-corp"
+def test_validate_tenant_slug_rejects_trailing_hyphen():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("acme-corp-")
+
+
+def test_validate_tenant_slug_rejects_underscore_and_other_symbols():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("acme_corp")
+
+
+def test_validate_tenant_slug_rejects_multibyte():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("あくめ-corp")
+
+
+def test_validate_tenant_slug_accepts_max_length_30():
+    assert validate_tenant_slug("a" + "b" * 28 + "c") == "a" + "b" * 28 + "c"
+
+
+def test_validate_tenant_slug_rejects_over_30_chars():
+    with pytest.raises(InvalidSlugError):
+        validate_tenant_slug("a" + "b" * 29 + "c")

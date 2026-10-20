@@ -13,12 +13,18 @@
     button { margin-top: 1.5rem; width: 100%; padding: 0.75rem; background: #2563eb; color: white; border: none; border-radius: 0.375rem; font-size: 1rem; cursor: pointer; }
     button:disabled { background: #93c5fd; cursor: wait; }
     #error { color: #dc2626; margin-top: 1rem; font-size: 0.875rem; }
+    .hint { margin-top: 0.25rem; font-size: 0.75rem; color: #6b7280; }
   </style>
 </head>
 <body>
   <h1>無料トライアル申込み（90日間）</h1>
   <form id="signup-form">
     <label>テナント名(会社名等)<input type="text" id="tenant_name" required maxlength="255"></label>
+    <label>テナントID(ログインに使用)
+      <input type="text" id="tenant_slug" required minlength="3" maxlength="30"
+             pattern="[a-z0-9][a-z0-9-]{1,28}[a-z0-9]" placeholder="your-company">
+    </label>
+    <div class="hint">半角英小文字・数字・ハイフンのみ、3〜30文字(先頭・末尾にハイフン不可)。あとから変更できません。</div>
     <label>メールアドレス<input type="email" id="email" required></label>
     <label>パスワード(12文字以上)<input type="password" id="password" required minlength="12"></label>
     <button type="submit" id="submit-btn">申込む</button>
@@ -38,6 +44,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             tenant_name: document.getElementById('tenant_name').value,
+            tenant_slug: document.getElementById('tenant_slug').value,
             email: document.getElementById('email').value,
             password: document.getElementById('password').value,
             recaptcha_token: token,
