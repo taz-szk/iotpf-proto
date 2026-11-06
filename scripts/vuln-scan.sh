@@ -14,6 +14,12 @@ source .env
 
 : "${VULN_SCAN_SLACK_WEBHOOK_URL:?VULN_SCAN_SLACK_WEBHOOK_URLを.envに設定してください}"
 
+# スキャン前に自動remediationを実行する。こうすることで、このあとのスキャン結果と
+# Slack通知は「今回の自動対応を反映した後」の状態になる。1サービスの失敗で全体は止めない。
+if ! bash "$(dirname "$0")/vuln-remediate.sh"; then
+    echo "WARN: vuln-remediate.shが失敗しましたが、スキャンは続行します" >&2
+fi
+
 if ! command -v jq &>/dev/null; then
     sudo apt-get install -y jq
 fi
